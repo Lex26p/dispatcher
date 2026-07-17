@@ -1,96 +1,529 @@
 @page "/events"
+@page "/events/{EventId}"
+@inject NavigationManager Navigation
 
 <PageTitle>Диспетчер событий</PageTitle>
 
-<section class="page-grid">
+<section class="events-page">
     <div class="page-title-row">
         <div>
             <h1>Диспетчер событий</h1>
-            <p>Единый список событий, аварийных occurrence, acknowledgement, assignment, shelving и suppression.</p>
+            <p>Единый список событий, аварийных occurrence, назначений, shelving и suppression</p>
         </div>
 
-        <div class="live-chip">Realtime</div>
+        <div class="events-summary">
+            <span class="summary-chip danger">@ReactionCount требуют реакции</span>
+            <span class="summary-chip">@FilteredEvents.Count показано</span>
+            <span class="summary-chip live">@ModeCaption</span>
+        </div>
     </div>
 
-    <div class="metric-grid">
-        <article class="metric-card">
-            <span>Требуют реакции</span>
-            <strong>3</strong>
-            <small>1 critical</small>
-        </article>
+    <div class="events-layout">
+        <main class="events-main">
+            <section class="events-toolbar panel-card">
+                <div class="view-tabs" role="tablist" aria-label="Режим диспетчера событий">
+                    <button type="button"
+                            class="@GetModeButtonClass("realtime")"
+                            @onclick='() => SetMode("realtime")'>
+                        Realtime
+                    </button>
 
-        <article class="metric-card">
-            <span>Назначены мне</span>
-            <strong>2</strong>
-            <small>Ожидают принятия</small>
-        </article>
-
-        <article class="metric-card">
-            <span>Shelved</span>
-            <strong>1</strong>
-            <small>С причиной и сроком</small>
-        </article>
-
-        <article class="metric-card">
-            <span>История</span>
-            <strong>Read-only</strong>
-            <small>Команды заблокированы</small>
-        </article>
-    </div>
-
-    <div class="content-grid">
-        <article class="panel-card large">
-            <div class="panel-card-header">
-                <div>
-                    <h2>Рабочий список</h2>
-                    <p>Фильтры: состояние, локация, ответственный, severity, condition.</p>
+                    <button type="button"
+                            class="@GetModeButtonClass("history")"
+                            @onclick='() => SetMode("history")'>
+                        История
+                    </button>
                 </div>
-            </div>
 
-            <div class="working-list">
-                <div class="working-row critical">
-                    <span class="status-pill danger">EV-001</span>
-                    <div>
-                        <strong>Нет подтверждения работы вентилятора П1</strong>
-                        <small>Alarm occurrence · не подтверждено · ответственный не принят</small>
+                <label class="events-search">
+                    <span>Поиск</span>
+                    <input value="@_search"
+                           @oninput="OnSearchInput"
+                           placeholder="Событие, объект, тег, ответственный..." />
+                </label>
+
+                <label>
+                    <span>Представление</span>
+                    <select @bind="_view">
+                        <option value="requires">Требуют реакции</option>
+                        <option value="all">Все события</option>
+                        <option value="assigned">Назначенные</option>
+                        <option value="shelved">Отложенные</option>
+                        <option value="suppressed">Подавленные</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Severity</span>
+                    <select @bind="_severity">
+                        <option value="all">Все</option>
+                        <option value="critical">Critical</option>
+                        <option value="alarm">Alarm</option>
+                        <option value="warning">Warning</option>
+                        <option value="info">Info</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Condition</span>
+                    <select @bind="_condition">
+                        <option value="all">Все</option>
+                        <option value="active">Active</option>
+                        <option value="ended">Ended</option>
+                        <option value="stale">Stale</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Ответственный</span>
+                    <select @bind="_assignment">
+                        <option value="all">Все</option>
+                        <option value="none">Не назначен</option>
+                        <option value="me">Назначен мне</option>
+                        <option value="team">Команда</option>
+                    </select>
+                </label>
+            </section>
+
+            @if (_mode == "history")
+            {
+                <div class="history-readonly-banner">
+                    <strong>Исторический режим.</strong>
+                    Подтверждение, назначение, shelving, suppression и создание заявок заблокированы. Доступен только просмотр записей.
+                </div>
+            }
+
+            <section class="events-grid panel-card">
+                <div class="events-grid-header">
+                    <span>Severity</span>
+                    <span>Событие</span>
+                    <span>Condition</span>
+                    <span>Ack</span>
+                    <span>Assignment</span>
+                    <span>Время</span>
+                </div>
+
+                @foreach (var item in FilteredEvents)
+                {
+                    <button type="button"
+                            class="@GetEventRowClass(item)"
+                            @onclick="() => SelectEvent(item)">
+                        <span class="status-pill @GetSeverityClass(item.Severity)">@item.Severity</span>
+
+                        <span class="event-title-cell">
+                            <strong>@item.Title</strong>
+                            <small>@item.Location · @item.Source · @item.Tag</small>
+                        </span>
+
+                        <span class="condition-badge @GetConditionClass(item.Condition)">@item.Condition</span>
+                        <span>@item.Acknowledgement</span>
+                        <span>@item.Assignment</span>
+                        <time>@item.Time</time>
+                    </button>
+                }
+
+                @if (FilteredEvents.Count == 0)
+                {
+                    <div class="events-empty">
+                        Нет событий по текущим фильтрам.
                     </div>
-                    <time>14:21</time>
-                </div>
+                }
+            </section>
+        </main>
 
-                <div class="working-row warning">
-                    <span class="status-pill warning">EV-004</span>
+        <aside class="context-drawer events-drawer">
+            @if (SelectedEvent is null)
+            {
+                <div class="drawer-empty">
+                    <h2>Событие не выбрано</h2>
+                    <p>Выбери строку в списке, чтобы открыть карточку события, связанные объекты, действия и аудит.</p>
+                </div>
+            }
+            else
+            {
+                <div class="drawer-header">
                     <div>
-                        <strong>ИБП-2 работает от батареи</strong>
-                        <small>Condition active · assignment: энергетика</small>
+                        <span class="status-pill @GetSeverityClass(SelectedEvent.Severity)">@SelectedEvent.Severity</span>
+                        <h2>@SelectedEvent.Title</h2>
+                        <p>@SelectedEvent.Id · @SelectedEvent.Location</p>
                     </div>
-                    <time>13:58</time>
+
+                    <button type="button" class="drawer-close" @onclick="ClearSelection">×</button>
                 </div>
 
-                <div class="working-row info">
-                    <span class="status-pill info">EV-007</span>
-                    <div>
-                        <strong>План ППР требует согласования</strong>
-                        <small>Связанная работа · acknowledgement события не меняется</small>
+                <div class="drawer-tabs">
+                    <button type="button" class="@GetDrawerTabClass("details")" @onclick='() => _drawerTab = "details"'>Детали</button>
+                    <button type="button" class="@GetDrawerTabClass("timeline")" @onclick='() => _drawerTab = "timeline"'>Хронология</button>
+                    <button type="button" class="@GetDrawerTabClass("actions")" @onclick='() => _drawerTab = "actions"'>Действия</button>
+                </div>
+
+                @if (_drawerTab == "details")
+                {
+                    <div class="drawer-section">
+                        <dl class="details-list">
+                            <dt>Тип</dt>
+                            <dd>@SelectedEvent.Type</dd>
+
+                            <dt>Источник</dt>
+                            <dd>@SelectedEvent.Source</dd>
+
+                            <dt>Тег</dt>
+                            <dd>@SelectedEvent.Tag</dd>
+
+                            <dt>Состояние</dt>
+                            <dd>@SelectedEvent.Condition</dd>
+
+                            <dt>Подтверждение</dt>
+                            <dd>@SelectedEvent.Acknowledgement</dd>
+
+                            <dt>Ответственный</dt>
+                            <dd>@SelectedEvent.Assignment</dd>
+                        </dl>
+
+                        <div class="event-message">
+                            <strong>Сообщение</strong>
+                            <p>@SelectedEvent.Message</p>
+                        </div>
+
+                        <div class="linked-actions">
+                            <a href="@SelectedEvent.DashboardRoute">Открыть мнемосхему</a>
+                            <a href="@SelectedEvent.TrendRoute">История параметра</a>
+                            <a href="@SelectedEvent.EquipmentRoute">Карточка оборудования</a>
+                        </div>
                     </div>
-                    <time>12:30</time>
-                </div>
-            </div>
-        </article>
+                }
+                else if (_drawerTab == "timeline")
+                {
+                    <div class="drawer-section timeline">
+                        @foreach (var entry in SelectedEvent.Timeline)
+                        {
+                            <div class="timeline-item">
+                                <time>@entry.Time</time>
+                                <div>
+                                    <strong>@entry.Title</strong>
+                                    <p>@entry.Description</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="drawer-section action-stack">
+                        @if (_mode == "history")
+                        {
+                            <div class="readonly-note">
+                                История read-only. Управляющие действия и изменение состояния события недоступны.
+                            </div>
+                        }
 
-        <article class="panel-card">
-            <div class="panel-card-header">
-                <div>
-                    <h2>Контекстная карточка</h2>
-                    <p>На следующем шаге станет правой drawer-панелью.</p>
-                </div>
-            </div>
+                        <button type="button" disabled="@IsActionDisabled">Подтвердить occurrence</button>
+                        <button type="button" disabled="@IsActionDisabled">Назначить ответственного</button>
+                        <button type="button" disabled="@IsActionDisabled">Отложить с причиной и сроком</button>
+                        <button type="button" disabled="@IsActionDisabled">Подавить по правилу</button>
+                        <button type="button" disabled="@IsActionDisabled">Создать инцидент</button>
 
-            <div class="compact-list">
-                <div>Событие: EV-001</div>
-                <div>Объект: Вентилятор П1</div>
-                <div>Действие: подтвердить отдельно</div>
-                <div>Инцидент: создаётся без закрытия occurrence</div>
-            </div>
-        </article>
+                        <div class="action-warning">
+                            Acknowledgement, assignment и incident остаются разными признаками. Нажатия пока не отправляют backend-команды.
+                        </div>
+                    </div>
+                }
+            }
+        </aside>
     </div>
 </section>
+
+@code {
+    [Parameter]
+    public string? EventId { get; set; }
+
+    private string _mode = "realtime";
+    private string _view = "requires";
+    private string _severity = "all";
+    private string _condition = "all";
+    private string _assignment = "all";
+    private string _search = string.Empty;
+    private string _drawerTab = "details";
+    private string? _selectedEventId = "EV-001";
+
+    private string ModeCaption => _mode == "history" ? "History · read-only" : "Realtime";
+
+    private int ReactionCount => EventItems.Count(item => item.RequiresReaction);
+
+    private bool IsActionDisabled => _mode == "history";
+
+    private EventItem? SelectedEvent =>
+        EventItems.FirstOrDefault(item => item.Id == _selectedEventId);
+
+    private IReadOnlyList<EventItem> FilteredEvents =>
+        EventItems
+            .Where(MatchesMode)
+            .Where(MatchesView)
+            .Where(MatchesSeverity)
+            .Where(MatchesCondition)
+            .Where(MatchesAssignment)
+            .Where(MatchesSearch)
+            .ToList();
+
+    private IReadOnlyList<EventItem> EventItems { get; } = new List<EventItem>
+    {
+        new(
+            "EV-001",
+            "Alarm occurrence",
+            "Critical",
+            "Нет подтверждения работы вентилятора П1",
+            "Корпус A · Венткамера 2",
+            "AHU-P1",
+            "ahu-p1-run-feedback",
+            "Active",
+            "Unacknowledged",
+            "Не назначен",
+            "14:21",
+            true,
+            "Контроллер не получил подтверждение работы после команды запуска. Первый клик по символу только выбирает объект и открывает faceplate.",
+            "/d/main/mimic",
+            "/trends/tag/ahu-p1-run-feedback",
+            "/equipment/AHU-P1",
+            new List<TimelineEntry>
+            {
+                new("14:21", "Occurrence создан", "Сработало правило контроля обратной связи вентилятора."),
+                new("14:22", "Эскалация подготовлена", "Критическое событие ожидает acknowledgement."),
+                new("14:24", "Связанный объект выбран", "Faceplate AHU-P1 открыт оператором.")
+            }),
+        new(
+            "EV-002",
+            "Alarm occurrence",
+            "Alarm",
+            "ИБП-2 работает от батареи",
+            "Главный комплекс · Энергетика",
+            "UPS-2",
+            "ups-2-power-source",
+            "Active",
+            "Acknowledged",
+            "Команда энергетиков",
+            "13:58",
+            false,
+            "Основной ввод недоступен, ИБП перешёл на батарею. Назначение уже передано команде энергетиков.",
+            "/d/energy/overview",
+            "/trends/tag/ups-2-power-source",
+            "/equipment/UPS-2",
+            new List<TimelineEntry>
+            {
+                new("13:58", "Occurrence создан", "Источник питания изменился на Battery."),
+                new("14:01", "Acknowledged", "Диспетчер подтвердил получение сигнала."),
+                new("14:05", "Назначено", "Передано команде энергетиков.")
+            }),
+        new(
+            "EV-003",
+            "Quality event",
+            "Warning",
+            "Данные датчика температуры устарели",
+            "Корпус A · Венткамера 2",
+            "AHU-P1-TEMP",
+            "ahu-p1-supply-temp",
+            "Stale",
+            "Not required",
+            "Не назначен",
+            "13:44",
+            true,
+            "Последнее значение старше допустимого окна. Quality-состояние не является alarm condition и обрабатывается отдельно.",
+            "/d/main/widgets",
+            "/trends/tag/ahu-p1-supply-temp",
+            "/equipment/AHU-P1-TEMP",
+            new List<TimelineEntry>
+            {
+                new("13:44", "Quality стал Stale", "Ожидаемое обновление тега не поступило."),
+                new("13:50", "Повторная проверка", "Источник всё ещё не обновляет данные.")
+            }),
+        new(
+            "EV-004",
+            "Maintenance event",
+            "Info",
+            "План ППР требует согласования",
+            "Главный комплекс · ТОиР",
+            "WO-241",
+            "maintenance-plan-week-29",
+            "Active",
+            "Not required",
+            "Назначен мне",
+            "12:30",
+            true,
+            "Прогноз календаря, наряд и личная задача остаются разными сущностями. Создание заявки не подтверждает событие.",
+            "/maintenance",
+            "/reports/maintenance-week-29",
+            "/maintenance/work-orders/WO-241",
+            new List<TimelineEntry>
+            {
+                new("12:30", "Задача создана", "Согласовать окно работ QF-12."),
+                new("12:35", "Добавлено в Мою работу", "Задача назначена текущему диспетчеру.")
+            }),
+        new(
+            "EV-005",
+            "Suppressed alarm",
+            "Warning",
+            "Дребезг сигнала заслонки подавлен правилом",
+            "Корпус A · Венткамера 2",
+            "AHU-P1-DAMPER",
+            "ahu-p1-damper-feedback",
+            "Ended",
+            "Acknowledged",
+            "Команда ОВиК",
+            "Вчера · 18:12",
+            false,
+            "Suppression скрывает рабочий шум из оперативного списка, но событие сохраняется в журнале и доступно в истории.",
+            "/d/main/mimic",
+            "/trends/tag/ahu-p1-damper-feedback",
+            "/equipment/AHU-P1-DAMPER",
+            new List<TimelineEntry>
+            {
+                new("18:12", "Condition ended", "Сигнал вернулся в норму."),
+                new("18:13", "Suppression applied", "Применено правило подавления кратковременного дребезга.")
+            })
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(EventId) && EventItems.Any(item => item.Id == EventId))
+        {
+            _selectedEventId = EventId;
+        }
+    }
+
+    private void SetMode(string mode)
+    {
+        _mode = mode;
+    }
+
+    private void SelectEvent(EventItem item)
+    {
+        _selectedEventId = item.Id;
+        _drawerTab = "details";
+        Navigation.NavigateTo($"/events/{item.Id}", replace: false);
+    }
+
+    private void ClearSelection()
+    {
+        _selectedEventId = null;
+        Navigation.NavigateTo("/events", replace: false);
+    }
+
+    private void OnSearchInput(ChangeEventArgs args)
+    {
+        _search = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private bool MatchesMode(EventItem item)
+    {
+        return _mode == "history" || item.Condition != "Ended";
+    }
+
+    private bool MatchesView(EventItem item)
+    {
+        return _view switch
+        {
+            "requires" => item.RequiresReaction,
+            "assigned" => item.Assignment == "Назначен мне" || item.Assignment.Contains("Команда", StringComparison.OrdinalIgnoreCase),
+            "shelved" => item.Acknowledgement.Contains("Shelved", StringComparison.OrdinalIgnoreCase),
+            "suppressed" => item.Type.Contains("Suppressed", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private bool MatchesSeverity(EventItem item)
+    {
+        return _severity == "all" || item.Severity.Equals(_severity, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesCondition(EventItem item)
+    {
+        return _condition == "all" || item.Condition.Equals(_condition, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesAssignment(EventItem item)
+    {
+        return _assignment switch
+        {
+            "none" => item.Assignment == "Не назначен",
+            "me" => item.Assignment == "Назначен мне",
+            "team" => item.Assignment.Contains("Команда", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private bool MatchesSearch(EventItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return true;
+        }
+
+        return item.Id.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Location.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Source.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Tag.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Assignment.Contains(_search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetModeButtonClass(string mode)
+    {
+        return _mode == mode ? "tab-button active" : "tab-button";
+    }
+
+    private string GetEventRowClass(EventItem item)
+    {
+        var selected = item.Id == _selectedEventId ? " selected" : string.Empty;
+        return $"event-row{selected}";
+    }
+
+    private string GetSeverityClass(string severity)
+    {
+        return severity.ToLowerInvariant() switch
+        {
+            "critical" => "danger",
+            "alarm" => "danger-soft",
+            "warning" => "warning",
+            _ => "info"
+        };
+    }
+
+    private string GetConditionClass(string condition)
+    {
+        return condition.ToLowerInvariant() switch
+        {
+            "active" => "active",
+            "ended" => "ended",
+            "stale" => "stale",
+            _ => "default"
+        };
+    }
+
+    private string GetDrawerTabClass(string tab)
+    {
+        return _drawerTab == tab ? "active" : string.Empty;
+    }
+
+    private sealed record EventItem(
+        string Id,
+        string Type,
+        string Severity,
+        string Title,
+        string Location,
+        string Source,
+        string Tag,
+        string Condition,
+        string Acknowledgement,
+        string Assignment,
+        string Time,
+        bool RequiresReaction,
+        string Message,
+        string DashboardRoute,
+        string TrendRoute,
+        string EquipmentRoute,
+        IReadOnlyList<TimelineEntry> Timeline);
+
+    private sealed record TimelineEntry(
+        string Time,
+        string Title,
+        string Description);
+}
