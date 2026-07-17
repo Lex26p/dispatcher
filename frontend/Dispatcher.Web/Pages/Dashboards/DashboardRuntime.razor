@@ -1,86 +1,166 @@
 @page "/d/{DashboardId}/{WindowId}"
+@inject NavigationManager Navigation
 
 <PageTitle>@RuntimeTitle</PageTitle>
 
-<section class="page-grid">
-    <div class="page-title-row">
-        <div>
+<section class="dashboard-runtime-page @DashboardTheme">
+    <div class="runtime-toolbar">
+        <div class="runtime-title-block">
             <h1>@RuntimeTitle</h1>
             <p>@RuntimeSubtitle</p>
         </div>
 
-        <div class="live-chip">@ModeLabel</div>
+        <div class="runtime-toolbar-actions">
+            <div class="mode-switch" aria-label="Режим времени">
+                <button type="button" class="@GetModeClass("live")" @onclick='() => SetTimeMode("live")'>Live</button>
+                <button type="button" class="@GetModeClass("history")" @onclick='() => SetTimeMode("history")'>History</button>
+            </div>
+
+            <a class="button-link" href="/dashboards">Все дашборды</a>
+            <button type="button" class="button-link" @onclick="ToggleFullscreen">Полный холст</button>
+        </div>
     </div>
 
-    <div class="metric-grid">
-        <article class="metric-card">
-            <span>Температура притока</span>
-            <strong>18,7 °C</strong>
-            <small>Good · 2 с назад</small>
-        </article>
+    @if (_timeMode == "history")
+    {
+        <div class="history-banner">
+            Исторический режим · период: сегодня 08:00–14:30 · технологические команды заблокированы.
+        </div>
+    }
 
-        <article class="metric-card">
-            <span>Давление</span>
-            <strong>286 Па</strong>
-            <small>Uncertain · обратная связь нестабильна</small>
-        </article>
-
-        <article class="metric-card">
-            <span>Установки online</span>
-            <strong>8 / 9</strong>
-            <small>1 устройство требует проверки</small>
-        </article>
-
-        <article class="metric-card">
-            <span>Требуют реакции</span>
-            <strong>1</strong>
-            <small>Нет подтверждения работы</small>
-        </article>
+    <div class="window-tabs">
+        @foreach (var window in CurrentDashboard.Windows)
+        {
+            <a class="@GetWindowClass(window.Id)" href="/d/@DashboardId/@window.Id">
+                <span>@window.Name</span>
+                <small>@window.Type</small>
+            </a>
+        }
     </div>
 
-    <div class="content-grid">
-        <article class="panel-card large">
-            <div class="panel-card-header">
-                <div>
-                    <h2>@WindowTitle</h2>
-                    <p>Клик по символу только выбирает target и открывает faceplate. Команда не отправляется первым кликом.</p>
+    <div class="runtime-grid">
+        <main class="runtime-primary">
+            <section class="mimic-shell @WindowId">
+                <div class="mimic-header">
+                    <div>
+                        <h2>@WindowTitle</h2>
+                        <p>@WindowDescription</p>
+                    </div>
+
+                    <div class="mimic-zoom-tools">
+                        <button type="button">−</button>
+                        <span>100%</span>
+                        <button type="button">+</button>
+                    </div>
                 </div>
 
-                <a href="/dashboards">Все дашборды</a>
+                @if (WindowId == "widgets")
+                {
+                    <div class="widget-runtime-grid">
+                        @foreach (var metric in CurrentDashboard.Metrics)
+                        {
+                            <article class="metric-card runtime-metric">
+                                <span>@metric.Label</span>
+                                <strong>@metric.Value</strong>
+                                <small>@metric.Note</small>
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="mimic-canvas">
+                        <div class="duct-line duct-main"></div>
+                        <div class="duct-line duct-branch"></div>
+
+                        @foreach (var item in RuntimeObjects)
+                        {
+                            <button type="button"
+                                    class="@GetMimicObjectClass(item)"
+                                    style="@GetMimicObjectStyle(item)"
+                                    @onclick="() => SelectObject(item.Id)">
+                                <span>@item.Name</span>
+                                <strong>@item.PrimaryValue @item.Unit</strong>
+                            </button>
+                        }
+
+                        <div class="flow-marker one"></div>
+                        <div class="flow-marker two"></div>
+                        <div class="flow-marker three"></div>
+                    </div>
+                }
+            </section>
+        </main>
+
+        <aside class="context-drawer-static runtime-context-drawer">
+            <div class="context-drawer-title">
+                <strong>@SelectedObject.Name</strong>
+                <span>@SelectedObject.Type · @SelectedObject.Location</span>
             </div>
 
-            <div class="complex-map">
-                <div class="map-zone danger">Вентилятор П1</div>
-                <div class="map-zone warning">Заслонка П1</div>
-                <div class="map-zone good">Фильтр</div>
-                <div class="map-zone good">Датчики</div>
-                <div class="map-zone warning">Тренд</div>
-                <div class="map-zone good">События</div>
+            <div class="faceplate-value">
+                <span>@SelectedObject.PrimaryValue</span>
+                <small>@SelectedObject.Unit</small>
             </div>
-        </article>
 
-        <article class="panel-card">
-            <div class="panel-card-header">
+            <div class="drawer-fact-list">
                 <div>
-                    <h2>Выбранный объект</h2>
-                    <p>Faceplate синхронизирует мнемосхему, тренд и события.</p>
+                    <span>Состояние</span>
+                    <strong>@SelectedObject.ProcessState</strong>
+                </div>
+
+                <div>
+                    <span>Режим</span>
+                    <strong>@SelectedObject.Mode</strong>
+                </div>
+
+                <div>
+                    <span>Качество</span>
+                    <strong>@SelectedObject.Quality</strong>
+                </div>
+
+                <div>
+                    <span>Свежесть</span>
+                    <strong>@SelectedObject.Freshness</strong>
                 </div>
             </div>
 
-            <div class="compact-list">
-                <div>Приточный вентилятор П1</div>
-                <div>Состояние: остановлен</div>
-                <div>Режим: автомат</div>
-                <div>Команда: preview доступен только в Live</div>
+            <div class="mini-trend">
+                <svg viewBox="0 0 220 70" role="img" aria-label="Короткий тренд">
+                    <polyline points="@SelectedObject.Points" />
+                </svg>
             </div>
 
-            <div class="quick-links" style="margin-top: 12px;">
-                <a href="/events">Связанные события</a>
-                <a href="/equipment">Карточка оборудования</a>
-                <a href="/d/@DashboardId/widgets">Окно Widgets</a>
-                <a href="/d/@DashboardId/mimic">Окно Mimic</a>
+            @if (!string.IsNullOrWhiteSpace(SelectedObject.Alarm))
+            {
+                <div class="runtime-alert-card">
+                    <strong>Связанное событие</strong>
+                    <span>@SelectedObject.Alarm</span>
+                    <a href="/events">Открыть в Диспетчере событий</a>
+                </div>
+            }
+
+            <div class="command-preview-card">
+                <strong>Command preview</strong>
+                <span>@SelectedObject.Command</span>
+
+                @if (_timeMode == "history")
+                {
+                    <button type="button" disabled>Команды недоступны в History</button>
+                }
+                else
+                {
+                    <button type="button" @onclick="PreviewCommand">Предпросмотр команды</button>
+                }
+
+                @if (_commandPreviewVisible)
+                {
+                    <div class="preflight-box">
+                        Target зафиксирован: @SelectedObject.Id. Реальная отправка не выполняется на UI-прототипе.
+                    </div>
+                }
             </div>
-        </article>
+        </aside>
     </div>
 </section>
 
@@ -91,21 +171,150 @@
     [Parameter]
     public string WindowId { get; set; } = "overview";
 
-    private string RuntimeTitle => DashboardId switch
+    private string _selectedObjectId = "AHU-P1";
+    private string _timeMode = "live";
+    private bool _commandPreviewVisible;
+    private bool _fullscreen;
+
+    private DashboardRuntimeModel CurrentDashboard => Dashboards.FirstOrDefault(item => item.Id == DashboardId) ?? Dashboards[0];
+
+    private RuntimeObject SelectedObject => RuntimeObjects.FirstOrDefault(item => item.Id == _selectedObjectId) ?? RuntimeObjects[0];
+
+    private string RuntimeTitle => CurrentDashboard.Name;
+
+    private string RuntimeSubtitle => $"Runtime · окно {WindowId} · published revision v{CurrentDashboard.PublishedVersion}";
+
+    private string DashboardTheme => _fullscreen ? $"{CurrentDashboard.Theme} fullscreen-canvas" : CurrentDashboard.Theme;
+
+    private string WindowTitle => CurrentDashboard.Windows.FirstOrDefault(item => item.Id == WindowId)?.Name ?? "Окно дашборда";
+
+    private string WindowDescription => WindowId switch
     {
-        "energy" => "Энергетика · Главный комплекс",
-        "maintenance" => "ТОиР · Сегодня",
-        _ => "Климат · Корпус A"
+        "mimic" => "Мнемосхема. Wheel-zoom и pan ЛКМ являются целевым поведением итогового продукта.",
+        "widgets" => "Виджеты используют вертикальную прокрутку страницы и выбранный объект как явный контекст.",
+        _ => "Combined-окно: мнемосхема, выбранный объект, faceplate, короткий тренд и связанные события."
     };
 
-    private string RuntimeSubtitle => $"Runtime · окно {WindowId} · опубликованная revision · Live контекст";
-
-    private string WindowTitle => WindowId switch
+    private IReadOnlyList<DashboardRuntimeModel> Dashboards => new List<DashboardRuntimeModel>
     {
-        "mimic" => "Мнемосхема П1",
-        "widgets" => "Параметры П1",
-        _ => "Combined · Установка П1"
+        new(
+            "main",
+            "Климат · Корпус A",
+            "hvac",
+            7,
+            new List<DashboardWindow>
+            {
+                new("overview", "Установка П1", "Combined"),
+                new("mimic", "Мнемосхема П1", "Mimic"),
+                new("widgets", "Параметры П1", "Widgets")
+            },
+            new List<RuntimeMetric>
+            {
+                new("Температура притока", "18,7 °C", "Good · 2 с назад"),
+                new("Давление", "286 Па", "Uncertain · обратная связь нестабильна"),
+                new("Установки online", "8 / 9", "1 устройство требует проверки"),
+                new("Требуют реакции", "1", "Нет подтверждения работы")
+            }),
+        new(
+            "energy",
+            "Энергетика · Главный комплекс",
+            "energy",
+            3,
+            new List<DashboardWindow>
+            {
+                new("overview", "Баланс", "Combined"),
+                new("mimic", "Вводы", "Mimic"),
+                new("widgets", "Потребление", "Widgets")
+            },
+            new List<RuntimeMetric>
+            {
+                new("Текущая мощность", "486 кВт", "Live"),
+                new("Пик сегодня", "612 кВт", "13:20"),
+                new("Вводы в норме", "3 / 4", "Есть предупреждение"),
+                new("ИБП от батареи", "1", "Требует реакции")
+            })
     };
 
-    private string ModeLabel => WindowId == "history" ? "History" : "Live";
+    private IReadOnlyList<RuntimeObject> RuntimeObjects => new List<RuntimeObject>
+    {
+        new("AHU-P1", "Вентилятор П1", "Вентилятор", "Корпус A · Венткамера 2", "Автомат", "Остановлен", "Good", "2 с назад", "0", "об/мин", "Нет подтверждения работы", "Перевести в автоматический режим", "0,49 20,45 40,43 60,38 80,34 100,31 120,28 140,23 160,19 180,15 200,12 220,10", 42, 44, "danger"),
+        new("AHU-P1-DAMPER", "Заслонка П1", "Исполнительный механизм", "Корпус A · Венткамера 2", "Автомат", "Открыта", "Uncertain", "5 с назад", "62", "%", null, "Установить положение 65 %", "0,34 20,32 40,35 60,30 80,31 100,29 120,26 140,28 160,23 180,25 200,21 220,22", 68, 43, "warning"),
+        new("AHU-P1-FILTER", "Фильтр П1", "Фильтр", "Корпус A · Венткамера 2", "Контроль", "Загрязнение 58 %", "Good", "3 с назад", "58", "%", null, "Создать заявку ТОиР", "0,20 20,22 40,24 60,30 80,31 100,36 120,40 140,43 160,48 180,53 200,56 220,58", 24, 64, "good"),
+        new("AHU-P1-TEMP", "Датчик T притока", "Датчик", "Корпус A · Канал притока", "Измерение", "Норма", "Good", "1 с назад", "18,7", "°C", null, "Открыть тренд", "0,44 20,42 40,43 60,41 80,38 100,37 120,35 140,34 160,33 180,30 200,29 220,28", 18, 28, "good")
+    };
+
+    private void SelectObject(string objectId)
+    {
+        _selectedObjectId = objectId;
+        _commandPreviewVisible = false;
+    }
+
+    private void SetTimeMode(string mode)
+    {
+        _timeMode = mode;
+        _commandPreviewVisible = false;
+    }
+
+    private void PreviewCommand()
+    {
+        _commandPreviewVisible = true;
+    }
+
+    private void ToggleFullscreen()
+    {
+        _fullscreen = !_fullscreen;
+    }
+
+    private string GetModeClass(string mode)
+    {
+        return mode == _timeMode ? "selected" : string.Empty;
+    }
+
+    private string GetWindowClass(string windowId)
+    {
+        return windowId == WindowId ? "window-tab active" : "window-tab";
+    }
+
+    private string GetMimicObjectClass(RuntimeObject item)
+    {
+        var selected = item.Id == _selectedObjectId ? " selected" : string.Empty;
+        return $"mimic-object {item.StateClass}{selected}";
+    }
+
+    private static string GetMimicObjectStyle(RuntimeObject item)
+    {
+        return $"left: {item.X}%; top: {item.Y}%;";
+    }
+
+    private sealed record DashboardWindow(string Id, string Name, string Type);
+
+    private sealed record RuntimeMetric(string Label, string Value, string Note);
+
+    private sealed record DashboardRuntimeModel(
+        string Id,
+        string Name,
+        string Theme,
+        int PublishedVersion,
+        IReadOnlyList<DashboardWindow> Windows,
+        IReadOnlyList<RuntimeMetric> Metrics
+    );
+
+    private sealed record RuntimeObject(
+        string Id,
+        string Name,
+        string Type,
+        string Location,
+        string Mode,
+        string ProcessState,
+        string Quality,
+        string Freshness,
+        string PrimaryValue,
+        string Unit,
+        string? Alarm,
+        string Command,
+        string Points,
+        int X,
+        int Y,
+        string StateClass
+    );
 }

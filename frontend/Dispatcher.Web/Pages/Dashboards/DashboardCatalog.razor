@@ -2,95 +2,275 @@
 
 <PageTitle>Дашборды</PageTitle>
 
-<section class="page-grid">
+<section class="page-grid dashboard-catalog-page">
     <div class="page-title-row">
         <div>
             <h1>Каталог дашбордов</h1>
-            <p>Первый вход открывает каталог. После выбора пункт rail будет возвращать к последнему активному дашборду.</p>
+            <p>Первый вход открывает каталог. После выбора пункт навигации может возвращать к последнему активному дашборду.</p>
         </div>
 
         <div class="live-chip">Catalog</div>
     </div>
 
-    <div class="metric-grid">
-        <article class="metric-card">
-            <span>Всего дашбордов</span>
-            <strong>6</strong>
-            <small>Демо-каталог</small>
-        </article>
+    <div class="dashboard-catalog-toolbar">
+        <label class="catalog-search">
+            <CoreIcon Name="search" />
+            <input @bind="_search" @bind:event="oninput" placeholder="Найти дашборд, систему или владельца..." />
+        </label>
 
-        <article class="metric-card">
-            <span>Избранные</span>
-            <strong>2</strong>
-            <small>Климат и энергетика</small>
-        </article>
-
-        <article class="metric-card">
-            <span>С авариями</span>
-            <strong>4</strong>
-            <small>Есть события, требующие реакции</small>
-        </article>
-
-        <article class="metric-card">
-            <span>Последний runtime</span>
-            <strong>П1</strong>
-            <small>/d/main/overview</small>
-        </article>
+        <div class="catalog-filter-group">
+            @foreach (var filter in Filters)
+            {
+                <button type="button"
+                        class="@GetFilterClass(filter.Id)"
+                        @onclick="() => SelectFilter(filter.Id)">
+                    @filter.Label
+                </button>
+            }
+        </div>
     </div>
 
-    <div class="content-grid">
-        <article class="panel-card large">
-            <div class="panel-card-header">
+    <div class="dashboard-catalog-layout">
+        <section class="dashboard-card-grid">
+            @foreach (var dashboard in FilteredDashboards)
+            {
+                <article class="dashboard-card @dashboard.Theme">
+                    <div class="dashboard-card-topline">
+                        <span>@dashboard.System</span>
+
+                        @if (dashboard.Alarms > 0)
+                        {
+                            <strong>@dashboard.Alarms</strong>
+                        }
+                    </div>
+
+                    <h2>@dashboard.Name</h2>
+                    <p>@dashboard.Purpose</p>
+
+                    <div class="dashboard-meta-grid">
+                        <span>Локация</span>
+                        <strong>@dashboard.Location</strong>
+
+                        <span>Владелец</span>
+                        <strong>@dashboard.Owner</strong>
+
+                        <span>Обновлён</span>
+                        <strong>@dashboard.Updated</strong>
+                    </div>
+
+                    <div class="dashboard-window-list">
+                        @foreach (var window in dashboard.Windows)
+                        {
+                            <a href="@GetWindowUrl(dashboard, window)">
+                                <span>@window.Name</span>
+                                <small>@window.Type</small>
+                            </a>
+                        }
+                    </div>
+
+                    <div class="dashboard-card-actions">
+                        <a class="primary-link" href="@GetDashboardUrl(dashboard)">Открыть</a>
+                        <button type="button" class="ghost-button">В избранное</button>
+                    </div>
+                </article>
+            }
+        </section>
+
+        <aside class="context-drawer-static">
+            <div class="context-drawer-title">
+                <strong>Правила runtime</strong>
+                <span>DashboardWindow · Live/History · published revision</span>
+            </div>
+
+            <div class="drawer-fact-list">
                 <div>
-                    <h2>Операторские дашборды</h2>
-                    <p>Каждый дашборд имеет собственный контекст и адресуемые окна.</p>
+                    <span>Контекст</span>
+                    <strong>Явный выбранный объект</strong>
+                </div>
+
+                <div>
+                    <span>Команды</span>
+                    <strong>Только Live + control mode</strong>
+                </div>
+
+                <div>
+                    <span>Редакция</span>
+                    <strong>Только целая published revision</strong>
+                </div>
+
+                <div>
+                    <span>Возврат</span>
+                    <strong>Все дашборды доступно из runtime</strong>
                 </div>
             </div>
-
-            <div class="working-list">
-                <a class="working-row critical" href="/d/main/overview">
-                    <span class="status-pill danger">ОВиК</span>
-                    <div>
-                        <strong>Климат · Корпус A</strong>
-                        <small>Combined · Мнемосхема и связанный контекст · 1 авария</small>
-                    </div>
-                    <time>14:42</time>
-                </a>
-
-                <a class="working-row warning" href="/d/energy/overview">
-                    <span class="status-pill warning">Energy</span>
-                    <div>
-                        <strong>Энергетика · Главный комплекс</strong>
-                        <small>Widgets · Баланс, вводы и ИБП · 2 события</small>
-                    </div>
-                    <time>14:05</time>
-                </a>
-
-                <a class="working-row info" href="/d/maintenance/overview">
-                    <span class="status-pill info">ТОиР</span>
-                    <div>
-                        <strong>ТОиР · Сегодня</strong>
-                        <small>Эксплуатационный обзор работ и просрочек</small>
-                    </div>
-                    <time>13:58</time>
-                </a>
-            </div>
-        </article>
-
-        <article class="panel-card">
-            <div class="panel-card-header">
-                <div>
-                    <h2>Быстрые окна</h2>
-                    <p>Адресуемые окна runtime</p>
-                </div>
-            </div>
-
-            <div class="quick-links">
-                <a href="/d/main/overview">Combined · Установка П1</a>
-                <a href="/d/main/mimic">Mimic · Мнемосхема П1</a>
-                <a href="/d/main/widgets">Widgets · Параметры П1</a>
-                <a href="/builder/dashboards/hvac">Открыть в конструкторе</a>
-            </div>
-        </article>
+        </aside>
     </div>
 </section>
+
+@code {
+    private string _search = string.Empty;
+    private string _filter = "all";
+
+    private IReadOnlyList<CatalogFilter> Filters => new List<CatalogFilter>
+    {
+        new("all", "Все"),
+        new("favorites", "Избранные"),
+        new("alarms", "Есть события"),
+        new("operator", "Операторские")
+    };
+
+    private IReadOnlyList<DashboardItem> Dashboards => new List<DashboardItem>
+    {
+        new(
+            "main",
+            "Климат · Корпус A",
+            "Основной операторский",
+            "Корпус A",
+            "ОВиК",
+            "Группа эксплуатации",
+            "Сегодня · 13:42",
+            1,
+            "hvac",
+            true,
+            new List<DashboardWindow>
+            {
+                new("overview", "Установка П1", "Combined"),
+                new("mimic", "Мнемосхема П1", "Mimic"),
+                new("widgets", "Параметры П1", "Widgets")
+            }),
+        new(
+            "energy",
+            "Энергетика · Главный комплекс",
+            "Баланс и вводы",
+            "Все локации",
+            "Энергетика",
+            "Энергослужба",
+            "Сегодня · 14:05",
+            2,
+            "energy",
+            true,
+            new List<DashboardWindow>
+            {
+                new("overview", "Баланс", "Combined"),
+                new("mimic", "Вводы", "Mimic"),
+                new("widgets", "Потребление", "Widgets")
+            }),
+        new(
+            "fire",
+            "Пожарная безопасность",
+            "Состояние зон и автоматики",
+            "Главный комплекс",
+            "АПС",
+            "Пожарная служба",
+            "Сегодня · 14:28",
+            1,
+            "fire",
+            false,
+            new List<DashboardWindow>
+            {
+                new("overview", "Зоны", "Combined"),
+                new("widgets", "Автоматика", "Widgets")
+            }),
+        new(
+            "datacenter",
+            "ЦОД · Инфраструктура",
+            "Сеть, питание и климат",
+            "ЦОД",
+            "IT/OT",
+            "Сетевая служба",
+            "Сегодня · 14:17",
+            2,
+            "datacenter",
+            false,
+            new List<DashboardWindow>
+            {
+                new("overview", "Инфраструктура", "Combined"),
+                new("widgets", "Стойки", "Widgets")
+            }),
+        new(
+            "maintenance",
+            "ТОиР · Сегодня",
+            "Работы и просрочки",
+            "Главный комплекс",
+            "ТОиР",
+            "Служба эксплуатации",
+            "Сегодня · 13:58",
+            0,
+            "maintenance",
+            true,
+            new List<DashboardWindow>
+            {
+                new("overview", "Работы", "Combined"),
+                new("widgets", "Показатели", "Widgets")
+            })
+    };
+
+    private IReadOnlyList<DashboardItem> FilteredDashboards =>
+        Dashboards
+            .Where(MatchesFilter)
+            .Where(MatchesSearch)
+            .ToList();
+
+    private void SelectFilter(string filter)
+    {
+        _filter = filter;
+    }
+
+    private bool MatchesFilter(DashboardItem item)
+    {
+        return _filter switch
+        {
+            "favorites" => item.IsFavorite,
+            "alarms" => item.Alarms > 0,
+            "operator" => item.Purpose.Contains("оператор", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private bool MatchesSearch(DashboardItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Purpose.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Location.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.System.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Owner.Contains(_search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetFilterClass(string filter)
+    {
+        return filter == _filter ? "chip-button selected" : "chip-button";
+    }
+
+    private static string GetDashboardUrl(DashboardItem item)
+    {
+        return $"/d/{item.Id}/overview";
+    }
+
+    private static string GetWindowUrl(DashboardItem item, DashboardWindow window)
+    {
+        return $"/d/{item.Id}/{window.Id}";
+    }
+
+    private sealed record CatalogFilter(string Id, string Label);
+
+    private sealed record DashboardWindow(string Id, string Name, string Type);
+
+    private sealed record DashboardItem(
+        string Id,
+        string Name,
+        string Purpose,
+        string Location,
+        string System,
+        string Owner,
+        string Updated,
+        int Alarms,
+        string Theme,
+        bool IsFavorite,
+        IReadOnlyList<DashboardWindow> Windows
+    );
+}
