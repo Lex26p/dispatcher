@@ -2,60 +2,542 @@
 
 <PageTitle>Добавить оборудование</PageTitle>
 
-<section class="page-grid">
+<section class="page-grid equipment-add-page">
     <div class="page-title-row">
         <div>
             <h1>Добавить оборудование</h1>
-            <p>Единый staging: ручные черновики и CSV-импорт попадают в одну таблицу.</p>
+            <p>Единый staging: ручные строки и CSV-импорт попадают в одну таблицу перед Apply.</p>
         </div>
 
-        <div class="live-chip">Staging</div>
+        <div class="equipment-title-actions">
+            <a class="button ghost" href="/equipment">Назад к реестру</a>
+            <button type="button" class="button primary" @onclick="ApplyValidRows">Apply valid rows</button>
+        </div>
     </div>
 
-    <div class="content-grid">
-        <article class="panel-card large">
+    <div class="add-shell-grid">
+        <section class="panel-card add-main-panel">
             <div class="panel-card-header">
                 <div>
-                    <h2>Черновики</h2>
-                    <p>Apply доступен только для структурно валидных create/update. Connection и poll не являются gate.</p>
+                    <h2>Staging оборудования</h2>
+                    <p>Структурная валидность — единственный gate для Apply. Connection/poll остаются независимой информационной проверкой.</p>
                 </div>
+                <span class="live-chip small">@DraftRows.Count строк</span>
             </div>
 
-            <div class="working-list">
-                <div class="working-row info">
-                    <span class="status-pill info">create</span>
-                    <div>
-                        <strong>Приточная установка П3</strong>
-                        <small>Modbus TCP · 192.168.30.43:502 · Unit ID 1 · valid</small>
-                    </div>
-                    <time>draft</time>
-                </div>
-
-                <div class="working-row warning">
-                    <span class="status-pill warning">review</span>
-                    <div>
-                        <strong>Коммутатор ЦОД-2</strong>
-                        <small>SNMP v2c · community masked · требуется admin-update</small>
-                    </div>
-                    <time>skip</time>
-                </div>
+            <div class="staging-actions">
+                <button type="button" class="button primary" @onclick="AddManualRow">Добавить строку</button>
+                <label class="button ghost file-button">
+                    CSV import
+                    <input type="file" accept=".csv,text/csv" />
+                </label>
+                <button type="button" class="button ghost" @onclick="CopySelectedRow">Copy selected</button>
+                <button type="button" class="button ghost" @onclick="RunSelectedConnectionTest">Connection</button>
+                <button type="button" class="button ghost" @onclick="RunSelectedPollTest">Poll</button>
             </div>
-        </article>
 
-        <article class="panel-card">
-            <div class="panel-card-header">
+            <div class="staging-table-wrap">
+                <table class="working-table staging-table">
+                    <thead>
+                        <tr>
+                            <th>Статус</th>
+                            <th>ID</th>
+                            <th>Название</th>
+                            <th>Тип</th>
+                            <th>Локация</th>
+                            <th>Протокол</th>
+                            <th>Host</th>
+                            <th>Port</th>
+                            <th>Unit ID</th>
+                            <th>Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in DraftRows)
+                        {
+                            <tr class="@GetRowClass(row)" @onclick="() => SelectRow(row.Key)">
+                                <td><span class="status-pill @GetValidityClass(row)">@GetValidityLabel(row)</span></td>
+                                <td><input value="@row.Id" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Id), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td><input value="@row.Name" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Name), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td><input value="@row.Type" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Type), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td><input value="@row.Location" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Location), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td>
+                                    <select value="@row.Protocol" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Protocol), eventArgs.Value?.ToString() ?? string.Empty)">
+                                        <option>Modbus TCP</option>
+                                        <option>SNMP v2c</option>
+                                        <option>SNMP v3</option>
+                                    </select>
+                                </td>
+                                <td><input value="@row.Host" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Host), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td><input value="@row.Port" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Port), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td><input value="@row.UnitId" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.UnitId), eventArgs.Value?.ToString() ?? string.Empty)" /></td>
+                                <td>
+                                    <select value="@row.Action" @onchange="eventArgs => UpdateRow(row.Key, nameof(EquipmentDraft.Action), eventArgs.Value?.ToString() ?? string.Empty)">
+                                        <option>create</option>
+                                        <option>skip/review</option>
+                                        <option>draft</option>
+                                        <option>admin-update</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <aside class="context-drawer add-drawer">
+            <div class="drawer-header">
                 <div>
-                    <h2>Диагностика</h2>
-                    <p>Информационная симуляция без отправки команд.</p>
+                    <h2>Preflight</h2>
+                    <p>Безопасная проверка перед применением.</p>
                 </div>
+                <span class="status-pill @PreflightClass">@PreflightLabel</span>
             </div>
 
-            <div class="compact-list">
-                <div>Проверить связь: endpoint маскируется</div>
-                <div>Запустить poll: независим от Apply</div>
-                <div>Секреты не отображаются и не попадают в аудит</div>
-                <div>CSV: comma/semicolon по header</div>
+            <div class="drawer-section-grid">
+                <div class="detail-line"><span>Valid create/update</span><strong>@DraftRows.Count(IsApplyCandidate)</strong></div>
+                <div class="detail-line"><span>Invalid</span><strong>@DraftRows.Count(row => !IsStructurallyValid(row))</strong></div>
+                <div class="detail-line"><span>Skip/review</span><strong>@DraftRows.Count(row => row.Action == "skip/review")</strong></div>
+                <div class="detail-line"><span>Selected</span><strong>@(SelectedRow?.Id ?? "—")</strong></div>
             </div>
-        </article>
+
+            <div class="drawer-note info">
+                <strong>Зафиксированное правило</strong>
+                <span>Импорт по умолчанию только добавляет оборудование. Existing остаётся skip/review до явного admin-update, а отсутствующие строки ничего не удаляют.</span>
+            </div>
+
+            @if (SelectedRow is not null)
+            {
+                <div class="diagnostics-card">
+                    <h3>Диагностика выбранной строки</h3>
+                    <p>Секреты и community не отображаются. Для SNMP v2c используется masked значение.</p>
+
+                    <div class="diagnostics-actions">
+                        <button type="button" class="button ghost" @onclick="RunSelectedConnectionTest">Проверить связь</button>
+                        <button type="button" class="button ghost" @onclick="RunSelectedPollTest">Запустить опрос</button>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_lastDiagnostic))
+                    {
+                        <div class="diagnostics-result">@_lastDiagnostic</div>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_lastApplyResult))
+            {
+                <div class="drawer-note success">
+                    <strong>Apply preview</strong>
+                    <span>@_lastApplyResult</span>
+                </div>
+            }
+        </aside>
     </div>
 </section>
+
+<style>
+.equipment-title-actions,
+.staging-actions,
+.diagnostics-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+.button:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+}
+
+.button.primary {
+    color: #05241f;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 800;
+}
+
+.button.ghost {
+    background: transparent;
+}
+
+.file-button {
+    position: relative;
+    overflow: hidden;
+}
+
+.file-button input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.live-chip.small {
+    min-height: 24px;
+    font-size: 11px;
+}
+
+.add-shell-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 12px;
+    align-items: start;
+}
+
+.staging-table-wrap {
+    margin-top: 12px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.working-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--text);
+}
+
+.working-table th,
+.working-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.working-table th {
+    color: var(--text-2);
+    background: var(--surface-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.working-table tbody tr {
+    cursor: pointer;
+}
+
+.working-table tbody tr:hover,
+.working-table tbody tr.selected {
+    background: rgba(32, 199, 181, .08);
+}
+
+.staging-table input,
+.staging-table select {
+    min-width: 110px;
+    width: 100%;
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 0 7px;
+}
+
+.status-pill {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.status-pill.good {
+    color: #061b10;
+    background: var(--green);
+}
+
+.status-pill.warning {
+    color: #1e1300;
+    background: var(--amber);
+}
+
+.status-pill.danger {
+    color: #fff;
+    background: var(--red);
+}
+
+.status-pill.info {
+    color: #071119;
+    background: var(--blue);
+}
+
+.context-drawer {
+    min-height: 540px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(14, 28, 39, .94);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .16);
+    padding: 13px;
+}
+
+.drawer-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+}
+
+.drawer-header h2,
+.diagnostics-card h3 {
+    margin: 0;
+    color: var(--text);
+}
+
+.drawer-header p,
+.diagnostics-card p {
+    margin: 4px 0 0;
+    color: var(--muted);
+}
+
+.drawer-section-grid {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.detail-line {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+}
+
+.detail-line span {
+    color: var(--muted);
+}
+
+.detail-line strong {
+    color: var(--text);
+}
+
+.drawer-note,
+.diagnostics-card,
+.diagnostics-result {
+    margin-top: 12px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface-2);
+}
+
+.drawer-note strong,
+.drawer-note span {
+    display: block;
+}
+
+.drawer-note span {
+    margin-top: 4px;
+    color: var(--text-2);
+}
+
+.drawer-note.success {
+    border-color: rgba(84, 211, 138, .45);
+}
+
+@@media (max-width: 1200px) {
+    .add-shell-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+@code {
+    private int _sequence = 4;
+    private string _selectedKey = "draft-1";
+    private string _lastDiagnostic = string.Empty;
+    private string _lastApplyResult = string.Empty;
+
+    private List<EquipmentDraft> DraftRows { get; } = new()
+    {
+        new("draft-1", "AHU-P3", "Приточная установка П3", "Вентустановка", "Корпус C · Венткамера 1", "Modbus TCP", "192.168.30.43", "502", "1", "create", "manual"),
+        new("draft-2", "SW-EDGE-2", "Коммутатор доступа 2", "Коммутатор", "ЦОД · стойка R4", "SNMP v2c", "10.20.1.22", "161", "", "create", "template"),
+        new("draft-3", "AHU-P1", "Приточная установка П1", "Вентустановка", "Корпус A · Венткамера 2", "Modbus TCP", "192.168.30.41", "502", "1", "skip/review", "csv-existing")
+    };
+
+    private EquipmentDraft? SelectedRow => DraftRows.FirstOrDefault(row => row.Key == _selectedKey);
+
+    private string PreflightLabel => DraftRows.All(IsStructurallyValid) ? "Ready" : "Review";
+
+    private string PreflightClass => DraftRows.All(IsStructurallyValid) ? "good" : "warning";
+
+    private void SelectRow(string key)
+    {
+        _selectedKey = key;
+        _lastDiagnostic = string.Empty;
+    }
+
+    private void AddManualRow()
+    {
+        var next = _sequence++;
+        var key = $"draft-{next}";
+        DraftRows.Add(new EquipmentDraft(key, $"NEW-{next}", "Новое оборудование", "Вентустановка", "Главный комплекс", "Modbus TCP", "", "502", "1", "draft", "manual"));
+        _selectedKey = key;
+    }
+
+    private void CopySelectedRow()
+    {
+        if (SelectedRow is null)
+        {
+            return;
+        }
+
+        var next = _sequence++;
+        var key = $"draft-{next}";
+        DraftRows.Add(SelectedRow with
+        {
+            Key = key,
+            Id = $"{SelectedRow.Id}-COPY-{next}",
+            Host = string.Empty,
+            UnitId = SelectedRow.Protocol == "Modbus TCP" ? (int.TryParse(SelectedRow.UnitId, out var unit) ? (unit + 1).ToString() : SelectedRow.UnitId) : string.Empty,
+            Action = "draft",
+            Source = "copy"
+        });
+        _selectedKey = key;
+    }
+
+    private void RunSelectedConnectionTest()
+    {
+        if (SelectedRow is null)
+        {
+            return;
+        }
+
+        _lastDiagnostic = string.IsNullOrWhiteSpace(SelectedRow.Host)
+            ? "Connection не запущен: host не заполнен. Это не блокирует сохранение черновика."
+            : $"Connection preview: {SelectedRow.Protocol} endpoint {SelectedRow.Host}:{SelectedRow.Port} отвечает за 42 мс.";
+    }
+
+    private void RunSelectedPollTest()
+    {
+        if (SelectedRow is null)
+        {
+            return;
+        }
+
+        _lastDiagnostic = IsStructurallyValid(SelectedRow)
+            ? "Poll preview: 5 запросов, 5 успешных ответов, среднее время 48 мс."
+            : "Poll preview недоступен: сначала исправь структурные поля строки.";
+    }
+
+    private void ApplyValidRows()
+    {
+        var count = DraftRows.Count(IsApplyCandidate);
+        _lastApplyResult = count == 0
+            ? "Нет строк create/admin-update со структурной валидностью."
+            : $"Будет применено строк: {count}. Skip/review и invalid останутся в staging.";
+    }
+
+    private void UpdateRow(string key, string field, string value)
+    {
+        var index = DraftRows.FindIndex(row => row.Key == key);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var row = DraftRows[index];
+        DraftRows[index] = field switch
+        {
+            nameof(EquipmentDraft.Id) => row with { Id = value },
+            nameof(EquipmentDraft.Name) => row with { Name = value },
+            nameof(EquipmentDraft.Type) => row with { Type = value },
+            nameof(EquipmentDraft.Location) => row with { Location = value },
+            nameof(EquipmentDraft.Protocol) => row with { Protocol = value, Port = value.StartsWith("SNMP", StringComparison.OrdinalIgnoreCase) ? "161" : row.Port },
+            nameof(EquipmentDraft.Host) => row with { Host = value },
+            nameof(EquipmentDraft.Port) => row with { Port = value },
+            nameof(EquipmentDraft.UnitId) => row with { UnitId = value },
+            nameof(EquipmentDraft.Action) => row with { Action = value },
+            _ => row
+        };
+    }
+
+    private string GetRowClass(EquipmentDraft row)
+    {
+        return row.Key == _selectedKey ? "selected" : string.Empty;
+    }
+
+    private static bool IsApplyCandidate(EquipmentDraft row)
+    {
+        return IsStructurallyValid(row) && row.Action is "create" or "admin-update";
+    }
+
+    private static bool IsStructurallyValid(EquipmentDraft row)
+    {
+        return !string.IsNullOrWhiteSpace(row.Id)
+            && !string.IsNullOrWhiteSpace(row.Name)
+            && !string.IsNullOrWhiteSpace(row.Type)
+            && !string.IsNullOrWhiteSpace(row.Location)
+            && !string.IsNullOrWhiteSpace(row.Protocol)
+            && !string.IsNullOrWhiteSpace(row.Host)
+            && !string.IsNullOrWhiteSpace(row.Port)
+            && (row.Protocol != "Modbus TCP" || !string.IsNullOrWhiteSpace(row.UnitId));
+    }
+
+    private static string GetValidityLabel(EquipmentDraft row)
+    {
+        if (!IsStructurallyValid(row))
+        {
+            return "Invalid";
+        }
+
+        return row.Action switch
+        {
+            "skip/review" => "Review",
+            "draft" => "Draft",
+            _ => "Valid"
+        };
+    }
+
+    private static string GetValidityClass(EquipmentDraft row)
+    {
+        if (!IsStructurallyValid(row))
+        {
+            return "danger";
+        }
+
+        return row.Action switch
+        {
+            "skip/review" => "warning",
+            "draft" => "info",
+            _ => "good"
+        };
+    }
+
+    private sealed record EquipmentDraft(
+        string Key,
+        string Id,
+        string Name,
+        string Type,
+        string Location,
+        string Protocol,
+        string Host,
+        string Port,
+        string UnitId,
+        string Action,
+        string Source
+    );
+}

@@ -1,96 +1,702 @@
 @page "/equipment"
+@page "/equipment/{SelectedEquipmentId}"
+@inject NavigationManager Navigation
 
 <PageTitle>Оборудование</PageTitle>
 
-<section class="page-grid">
+<section class="page-grid equipment-page">
     <div class="page-title-row">
         <div>
             <h1>Оборудование</h1>
-            <p>Реестр устройств, объектов обслуживания и связей с дашбордами.</p>
+            <p>Реестр устройств, качество связи, привязка к дашбордам и диагностические состояния.</p>
         </div>
 
-        <a class="live-chip" href="/equipment/add">Добавить</a>
+        <div class="equipment-title-actions">
+            <a class="button primary" href="/equipment/add">Добавить оборудование</a>
+            <button type="button" class="button ghost" @onclick="ResetFilters">Сбросить фильтры</button>
+        </div>
     </div>
 
-    <div class="metric-grid">
-        <article class="metric-card">
-            <span>Устройств</span>
-            <strong>42</strong>
-            <small>Modbus TCP и SNMP</small>
+    <div class="equipment-summary-grid">
+        <article class="metric-card compact-metric">
+            <span>Всего устройств</span>
+            <strong>@EquipmentItems.Count</strong>
+            <small>В текущем демо-реестре</small>
         </article>
 
-        <article class="metric-card">
+        <article class="metric-card compact-metric">
             <span>Online</span>
-            <strong>39</strong>
-            <small>3 требуют проверки</small>
+            <strong>@EquipmentItems.Count(item => item.Connection == "Online")</strong>
+            <small>Устройства отвечают</small>
         </article>
 
-        <article class="metric-card">
-            <span>Теги</span>
-            <strong>1 284</strong>
-            <small>Good / Stale / Offline</small>
+        <article class="metric-card compact-metric">
+            <span>Требуют реакции</span>
+            <strong>@EquipmentItems.Count(item => item.Severity is "Critical" or "Warning")</strong>
+            <small>По событиям и качеству</small>
         </article>
 
-        <article class="metric-card">
-            <span>Черновики</span>
-            <strong>1</strong>
-            <small>Staging add/update/skip</small>
+        <article class="metric-card compact-metric">
+            <span>Не привязаны</span>
+            <strong>@EquipmentItems.Count(item => item.BindingState == "Требует проверки")</strong>
+            <small>Проверить связь с объектами ТОиР</small>
         </article>
     </div>
 
-    <div class="content-grid">
-        <article class="panel-card large">
-            <div class="panel-card-header">
+    <div class="equipment-shell-grid">
+        <section class="panel-card equipment-main-panel">
+            <div class="panel-card-header sticky-header">
                 <div>
-                    <h2>Реестр</h2>
-                    <p>Крупные списки используют единый механизм фильтров, представлений и массовых действий.</p>
+                    <h2>Реестр оборудования</h2>
+                    <p>Единый список устройств диспетчеризации и объектов обслуживания.</p>
                 </div>
+
+                <span class="live-chip small">@FilteredItems.Count записей</span>
             </div>
 
-            <div class="working-list">
-                <div class="working-row warning">
-                    <span class="status-pill warning">AHU</span>
+            <div class="equipment-toolbar">
+                <label class="field search-field">
+                    <span>Поиск</span>
+                    <input @bind="_search" @bind:event="oninput" placeholder="ID, название, локация, протокол..." />
+                </label>
+
+                <label class="field">
+                    <span>Состояние</span>
+                    <select @bind="_stateFilter">
+                        <option value="all">Все</option>
+                        <option value="Online">Online</option>
+                        <option value="Uncertain">Uncertain</option>
+                        <option value="Offline">Offline</option>
+                        <option value="Maintenance">Maintenance</option>
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span>Протокол</span>
+                    <select @bind="_protocolFilter">
+                        <option value="all">Все</option>
+                        <option value="Modbus TCP">Modbus TCP</option>
+                        <option value="SNMP v2c">SNMP v2c</option>
+                        <option value="SNMP v3">SNMP v3</option>
+                        <option value="ТОиР only">ТОиР only</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="equipment-table-wrap">
+                <table class="working-table equipment-table">
+                    <thead>
+                        <tr>
+                            <th>Устройство</th>
+                            <th>Локация</th>
+                            <th>Протокол</th>
+                            <th>Связь</th>
+                            <th>Качество</th>
+                            <th>События</th>
+                            <th>Обслуживание</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in FilteredItems)
+                        {
+                            <tr class="@GetRowClass(item)" @onclick="() => SelectItem(item.Id)">
+                                <td>
+                                    <strong>@item.Name</strong>
+                                    <small>@item.Id · @item.Type</small>
+                                </td>
+                                <td>
+                                    <span>@item.Location</span>
+                                    <small>@item.BindingState</small>
+                                </td>
+                                <td>
+                                    <span>@item.Protocol</span>
+                                    <small>@item.Endpoint</small>
+                                </td>
+                                <td><span class="status-pill @GetStateClass(item.Connection)">@item.Connection</span></td>
+                                <td><span class="quality-badge @GetQualityClass(item.Quality)">@item.Quality</span></td>
+                                <td>
+                                    <strong class="event-count">@item.EventCount</strong>
+                                    <small>@item.PrimaryEvent</small>
+                                </td>
+                                <td>
+                                    <span>@item.MaintenanceState</span>
+                                    <small>@item.NextMaintenance</small>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <aside class="context-drawer equipment-drawer">
+            @if (SelectedItem is null)
+            {
+                <div class="drawer-empty">
+                    <h2>Карточка оборудования</h2>
+                    <p>Выбери строку реестра, чтобы открыть краткие свойства, события и диагностические действия.</p>
+                </div>
+            }
+            else
+            {
+                <div class="drawer-header">
                     <div>
-                        <strong>Приточная установка П1</strong>
-                        <small>Корпус A · Modbus TCP · host скрыт · есть alarm occurrence</small>
+                        <h2>@SelectedItem.Name</h2>
+                        <p>@SelectedItem.Id · @SelectedItem.Type</p>
                     </div>
-                    <time>2 с</time>
+                    <span class="status-pill @GetStateClass(SelectedItem.Connection)">@SelectedItem.Connection</span>
                 </div>
 
-                <div class="working-row info">
-                    <span class="status-pill info">SNMP</span>
-                    <div>
-                        <strong>Коммутатор ЦОД-1</strong>
-                        <small>SNMP v2c · community masked · диагностика информационная</small>
+                <div class="drawer-tabs">
+                    <button type="button" class="@GetTabClass("details")" @onclick='() => _drawerTab = "details"'>Детали</button>
+                    <button type="button" class="@GetTabClass("diagnostics")" @onclick='() => _drawerTab = "diagnostics"'>Диагностика</button>
+                    <button type="button" class="@GetTabClass("links")" @onclick='() => _drawerTab = "links"'>Связи</button>
+                </div>
+
+                @if (_drawerTab == "details")
+                {
+                    <div class="drawer-section-grid">
+                        <div class="detail-line"><span>Локация</span><strong>@SelectedItem.Location</strong></div>
+                        <div class="detail-line"><span>Протокол</span><strong>@SelectedItem.Protocol</strong></div>
+                        <div class="detail-line"><span>Endpoint</span><strong>@SelectedItem.Endpoint</strong></div>
+                        <div class="detail-line"><span>Качество данных</span><strong>@SelectedItem.Quality</strong></div>
+                        <div class="detail-line"><span>Последний опрос</span><strong>@SelectedItem.LastPoll</strong></div>
+                        <div class="detail-line"><span>Обслуживание</span><strong>@SelectedItem.MaintenanceState</strong></div>
                     </div>
-                    <time>8 с</time>
-                </div>
 
-                <div class="working-row critical">
-                    <span class="status-pill danger">UPS</span>
-                    <div>
-                        <strong>ИБП-2</strong>
-                        <small>Энергетика · батарея · событие требует реакции</small>
+                    <div class="drawer-note @GetSeverityClass(SelectedItem.Severity)">
+                        <strong>@SelectedItem.PrimaryEvent</strong>
+                        <span>@SelectedItem.EventDescription</span>
                     </div>
-                    <time>14:05</time>
-                </div>
-            </div>
-        </article>
+                }
+                else if (_drawerTab == "diagnostics")
+                {
+                    <div class="diagnostics-card">
+                        <h3>Проверка подключения</h3>
+                        <p>Endpoint маскируется, секреты не отображаются. Connection/poll являются информационной проверкой, а не gate для Apply.</p>
 
-        <article class="panel-card">
-            <div class="panel-card-header">
-                <div>
-                    <h2>Действия</h2>
-                    <p>Добавление выполняется через единый staging.</p>
-                </div>
-            </div>
+                        <div class="diagnostics-actions">
+                            <button type="button" class="button primary" @onclick="RunConnectionTest">Проверить связь</button>
+                            <button type="button" class="button ghost" @onclick="RunPollTest">Запустить опрос</button>
+                        </div>
 
-            <div class="quick-links">
-                <a href="/equipment/add">Добавить оборудование</a>
-                <a href="/events">События оборудования</a>
-                <a href="/d/main/overview">Открыть на дашборде</a>
-                <a href="/maintenance/assets">Связанные объекты ТОиР</a>
-            </div>
-        </article>
+                        @if (!string.IsNullOrWhiteSpace(_diagnosticsResult))
+                        {
+                            <div class="diagnostics-result">
+                                @_diagnosticsResult
+                            </div>
+                        }
+                    </div>
+
+                    <div class="drawer-section-grid">
+                        <div class="detail-line"><span>Последний ping</span><strong>@SelectedItem.LastPoll</strong></div>
+                        <div class="detail-line"><span>Средний ответ</span><strong>@SelectedItem.AverageResponse</strong></div>
+                        <div class="detail-line"><span>Ошибки за час</span><strong>@SelectedItem.ErrorsLastHour</strong></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="link-list">
+                        <a href="/d/main/overview">Открыть на дашборде</a>
+                        <a href="/events">Связанные события</a>
+                        <a href="/maintenance">Объект ТОиР</a>
+                        <a href="/builder/dashboards/hvac">Открыть в конструкторе</a>
+                    </div>
+
+                    <div class="drawer-note info">
+                        <strong>Правило доступа</strong>
+                        <span>Прямая ссылка не раскрывает недоступные объекты. Реальный backend повторно проверит право.</span>
+                    </div>
+                }
+            }
+        </aside>
     </div>
 </section>
+
+<style>
+.equipment-title-actions,
+.diagnostics-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+.button:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+}
+
+.button.primary {
+    color: #05241f;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 800;
+}
+
+.button.ghost {
+    background: transparent;
+}
+
+.live-chip.small {
+    min-height: 24px;
+    font-size: 11px;
+}
+
+.equipment-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.compact-metric strong {
+    font-size: 24px;
+}
+
+.equipment-shell-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 12px;
+    align-items: start;
+}
+
+.equipment-main-panel {
+    min-width: 0;
+}
+
+.sticky-header {
+    position: sticky;
+    top: -18px;
+    z-index: 5;
+    padding-top: 4px;
+    background: rgba(14, 28, 39, .96);
+}
+
+.equipment-toolbar {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) 170px 170px;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.field {
+    display: grid;
+    gap: 5px;
+}
+
+.field span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.field input,
+.field select {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 0 9px;
+    outline: 0;
+}
+
+.equipment-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.working-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--text);
+}
+
+.working-table th,
+.working-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.working-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    color: var(--text-2);
+    background: var(--surface-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.working-table tbody tr {
+    cursor: pointer;
+}
+
+.working-table tbody tr:hover,
+.working-table tbody tr.selected {
+    background: rgba(32, 199, 181, .08);
+}
+
+.working-table strong,
+.working-table small,
+.working-table span {
+    display: block;
+}
+
+.working-table small {
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.event-count {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.status-pill,
+.quality-badge {
+    display: inline-flex !important;
+    width: fit-content;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.status-pill.good,
+.quality-badge.good {
+    color: #061b10;
+    background: var(--green);
+}
+
+.status-pill.warning,
+.quality-badge.warning {
+    color: #1e1300;
+    background: var(--amber);
+}
+
+.status-pill.danger,
+.quality-badge.danger {
+    color: #fff;
+    background: var(--red);
+}
+
+.status-pill.info,
+.quality-badge.info {
+    color: #071119;
+    background: var(--blue);
+}
+
+.context-drawer {
+    min-height: 540px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(14, 28, 39, .94);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .16);
+    padding: 13px;
+}
+
+.drawer-empty {
+    min-height: 430px;
+    display: grid;
+    place-content: center;
+    gap: 8px;
+    color: var(--text-2);
+    text-align: center;
+}
+
+.drawer-empty h2,
+.drawer-header h2,
+.diagnostics-card h3 {
+    margin: 0;
+    color: var(--text);
+}
+
+.drawer-empty p,
+.drawer-header p,
+.diagnostics-card p {
+    margin: 4px 0 0;
+    color: var(--muted);
+}
+
+.drawer-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+}
+
+.drawer-tabs {
+    display: flex;
+    gap: 6px;
+    margin: 12px 0;
+}
+
+.drawer-tabs button {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+.drawer-tabs button.active {
+    color: #05241f;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 800;
+}
+
+.drawer-section-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.detail-line {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+}
+
+.detail-line span {
+    color: var(--muted);
+}
+
+.detail-line strong {
+    color: var(--text);
+}
+
+.drawer-note,
+.diagnostics-result {
+    margin-top: 12px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface-2);
+}
+
+.drawer-note strong,
+.drawer-note span {
+    display: block;
+}
+
+.drawer-note span {
+    margin-top: 4px;
+    color: var(--text-2);
+}
+
+.drawer-note.critical { border-color: rgba(255, 93, 115, .45); }
+.drawer-note.warning { border-color: rgba(244, 184, 74, .45); }
+.drawer-note.info { border-color: rgba(85, 166, 255, .45); }
+
+.link-list {
+    display: grid;
+    gap: 8px;
+}
+
+.link-list a {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-2);
+}
+
+.link-list a:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+}
+
+@@media (max-width: 1200px) {
+    .equipment-summary-grid,
+    .equipment-shell-grid,
+    .equipment-toolbar {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+@code {
+    [Parameter]
+    public string? SelectedEquipmentId { get; set; }
+
+    private string _search = string.Empty;
+    private string _stateFilter = "all";
+    private string _protocolFilter = "all";
+    private string _drawerTab = "details";
+    private string _diagnosticsResult = string.Empty;
+
+    private IReadOnlyList<EquipmentItem> EquipmentItems => new List<EquipmentItem>
+    {
+        new("AHU-P1", "Приточная установка П1", "Вентустановка", "Корпус A · Венткамера 2", "Modbus TCP", "192.168.30.41:502 · Unit 1", "Online", "Good", "Требует подтверждения", "Нет подтверждения работы", "EV-002 · alarm occurrence активен", 1, "Связан с устройством", "ППР через 12 дней", "Сегодня · 14:31", "34 мс", "0", "Warning"),
+        new("AHU-P1-DAMPER", "Приточная заслонка П1", "Исполнительный механизм", "Корпус A · Венткамера 2", "Modbus TCP", "192.168.30.41:502 · Unit 2", "Online", "Uncertain", "Связан с устройством", "Обратная связь нестабильна", "quality uncertain, событие не требует ack", 0, "Связан с устройством", "Осмотр через 20 дней", "Сегодня · 14:31", "38 мс", "0", "Info"),
+        new("UPS-2", "ИБП-2", "Электропитание", "Главный комплекс · Энергоблок", "SNMP v3", "10.20.4.18:161", "Online", "Good", "Связан с устройством", "Работа от батареи", "EV-003 · требуется назначение", 1, "Связан с устройством", "Проверка сегодня", "Сегодня · 14:30", "51 мс", "0", "Critical"),
+        new("SW-CORE-1", "Коммутатор ядра 1", "Сеть", "ЦОД · стойка R1", "SNMP v2c", "10.20.1.2:161 · community masked", "Online", "Good", "Связан с устройством", "Состояние в норме", "Нет активных событий", 0, "Связан с устройством", "ППР через 34 дня", "Сегодня · 14:29", "22 мс", "0", "Info"),
+        new("FIRE-ZONE-A3", "Пожарная зона A3", "АПС", "Корпус A · этаж 3", "Modbus TCP", "192.168.50.12:502 · Unit 7", "Offline", "Bad", "Связь требует проверки", "Нет связи с контроллером зоны", "EV-001 · критическое событие", 2, "Связан с устройством", "Аварийная проверка", "Сегодня · 14:12", "timeout", "8", "Critical"),
+        new("MNT-QF-12", "ЩР-12", "Объект обслуживания", "Корпус B · электрощитовая", "ТОиР only", "Нет телеметрии", "Maintenance", "Initializing", "Только ТОиР", "Плановое обслуживание", "Объект существует без устройства диспетчеризации", 0, "ТОиР only", "Наряд WO-241", "Нет опроса", "—", "—", "Info")
+    };
+
+    private IReadOnlyList<EquipmentItem> FilteredItems => EquipmentItems
+        .Where(MatchesSearch)
+        .Where(MatchesState)
+        .Where(MatchesProtocol)
+        .OrderByDescending(item => item.Severity == "Critical")
+        .ThenByDescending(item => item.Severity == "Warning")
+        .ThenBy(item => item.Name)
+        .ToList();
+
+    private EquipmentItem? SelectedItem => string.IsNullOrWhiteSpace(SelectedEquipmentId)
+        ? FilteredItems.FirstOrDefault()
+        : EquipmentItems.FirstOrDefault(item => item.Id.Equals(SelectedEquipmentId, StringComparison.OrdinalIgnoreCase));
+
+    private void SelectItem(string id)
+    {
+        _drawerTab = "details";
+        _diagnosticsResult = string.Empty;
+        Navigation.NavigateTo($"/equipment/{id}");
+    }
+
+    private void ResetFilters()
+    {
+        _search = string.Empty;
+        _stateFilter = "all";
+        _protocolFilter = "all";
+    }
+
+    private void RunConnectionTest()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        _diagnosticsResult = SelectedItem.Connection == "Offline"
+            ? $"Связь не установлена: {SelectedItem.Endpoint}. Последняя ошибка: timeout."
+            : $"Связь установлена: {SelectedItem.Endpoint}. Время ответа: {SelectedItem.AverageResponse}.";
+    }
+
+    private void RunPollTest()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        _diagnosticsResult = SelectedItem.Connection == "Offline"
+            ? "Опрос завершён с ошибками: 0 успешных, 5 ошибок, последний timeout."
+            : "Опрос завершён: 5 запросов, 5 успешных ответов, ошибок 0.";
+    }
+
+    private bool MatchesSearch(EquipmentItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return true;
+        }
+
+        return item.Id.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Type.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Location.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || item.Protocol.Contains(_search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesState(EquipmentItem item)
+    {
+        return _stateFilter == "all" || item.Connection == _stateFilter;
+    }
+
+    private bool MatchesProtocol(EquipmentItem item)
+    {
+        return _protocolFilter == "all" || item.Protocol == _protocolFilter;
+    }
+
+    private string GetRowClass(EquipmentItem item)
+    {
+        return SelectedItem?.Id == item.Id ? "selected" : string.Empty;
+    }
+
+    private string GetTabClass(string tab)
+    {
+        return _drawerTab == tab ? "active" : string.Empty;
+    }
+
+    private static string GetStateClass(string state)
+    {
+        return state switch
+        {
+            "Online" => "good",
+            "Uncertain" => "warning",
+            "Offline" => "danger",
+            "Maintenance" => "info",
+            _ => "info"
+        };
+    }
+
+    private static string GetQualityClass(string quality)
+    {
+        return quality switch
+        {
+            "Good" => "good",
+            "Uncertain" => "warning",
+            "Bad" => "danger",
+            _ => "info"
+        };
+    }
+
+    private static string GetSeverityClass(string severity)
+    {
+        return severity.ToLowerInvariant();
+    }
+
+    private sealed record EquipmentItem(
+        string Id,
+        string Name,
+        string Type,
+        string Location,
+        string Protocol,
+        string Endpoint,
+        string Connection,
+        string Quality,
+        string BindingState,
+        string PrimaryEvent,
+        string EventDescription,
+        int EventCount,
+        string MaintenanceState,
+        string NextMaintenance,
+        string LastPoll,
+        string AverageResponse,
+        string ErrorsLastHour,
+        string Severity
+    );
+}
