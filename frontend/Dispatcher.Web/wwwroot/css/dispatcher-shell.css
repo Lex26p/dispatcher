@@ -1327,3 +1327,110 @@ a {
         grid-template-columns: 1fr;
     }
 }
+
+/* Stage 29.4 — dark theme contrast fix
+   MudBlazor and browser defaults can reintroduce dark typography on the dark shell.
+   Keep all operator workspace copy readable unless a component explicitly opts into accent/status colors. */
+.app-shell,
+.workspace,
+.page-grid,
+.dashboard-runtime-page,
+.dashboard-catalog-layout,
+.context-drawer-static,
+.panel-card,
+.metric-card,
+.dashboard-card,
+.mimic-shell,
+.runtime-alert-card,
+.command-preview-card,
+.header-dropdown {
+    color: var(--text);
+}
+
+.workspace h1,
+.workspace h2,
+.workspace h3,
+.workspace h4,
+.workspace h5,
+.workspace h6,
+.workspace strong,
+.context-drawer-static h1,
+.context-drawer-static h2,
+.context-drawer-static h3,
+.context-drawer-static strong,
+.header-dropdown strong,
+.mud-typography,
+.mud-typography-h1,
+.mud-typography-h2,
+.mud-typography-h3,
+.mud-typography-h4,
+.mud-typography-h5,
+.mud-typography-h6,
+.mud-typography-subtitle1,
+.mud-typography-subtitle2,
+.mud-typography-body1,
+.mud-typography-body2 {
+    color: var(--text) !important;
+}
+
+.workspace p,
+.workspace small,
+.workspace label,
+.workspace .text-secondary,
+.workspace .muted,
+.page-title-row p,
+.panel-card-header p,
+.runtime-title-block p,
+.mimic-header p,
+.context-drawer-title span,
+.dashboard-card p,
+.dashboard-card-topline,
+.dashboard-window-list small,
+.dashboard-meta-grid span,
+.drawer-fact-list span,
+.working-row small,
+.compact-list small,
+.faceplate-value small,
+.runtime-alert-card span,
+.command-preview-card span {
+    color: var(--text-2) !important;
+}
+
+.workspace input,
+.workspace textarea,
+.workspace select,
+.header-search input,
+.catalog-search input {
+    color: var(--text) !important;
+}
+
+.workspace input::placeholder,
+.workspace textarea::placeholder,
+.header-search input::placeholder,
+.catalog-search input::placeholder {
+    color: var(--muted) !important;
+}
+
+/* Preserve intentional dark text on bright accent/status controls. */
+.live-chip,
+.primary-link,
+.mode-switch button.selected,
+.command-preview-card button:not(:disabled),
+.status-pill.warning,
+.status-pill.info,
+.brand-button,
+.avatar {
+    color: #05241f !important;
+}
+
+.status-pill.danger,
+.header-count,
+.dashboard-card-topline strong {
+    color: #ffffff !important;
+}
+
+button:disabled,
+.button-link:disabled,
+.ghost-button:disabled {
+    color: var(--muted) !important;
+}
