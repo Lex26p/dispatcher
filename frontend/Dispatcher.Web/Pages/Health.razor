@@ -1,0 +1,107 @@
+@page "/health"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Health</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Health</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Backend"
+                                      Value="Healthy"
+                                      ValueColor="Color.Success"
+                                      ChipText="Готово"
+                                      ChipColor="Color.Success"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Runtime"
+                                      Value="Running"
+                                      ValueColor="Color.Success"
+                                      ChipText="Принимает запросы"
+                                      ChipColor="Color.Success"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Storage"
+                                      Value="OK"
+                                      ValueColor="Color.Success"
+                                      ChipText="SQLite"
+                                      ChipColor="Color.Info"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Аварии"
+                                      Value="@MockData.GetActiveAlarms().Count.ToString()"
+                                      ValueColor="@(MockData.GetActiveAlarms().Count == 0 ? Color.Success : Color.Error)"
+                                      ChipText="Mock UI"
+                                      ChipColor="Color.Info"
+                                      Class="metric-card" />
+            </MudItem>
+        </MudGrid>
+
+        <DispatcherCard>
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.h6">Компоненты системы</MudText>
+
+                <MudTable T="HealthComponentRow" Items="@_components" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Компонент</MudTh>
+                        <MudTh>Состояние</MudTh>
+                        <MudTh>Описание</MudTh>
+                    </HeaderContent>
+
+                    <RowTemplate>
+                        <MudTd DataLabel="Компонент">@context.Name</MudTd>
+                        <MudTd DataLabel="Состояние">
+                            <DispatcherStatusChip Text="@context.Status"
+                                                  Color="@GetHealthStatusColor(context.Status)" />
+                        </MudTd>
+                        <MudTd DataLabel="Описание">@context.Description</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudStack>
+        </DispatcherCard>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<HealthComponentRow> _components = new List<HealthComponentRow>
+    {
+        new("HTTP API", "Healthy", "Backend API отвечает на запросы."),
+        new("Runtime", "Healthy", "Основной runtime запущен."),
+        new("Storage", "Healthy", "SQLite storage доступен."),
+        new("Notifications", "Warning", "Есть mock-предупреждения доставки."),
+        new("History pipeline", "Healthy", "Запись истории доступна.")
+    };
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Health");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private static Color GetHealthStatusColor(string status)
+    {
+        return status switch
+        {
+            "Healthy" => Color.Success,
+            "Warning" => Color.Warning,
+            "Error" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record HealthComponentRow(
+        string Name,
+        string Status,
+        string Description
+    );
+}

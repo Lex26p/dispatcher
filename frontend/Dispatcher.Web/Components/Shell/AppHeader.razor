@@ -1,0 +1,174 @@
+@inject NavigationManager Navigation
+
+<header class="app-header">
+    <button type="button"
+            class="brand-button"
+            title="Диспетчер"
+            @onclick="GoHome">
+        D
+    </button>
+
+    <button type="button" class="header-location">
+        <span class="status-dot"></span>
+        <span>Главный комплекс</span>
+    </button>
+
+    <div class="header-divider"></div>
+
+    <div class="header-service">
+        <span>@ServiceTitle</span>
+    </div>
+
+    <div class="header-spacer"></div>
+
+    <label class="header-search">
+        <CoreIcon Name="search" />
+        <input placeholder="Поиск, команда или объект..." />
+    </label>
+
+    <button type="button"
+            class="@ControlButtonClass"
+            @onclick="ToggleControl">
+        <CoreIcon Name="command" />
+        <span>@ControlText</span>
+    </button>
+
+    <button type="button"
+            class="header-action compact"
+            title="Персональные оповещения">
+        <CoreIcon Name="mail" />
+        <span class="header-count personal">2</span>
+    </button>
+
+    <button type="button"
+            class="header-action compact"
+            title="Диспетчер событий"
+            @onclick="OpenEvents">
+        <CoreIcon Name="bell" />
+        <span class="header-count">3</span>
+    </button>
+
+    <div class="header-menu-anchor">
+        <button type="button"
+                class="header-action profile"
+                @onclick="ToggleUserMenu">
+            <span class="avatar">АС</span>
+            <span>Алексей Смирнов</span>
+        </button>
+
+        @if (_userMenuOpen)
+        {
+            <div class="header-dropdown user-menu">
+                <div class="user-menu-summary">
+                    <span class="avatar">АС</span>
+
+                    <div>
+                        <strong>Алексей Смирнов</strong>
+                        <span>Дежурный диспетчер</span>
+                    </div>
+                </div>
+
+                <div class="user-menu-links">
+                    <button type="button" @onclick='() => Go("/me")'>
+                        <CoreIcon Name="user" />
+                        <span>Моя страница</span>
+                    </button>
+
+                    <button type="button" @onclick='() => Go("/my-work")'>
+                        <CoreIcon Name="work" />
+                        <span>Моя работа</span>
+                        <span class="user-menu-badge">3</span>
+                    </button>
+
+                    <button type="button" @onclick='() => Go("/settings/notifications")'>
+                        <CoreIcon Name="bell" />
+                        <span>Настройка оповещений</span>
+                    </button>
+
+                    <button type="button" @onclick='() => Go("/settings/profile")'>
+                        <CoreIcon Name="settings" />
+                        <span>Настройки профиля</span>
+                    </button>
+
+                    <button type="button" class="logout" @onclick='() => Go("/logout")'>
+                        <span>Выйти</span>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</header>
+
+@code {
+    private bool _userMenuOpen;
+    private bool _controlEnabled;
+
+    private string ServiceTitle =>
+        GetCurrentPath() switch
+        {
+            "/home" => "Главная",
+            "/dashboards" => "Дашборды",
+            "/events" => "Диспетчер событий",
+            "/equipment" => "Оборудование",
+            "/maintenance" => "ТОиР и ППР",
+            var path when path.StartsWith("/builder") => "Конструктор",
+            var path when path.StartsWith("/admin") => "Системные настройки",
+            var path when path.StartsWith("/settings") => "Настройки профиля",
+            _ => "Диспетчер"
+        };
+
+    private string ControlText =>
+        _controlEnabled
+            ? "Управление включено"
+            : "Включить управление";
+
+    private string ControlButtonClass =>
+        _controlEnabled
+            ? "header-action control-on"
+            : "header-action";
+
+    private void ToggleUserMenu()
+    {
+        _userMenuOpen = !_userMenuOpen;
+    }
+
+    private void ToggleControl()
+    {
+        _controlEnabled = !_controlEnabled;
+    }
+
+    private void GoHome()
+    {
+        Go("/home");
+    }
+
+    private void OpenEvents()
+    {
+        Go("/events");
+    }
+
+    private void Go(string url)
+    {
+        _userMenuOpen = false;
+        Navigation.NavigateTo(url);
+    }
+
+    private string GetCurrentPath()
+    {
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        if (string.IsNullOrWhiteSpace(relative))
+        {
+            return "/";
+        }
+
+        var queryIndex = relative.IndexOf('?');
+
+        if (queryIndex >= 0)
+        {
+            relative = relative[..queryIndex];
+        }
+
+        return "/" + relative.TrimStart('/');
+    }
+}

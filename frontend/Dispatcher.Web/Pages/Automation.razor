@@ -1,0 +1,340 @@
+@page "/automation"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Автоматизация</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Автоматизация</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "Скрипты")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_scriptSearchQuery"
+                                      Placeholder="Поиск скриптов..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новый скрипт
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <DispatcherCard Class="mt-3">
+                        <MudTable T="ScriptRow" Items="@FilteredScripts" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Скрипт</MudTh>
+                                <MudTh>Тип</MudTh>
+                                <MudTh>Статус</MudTh>
+                                <MudTh>Последний запуск</MudTh>
+                                <MudTh>Результат</MudTh>
+                                <MudTh>Действия</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Скрипт">@context.Name</MudTd>
+                                <MudTd DataLabel="Тип">@context.Type</MudTd>
+                                <MudTd DataLabel="Статус">
+                                    <DispatcherStatusChip Text="@context.Status"
+                                                          Color="@GetAutomationStatusColor(context.Status)" />
+                                </MudTd>
+                                <MudTd DataLabel="Последний запуск">@context.LastRun</MudTd>
+                                <MudTd DataLabel="Результат">@context.LastResult</MudTd>
+                                <MudTd DataLabel="Действия">
+                                    <MudStack Row="true" Spacing="1">
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                                            Открыть
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Outlined" Size="Size.Small">
+                                            Запустить
+                                        </MudButton>
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Сценарии")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_scenarioSearchQuery"
+                                      Placeholder="Поиск сценариев..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новый сценарий
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        @foreach (var scenario in FilteredScenarios)
+                        {
+                            <MudItem xs="12" md="6" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@scenario.Name</MudText>
+                                            <DispatcherStatusChip Text="@scenario.Status"
+                                                                  Color="@GetAutomationStatusColor(scenario.Status)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Триггер: @scenario.Trigger
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Шагов: @scenario.StepCount
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Последний запуск: @scenario.LastRun
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small">
+                                                Открыть
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small">
+                                                Проверить
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_scheduleSearchQuery"
+                                      Placeholder="Поиск расписаний..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новое расписание
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <DispatcherCard Class="mt-3">
+                        <MudTable T="ScheduleRow" Items="@FilteredSchedules" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Расписание</MudTh>
+                                <MudTh>Период</MudTh>
+                                <MudTh>Действие</MudTh>
+                                <MudTh>Статус</MudTh>
+                                <MudTh>Следующий запуск</MudTh>
+                                <MudTh>Действия</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Расписание">@context.Name</MudTd>
+                                <MudTd DataLabel="Период">@context.Period</MudTd>
+                                <MudTd DataLabel="Действие">@context.Action</MudTd>
+                                <MudTd DataLabel="Статус">
+                                    <DispatcherStatusChip Text="@context.Status"
+                                                          Color="@GetAutomationStatusColor(context.Status)" />
+                                </MudTd>
+                                <MudTd DataLabel="Следующий запуск">@context.NextRun</MudTd>
+                                <MudTd DataLabel="Действия">
+                                    <MudStack Row="true" Spacing="1">
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                                            Открыть
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Outlined" Size="Size.Small">
+                                            Отключить
+                                        </MudButton>
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </DispatcherCard>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Скрипты",
+        "Сценарии",
+        "Расписания"
+    };
+
+    private string _activeSection = "Скрипты";
+    private string _scriptSearchQuery = string.Empty;
+    private string _scenarioSearchQuery = string.Empty;
+    private string _scheduleSearchQuery = string.Empty;
+
+    private IReadOnlyList<ScriptRow> Scripts => new List<ScriptRow>
+    {
+        new("Проверка зависших аварий", "Системный", "Включен", "12:00", "Успешно"),
+        new("Архивация старых событий", "Обслуживание", "Включен", "03:00", "Успешно"),
+        new("Проверка каналов уведомлений", "Диагностика", "Отключен", "Вчера 18:00", "Пропущен")
+    };
+
+    private IReadOnlyList<ScenarioCard> Scenarios => new List<ScenarioCard>
+    {
+        new("Эскалация критической аварии", "Критическая авария не подтверждена 5 минут", "Включен", 4, "12:05"),
+        new("Отключение вентиляции по расписанию", "Расписание", "Черновик", 6, "Не запускался"),
+        new("Уведомление о потере связи", "Устройство недоступно", "Включен", 3, "11:40")
+    };
+
+    private IReadOnlyList<ScheduleRow> Schedules => new List<ScheduleRow>
+    {
+        new("Суточный отчет", "Каждый день 08:00", "Сформировать отчет", "Включен", "Завтра 08:00"),
+        new("Очистка временных данных", "Каждую ночь 03:00", "Запустить скрипт", "Включен", "Завтра 03:00"),
+        new("Тест уведомлений", "Каждый понедельник 10:00", "Проверить каналы", "Отключен", "Не запланирован")
+    };
+
+    private IReadOnlyList<ScriptRow> FilteredScripts =>
+        Scripts
+            .Where(MatchesScriptSearch)
+            .ToList();
+
+    private IReadOnlyList<ScenarioCard> FilteredScenarios =>
+        Scenarios
+            .Where(MatchesScenarioSearch)
+            .ToList();
+
+    private IReadOnlyList<ScheduleRow> FilteredSchedules =>
+        Schedules
+            .Where(MatchesScheduleSearch)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Автоматизация");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private bool MatchesScriptSearch(ScriptRow item)
+    {
+        if (string.IsNullOrWhiteSpace(_scriptSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_scriptSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Type.Contains(_scriptSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_scriptSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.LastResult.Contains(_scriptSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesScenarioSearch(ScenarioCard item)
+    {
+        if (string.IsNullOrWhiteSpace(_scenarioSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_scenarioSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Trigger.Contains(_scenarioSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_scenarioSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesScheduleSearch(ScheduleRow item)
+    {
+        if (string.IsNullOrWhiteSpace(_scheduleSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_scheduleSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Period.Contains(_scheduleSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Action.Contains(_scheduleSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_scheduleSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static Color GetAutomationStatusColor(string status)
+    {
+        return status switch
+        {
+            "Включен" => Color.Success,
+            "Отключен" => Color.Default,
+            "Черновик" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record ScriptRow(
+        string Name,
+        string Type,
+        string Status,
+        string LastRun,
+        string LastResult
+    );
+
+    private sealed record ScenarioCard(
+        string Name,
+        string Trigger,
+        string Status,
+        int StepCount,
+        string LastRun
+    );
+
+    private sealed record ScheduleRow(
+        string Name,
+        string Period,
+        string Action,
+        string Status,
+        string NextRun
+    );
+}

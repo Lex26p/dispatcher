@@ -1,0 +1,61 @@
+﻿{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-vs-debug",
+      "displayName": "Windows Visual Studio Debug",
+      "description": "Debug build using Visual Studio 2026 generator on Windows",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "DISPATCHER_BUILD_TESTS": "ON",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "windows-vs-release",
+      "displayName": "Windows Visual Studio Release",
+      "description": "Release build using Visual Studio 2026 generator on Windows",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "DISPATCHER_BUILD_TESTS": "ON",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-vs-debug",
+      "displayName": "Build Windows Visual Studio Debug",
+      "configurePreset": "windows-vs-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs-release",
+      "displayName": "Build Windows Visual Studio Release",
+      "configurePreset": "windows-vs-release",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-vs-debug",
+      "displayName": "Test Windows Visual Studio Debug",
+      "configurePreset": "windows-vs-debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

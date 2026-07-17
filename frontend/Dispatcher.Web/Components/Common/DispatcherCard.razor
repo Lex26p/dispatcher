@@ -1,0 +1,31 @@
+<MudCard Class="@RootClass" Elevation="@Elevation">
+    @if (UseContentPadding)
+    {
+        <MudCardContent>
+            @ChildContent
+        </MudCardContent>
+    }
+    else
+    {
+        @ChildContent
+    }
+</MudCard>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public int Elevation { get; set; }
+
+    [Parameter]
+    public bool UseContentPadding { get; set; } = true;
+
+    private string RootClass =>
+        string.IsNullOrWhiteSpace(Class)
+            ? "dispatcher-card"
+            : $"dispatcher-card {Class}";
+}

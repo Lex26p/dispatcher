@@ -1,0 +1,195 @@
+<MudGrid>
+    <MudItem xs="12" lg="7">
+        <DispatcherCard>
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.h6">Добавить устройство</MudText>
+
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    Это UI-макет добавления устройства. Сохранение подключим позже.
+                </MudAlert>
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Имя устройства"
+                                      Value="@("Новое устройство")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Тип устройства"
+                                      Value="@("Устройство")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Объект"
+                                      Value="@("Вентиляция")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Местоположение"
+                                      Value="@("Не задано")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Протокол"
+                                      Value="@("Modbus TCP")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string"
+                                      Label="Адрес"
+                                      Value="@("192.168.10.100:502")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudDivider />
+
+                <MudText Typo="Typo.subtitle1">
+                    Теги устройства
+                </MudText>
+
+                <DispatcherEmptyState Title="Теги пока не добавлены"
+                                      Description="Позже здесь будет таблица тегов устройства."
+                                      Icon="@Icons.Material.Filled.Tag" />
+
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Save">
+                        Сохранить черновик
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Done">
+                        Применить устройство
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </DispatcherCard>
+    </MudItem>
+
+    <MudItem xs="12" lg="5">
+        <DispatcherCard Class="device-diagnostics-panel">
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.h6">Проверка и диагностика</MudText>
+
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                    Проверка выполняется от сервера к устройству. Сейчас это mock-режим.
+                </MudAlert>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.NetworkPing"
+                           OnClick="OnCheckConnection">
+                    Проверить связь
+                </MudButton>
+
+                @if (PingResult is not null)
+                {
+                    <MudAlert Severity="@(PingResult.Success ? Severity.Success : Severity.Error)"
+                              Variant="Variant.Outlined">
+                        @if (PingResult.Success)
+                        {
+                            <span>Связь есть. Время ответа: @PingResult.ResponseTimeMs мс.</span>
+                        }
+                        else
+                        {
+                            <span>Связь не установлена. Ошибка: @PingResult.Error</span>
+                        }
+                    </MudAlert>
+                }
+
+                <MudDivider />
+
+                <MudText Typo="Typo.subtitle2">Тестовый опрос</MudText>
+
+                <MudNumericField T="int"
+                                 Value="@PollRequestCount"
+                                 ValueChanged="@PollRequestCountChanged"
+                                 Label="Количество запросов"
+                                 Min="1"
+                                 Max="100"
+                                 Step="1"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" />
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="OnRunPollTest">
+                    Запустить опрос
+                </MudButton>
+
+                @if (PollResult is not null)
+                {
+                    <MudPaper Class="device-diagnostics-result" Elevation="0">
+                        <MudText Typo="Typo.subtitle2">Результат опроса</MudText>
+
+                        <div class="device-diagnostics-grid">
+                            <span>Всего запросов</span>
+                            <strong>@PollResult.TotalRequests</strong>
+
+                            <span>Ответов получено</span>
+                            <strong>@PollResult.SuccessfulResponses</strong>
+
+                            <span>Неудачных запросов</span>
+                            <strong>@PollResult.FailedRequests</strong>
+
+                            <span>Среднее время</span>
+                            <strong>@PollResult.AverageResponseTimeMs мс</strong>
+
+                            <span>Минимальное время</span>
+                            <strong>@PollResult.MinResponseTimeMs мс</strong>
+
+                            <span>Максимальное время</span>
+                            <strong>@PollResult.MaxResponseTimeMs мс</strong>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(PollResult.LastError))
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2">
+                                Последняя ошибка: @PollResult.LastError
+                            </MudAlert>
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        </DispatcherCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter]
+    public int PollRequestCount { get; set; }
+
+    [Parameter]
+    public EventCallback<int> PollRequestCountChanged { get; set; }
+
+    [Parameter]
+    public MockDevicePingResult? PingResult { get; set; }
+
+    [Parameter]
+    public MockDevicePollTestResult? PollResult { get; set; }
+
+    [Parameter]
+    public EventCallback OnCheckConnection { get; set; }
+
+    [Parameter]
+    public EventCallback OnRunPollTest { get; set; }
+}

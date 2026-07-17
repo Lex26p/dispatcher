@@ -1,0 +1,133 @@
+@page "/runtime"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Runtime</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Runtime</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Состояние"
+                                      Value="Running"
+                                      ValueColor="Color.Success"
+                                      ChipText="Активен"
+                                      ChipColor="Color.Success"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Устройства"
+                                      Value="@MockData.GetDevices().Count.ToString()"
+                                      ValueColor="Color.Primary"
+                                      ChipText="Mock data"
+                                      ChipColor="Color.Info"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Теги"
+                                      Value="@MockData.GetTags().Count.ToString()"
+                                      ValueColor="Color.Primary"
+                                      ChipText="Mock data"
+                                      ChipColor="Color.Info"
+                                      Class="metric-card" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" lg="3">
+                <DispatcherMetricCard Title="Очереди"
+                                      Value="0"
+                                      ValueColor="Color.Success"
+                                      ChipText="Нет задержек"
+                                      ChipColor="Color.Success"
+                                      Class="metric-card" />
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12" lg="6">
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Runtime pipeline</MudText>
+
+                        <div class="runtime-pipeline">
+                            @foreach (var item in _pipeline)
+                            {
+                                <div class="runtime-pipeline-node">
+                                    <DispatcherStatusChip Text="@item.Status"
+                                                          Color="@GetRuntimeStatusColor(item.Status)" />
+
+                                    <MudText Typo="Typo.subtitle2">@item.Name</MudText>
+
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        @item.Description
+                                    </MudText>
+                                </div>
+                            }
+                        </div>
+                    </MudStack>
+                </DispatcherCard>
+            </MudItem>
+
+            <MudItem xs="12" lg="6">
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Последние runtime-события</MudText>
+
+                        <MudTable T="MockEvent" Items="@MockData.GetEvents()" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Время</MudTh>
+                                <MudTh>Тип</MudTh>
+                                <MudTh>Сообщение</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Время">@context.Time</MudTd>
+                                <MudTd DataLabel="Тип">@context.Type</MudTd>
+                                <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudStack>
+                </DispatcherCard>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<RuntimePipelineRow> _pipeline = new List<RuntimePipelineRow>
+    {
+        new("HTTP API", "OK", "Принимает внешние запросы."),
+        new("Runtime core", "OK", "Обрабатывает runtime-состояние."),
+        new("Device polling", "OK", "Опрос устройств активен."),
+        new("History writer", "OK", "Пишет исторические значения."),
+        new("Alarm engine", "Warning", "Есть активные mock-аварии."),
+        new("Notification delivery", "OK", "Доставка готова к подключению.")
+    };
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Runtime");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private static Color GetRuntimeStatusColor(string status)
+    {
+        return status switch
+        {
+            "OK" => Color.Success,
+            "Warning" => Color.Warning,
+            "Error" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record RuntimePipelineRow(
+        string Name,
+        string Status,
+        string Description
+    );
+}

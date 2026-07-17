@@ -1,0 +1,47 @@
+@page "/logout"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Выход</PageTitle>
+
+<DispatcherPageSurface>
+    <div class="logout-page">
+        <DispatcherCard Class="logout-card">
+            <MudStack Spacing="3" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Logout"
+                         Size="Size.Large"
+                         Color="Color.Primary" />
+
+                <MudText Typo="Typo.h5" Align="Align.Center">
+                    Выход из системы
+                </MudText>
+
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                    Авторизация будет подключена позже. Сейчас это макет страницы выхода.
+                </MudText>
+
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Href="/"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary">
+                        Вернуться в систему
+                    </MudButton>
+
+                    <MudButton Href="/account"
+                               Variant="Variant.Outlined">
+                        Личный кабинет
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </DispatcherCard>
+    </div>
+</DispatcherPageSurface>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Выход");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+}

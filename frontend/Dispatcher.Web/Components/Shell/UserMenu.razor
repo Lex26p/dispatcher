@@ -1,0 +1,43 @@
+@inject NavigationManager Navigation
+
+<div class="dispatcher-dropdown user-dropdown">
+    <MudIconButton Icon="@Icons.Material.Filled.AccountCircle"
+                   Color="Color.Inherit"
+                   Variant="Variant.Text"
+                   Class="user-menu-button"
+                   OnClick="ToggleMenu" />
+
+    @if (_open)
+    {
+        <div class="dispatcher-dropdown-panel dispatcher-dropdown-panel-right">
+            <button type="button" class="dispatcher-dropdown-item" @onclick='() => Go("/account")'>
+                Личный кабинет
+            </button>
+
+            <button type="button" class="dispatcher-dropdown-item" @onclick='() => Go("/security/preview-role")'>
+                Просмотр как роль
+            </button>
+
+            <div class="dispatcher-dropdown-divider"></div>
+
+            <button type="button" class="dispatcher-dropdown-item" @onclick='() => Go("/logout")'>
+                Выйти
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _open;
+
+    private void ToggleMenu()
+    {
+        _open = !_open;
+    }
+
+    private void Go(string url)
+    {
+        _open = false;
+        Navigation.NavigateTo(url);
+    }
+}

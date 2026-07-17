@@ -1,0 +1,350 @@
+@page "/configuration"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject MockDeviceDiagnosticsService Diagnostics
+
+<PageTitle>Конфигурация</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Конфигурация</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "Устройства")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_deviceSearchQuery"
+                                      Placeholder="Поиск устройств..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudSelect T="string"
+                                   Label="Статус"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Value="_deviceStatusFilter">
+                            <MudSelectItem T="string" Value="@("all")">Все</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("На связи")">На связи</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Авария")">Авария</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Нет связи")">Нет связи</MudSelectItem>
+                        </MudSelect>
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => SelectSection("Добавить устройство"))">
+                            Добавить устройство
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        <MudItem xs="12" lg="8">
+                            <DispatcherCard>
+                                <MudTable T="MockDevice" Items="@FilteredDevices" Dense="true" Hover="true">
+                                    <HeaderContent>
+                                        <MudTh>Устройство</MudTh>
+                                        <MudTh>Объект</MudTh>
+                                        <MudTh>Местоположение</MudTh>
+                                        <MudTh>Протокол</MudTh>
+                                        <MudTh>Адрес</MudTh>
+                                        <MudTh>Статус</MudTh>
+                                        <MudTh>Теги</MudTh>
+                                        <MudTh>Действия</MudTh>
+                                    </HeaderContent>
+
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Устройство">@context.Name</MudTd>
+                                        <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                        <MudTd DataLabel="Местоположение">@context.Location</MudTd>
+                                        <MudTd DataLabel="Протокол">@context.Protocol</MudTd>
+                                        <MudTd DataLabel="Адрес">@context.Endpoint</MudTd>
+                                        <MudTd DataLabel="Статус">
+                                            <DispatcherStatusChip Text="@context.Status"
+                                                                  Color="@GetDeviceStatusColor(context.Status)" />
+                                        </MudTd>
+                                        <MudTd DataLabel="Теги">@context.TagCount</MudTd>
+                                        <MudTd DataLabel="Действия">
+                                            <MudButton Size="Size.Small"
+                                                       Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       OnClick="() => SelectDevice(context)">
+                                                Открыть
+                                            </MudButton>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </DispatcherCard>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="4">
+                            <DeviceDiagnosticsPanel Device="@SelectedDevice"
+                                                    PingResult="@_pingResult"
+                                                    PollResult="@_pollResult"
+                                                    PollRequestCount="@_pollRequestCount"
+                                                    PollRequestCountChanged="OnPollRequestCountChanged"
+                                                    OnCheckConnection="CheckSelectedDeviceConnection"
+                                                    OnRunPollTest="RunSelectedDevicePollTest" />
+                        </MudItem>
+                    </MudGrid>
+                }
+                else if (_activeSection == "Теги")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_tagSearchQuery"
+                                      Placeholder="Поиск тегов..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudSelect T="string"
+                                   Label="Тип сигнала"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Value="_tagSignalTypeFilter">
+                            <MudSelectItem T="string" Value="@("all")">Все</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Analog")">Analog</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Discrete")">Discrete</MudSelectItem>
+                        </MudSelect>
+                    </DispatcherToolbar>
+
+                    <DispatcherCard Class="mt-3">
+                        <MudTable T="MockTag" Items="@FilteredTags" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Тег</MudTh>
+                                <MudTh>Название</MudTh>
+                                <MudTh>Устройство</MudTh>
+                                <MudTh>Объект</MudTh>
+                                <MudTh>Значение</MudTh>
+                                <MudTh>Ед.</MudTh>
+                                <MudTh>Качество</MudTh>
+                                <MudTh>Тип</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Тег">@context.Name</MudTd>
+                                <MudTd DataLabel="Название">@context.DisplayName</MudTd>
+                                <MudTd DataLabel="Устройство">@context.DeviceName</MudTd>
+                                <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                <MudTd DataLabel="Значение">@context.Value</MudTd>
+                                <MudTd DataLabel="Ед.">@context.Unit</MudTd>
+                                <MudTd DataLabel="Качество">
+                                    <DispatcherStatusChip Text="@context.Quality"
+                                                          Color="Color.Success" />
+                                </MudTd>
+                                <MudTd DataLabel="Тип">@context.SignalType</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </DispatcherCard>
+                }
+                else
+                {
+                    <AddDeviceMockPanel PollRequestCount="@_newDevicePollRequestCount"
+                                        PollRequestCountChanged="OnNewDevicePollRequestCountChanged"
+                                        PingResult="@_newDevicePingResult"
+                                        PollResult="@_newDevicePollResult"
+                                        OnCheckConnection="CheckNewDeviceConnection"
+                                        OnRunPollTest="RunNewDevicePollTest" />
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Устройства",
+        "Теги",
+        "Добавить устройство"
+    };
+
+    private string _activeSection = "Устройства";
+    private string _deviceSearchQuery = string.Empty;
+    private string _tagSearchQuery = string.Empty;
+    private string _deviceStatusFilter = "all";
+    private string _tagSignalTypeFilter = "all";
+    private string? _selectedDeviceId;
+
+    private int _pollRequestCount = 10;
+    private int _newDevicePollRequestCount = 10;
+
+    private MockDevicePingResult? _pingResult;
+    private MockDevicePollTestResult? _pollResult;
+    private MockDevicePingResult? _newDevicePingResult;
+    private MockDevicePollTestResult? _newDevicePollResult;
+
+    private MockDevice? SelectedDevice =>
+        string.IsNullOrWhiteSpace(_selectedDeviceId)
+            ? MockData.GetDevices().FirstOrDefault()
+            : MockData.GetDevices().FirstOrDefault(item => item.Id == _selectedDeviceId);
+
+    private MockDevice DraftDevice =>
+        new(
+            Id: "draft-device",
+            Name: "Новое устройство",
+            Type: "Устройство",
+            ObjectId: "ventilation",
+            ObjectName: "Вентиляция",
+            Location: "Не задано",
+            Protocol: "Modbus TCP",
+            Endpoint: "192.168.10.100:502",
+            Status: "На связи",
+            TagCount: 0,
+            LastPoll: "нет данных"
+        );
+
+    private IReadOnlyList<MockDevice> FilteredDevices =>
+        MockData.GetDevices()
+            .Where(MatchesDeviceSearch)
+            .Where(MatchesDeviceStatus)
+            .OrderBy(item => item.ObjectName)
+            .ThenBy(item => item.Name)
+            .ToList();
+
+    private IReadOnlyList<MockTag> FilteredTags =>
+        MockData.GetTags()
+            .Where(MatchesTagSearch)
+            .Where(MatchesSignalType)
+            .OrderBy(item => item.ObjectName)
+            .ThenBy(item => item.DeviceName)
+            .ThenBy(item => item.DisplayName)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Конфигурация");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+
+        _selectedDeviceId = MockData.GetDevices().FirstOrDefault()?.Id;
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private void SelectDevice(MockDevice device)
+    {
+        _selectedDeviceId = device.Id;
+        _pingResult = null;
+        _pollResult = null;
+    }
+
+    private void CheckSelectedDeviceConnection()
+    {
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+
+        _pingResult = Diagnostics.CheckConnection(SelectedDevice);
+    }
+
+    private void RunSelectedDevicePollTest()
+    {
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+
+        _pollResult = Diagnostics.RunPollTest(SelectedDevice, _pollRequestCount);
+    }
+
+    private void CheckNewDeviceConnection()
+    {
+        _newDevicePingResult = Diagnostics.CheckConnection(DraftDevice);
+    }
+
+    private void RunNewDevicePollTest()
+    {
+        _newDevicePollResult = Diagnostics.RunPollTest(DraftDevice, _newDevicePollRequestCount);
+    }
+
+    private void OnPollRequestCountChanged(int value)
+    {
+        _pollRequestCount = Math.Clamp(value, 1, 100);
+    }
+
+    private void OnNewDevicePollRequestCountChanged(int value)
+    {
+        _newDevicePollRequestCount = Math.Clamp(value, 1, 100);
+    }
+
+    private bool MatchesDeviceSearch(MockDevice device)
+    {
+        if (string.IsNullOrWhiteSpace(_deviceSearchQuery))
+        {
+            return true;
+        }
+
+        return device.Name.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || device.Type.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || device.ObjectName.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || device.Location.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || device.Protocol.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || device.Endpoint.Contains(_deviceSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesDeviceStatus(MockDevice device)
+    {
+        return _deviceStatusFilter == "all" || device.Status == _deviceStatusFilter;
+    }
+
+    private bool MatchesTagSearch(MockTag tag)
+    {
+        if (string.IsNullOrWhiteSpace(_tagSearchQuery))
+        {
+            return true;
+        }
+
+        return tag.Name.Contains(_tagSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || tag.DisplayName.Contains(_tagSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || tag.DeviceName.Contains(_tagSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || tag.ObjectName.Contains(_tagSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesSignalType(MockTag tag)
+    {
+        return _tagSignalTypeFilter == "all" || tag.SignalType == _tagSignalTypeFilter;
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static Color GetDeviceStatusColor(string status)
+    {
+        return status switch
+        {
+            "На связи" => Color.Success,
+            "Авария" => Color.Error,
+            "Нет связи" => Color.Error,
+            _ => Color.Default
+        };
+    }
+}

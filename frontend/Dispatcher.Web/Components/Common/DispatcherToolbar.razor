@@ -1,0 +1,19 @@
+<MudPaper Class="@RootClass" Elevation="@Elevation">
+    @ChildContent
+</MudPaper>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public int Elevation { get; set; }
+
+    private string RootClass =>
+        string.IsNullOrWhiteSpace(Class)
+            ? "dispatcher-toolbar"
+            : $"dispatcher-toolbar {Class}";
+}

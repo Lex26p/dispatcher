@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "application": {
+    "name": "dispatcher",
+    "component": "backend",
+    "environment": "local-package",
+    "versionTag": "v1.8.0-service-packaging"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 18080,
+    "baseUrl": "http://127.0.0.1:18080",
+    "requestTimeoutMs": 30000,
+    "enableCors": true,
+    "cors": {
+      "allowedOrigins": [
+        "http://127.0.0.1:5000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173"
+      ],
+      "allowedMethods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS"
+      ],
+      "allowedHeaders": [
+        "Content-Type",
+        "Authorization",
+        "X-Request-Id",
+        "X-Correlation-Id"
+      ]
+    }
+  },
+  "runtime": {
+    "mode": "local",
+    "demoMode": true,
+    "startupConfigurationPath": "config/configuration-snapshot.json",
+    "healthCheckIntervalMs": 5000,
+    "readyWhenConfigurationLoaded": true
+  },
+  "storage": {
+    "provider": "sqlite",
+    "sqlite": {
+      "databasePath": "data/dispatcher.db",
+      "applyMigrationsOnStartup": true,
+      "busyTimeoutMs": 5000
+    }
+  },
+  "history": {
+    "enabled": true,
+    "retentionDays": 30,
+    "flushIntervalMs": 1000
+  },
+  "alarms": {
+    "enabled": true,
+    "defaultAckRequired": true,
+    "shelvingEnabled": true,
+    "suppressionEnabled": true,
+    "inhibitionEnabled": true
+  },
+  "telemetry": {
+    "provider": "simulator",
+    "simulator": {
+      "enabled": true,
+      "sampleIntervalMs": 1000
+    },
+    "modbusTcp": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 502,
+      "unitId": 1,
+      "pollIntervalMs": 1000,
+      "connectTimeoutMs": 3000,
+      "requestTimeoutMs": 3000
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "file": {
+      "enabled": true,
+      "directory": "logs/notifications",
+      "fileName": "notifications.log",
+      "append": true
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "https://example.local/dispatcher/webhook",
+      "timeoutMs": 5000,
+      "successStatusMin": 200,
+      "successStatusMax": 299,
+      "includeAttributes": true,
+      "headers": {
+        "X-Dispatcher-Source": "dispatcher"
+      }
+    }
+  },
+  "authAudit": {
+    "enabled": false,
+    "authorizationEnforcement": false,
+    "auditRecording": true,
+    "recordAllowedDecisions": true,
+    "recordDeniedDecisions": true,
+    "sink": {
+      "provider": "in-memory"
+    }
+  },
+  "logging": {
+    "level": "Information",
+    "directory": "logs",
+    "fileName": "dispatcher-backend.log"
+  },
+  "paths": {
+    "dataDirectory": "data",
+    "logsDirectory": "logs",
+    "wwwrootDirectory": "wwwroot"
+  }
+}

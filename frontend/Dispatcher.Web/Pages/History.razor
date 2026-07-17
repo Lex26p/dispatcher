@@ -1,0 +1,347 @@
+@page "/history"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>История / Графики / Отчеты</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">История / Графики / Отчеты</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "История")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_historySearchQuery"
+                                      Placeholder="Поиск по объекту, устройству или тегу..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudSelect T="string"
+                                   Label="Период"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Value="_period">
+                            <MudSelectItem T="string" Value="@("1h")">Последний час</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("shift")">Текущая смена</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("day")">Сутки</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("week")">Неделя</MudSelectItem>
+                        </MudSelect>
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Refresh">
+                            Обновить
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        <MudItem xs="12" lg="8">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">Исторические значения</MudText>
+
+                                    <MudTable T="HistoryValueRow" Items="@FilteredHistoryRows" Dense="true" Hover="true">
+                                        <HeaderContent>
+                                            <MudTh>Время</MudTh>
+                                            <MudTh>Объект</MudTh>
+                                            <MudTh>Тег</MudTh>
+                                            <MudTh>Значение</MudTh>
+                                            <MudTh>Качество</MudTh>
+                                        </HeaderContent>
+
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Время">@context.Time</MudTd>
+                                            <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                            <MudTd DataLabel="Тег">@context.TagName</MudTd>
+                                            <MudTd DataLabel="Значение">@context.Value</MudTd>
+                                            <MudTd DataLabel="Качество">
+                                                <DispatcherStatusChip Text="@context.Quality" Color="Color.Success" />
+                                            </MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="4">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">Быстрый выбор тегов</MudText>
+
+                                    @foreach (var tag in MockData.GetTags())
+                                    {
+                                        <button type="button"
+                                                class="history-tag-button"
+                                                @onclick="() => SelectTag(tag.DisplayName)">
+                                            <span>@tag.DisplayName</span>
+                                            <small>@tag.ObjectName · @tag.DeviceName</small>
+                                        </button>
+                                    }
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else if (_activeSection == "Графики")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_chartTagQuery"
+                                      Placeholder="Выбрать тег для графика..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudSelect T="string"
+                                   Label="Период"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Value="_period">
+                            <MudSelectItem T="string" Value="@("1h")">Последний час</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("shift")">Текущая смена</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("day")">Сутки</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("week")">Неделя</MudSelectItem>
+                        </MudSelect>
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Добавить тег
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        <MudItem xs="12" lg="8">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">График значений</MudText>
+
+                                    <div class="mock-trend-chart">
+                                        <div class="mock-trend-line line-a"></div>
+                                        <div class="mock-trend-line line-b"></div>
+                                        <div class="mock-trend-grid"></div>
+
+                                        <div class="mock-trend-caption">
+                                            Mock-график. Реальный chart-компонент подключим отдельным этапом.
+                                        </div>
+                                    </div>
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="4">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">Выбранные теги</MudText>
+
+                                    @foreach (var tag in MockData.GetTags().Take(3))
+                                    {
+                                        <MudPaper Class="selected-tag-card" Elevation="0">
+                                            <MudText Typo="Typo.subtitle2">@tag.DisplayName</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                @tag.ObjectName · @tag.DeviceName
+                                            </MudText>
+                                            <MudText Typo="Typo.body2">
+                                                Текущее значение: @tag.Value @tag.Unit
+                                            </MudText>
+                                        </MudPaper>
+                                    }
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_reportSearchQuery"
+                                      Placeholder="Поиск отчетов..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Assessment">
+                            Сформировать отчет
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        @foreach (var report in FilteredReports)
+                        {
+                            <MudItem xs="12" md="6" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@report.Name</MudText>
+                                            <DispatcherStatusChip Text="@report.Status"
+                                                                  Color="@GetReportStatusColor(report.Status)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            @report.Description
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Последний запуск: @report.LastRun
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                                                Открыть
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small">
+                                                Экспорт
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "История",
+        "Графики",
+        "Отчеты"
+    };
+
+    private string _activeSection = "История";
+    private string _historySearchQuery = string.Empty;
+    private string _chartTagQuery = string.Empty;
+    private string _reportSearchQuery = string.Empty;
+    private string _period = "shift";
+
+    private IReadOnlyList<HistoryValueRow> HistoryRows => new List<HistoryValueRow>
+    {
+        new("12:00", "Электроснабжение", "Напряжение L1", "0 В", "Хорошее"),
+        new("12:05", "Вентиляция", "Температура двигателя", "84.2 °C", "Хорошее"),
+        new("12:10", "Вентиляция", "Работа", "Включена", "Хорошее"),
+        new("12:15", "Водоснабжение", "Расход воды", "12.8 м³/ч", "Хорошее")
+    };
+
+    private IReadOnlyList<ReportCard> Reports => new List<ReportCard>
+    {
+        new("Электропотребление", "Расход электроэнергии по объектам и периодам.", "Готов", "Сегодня 08:00"),
+        new("Аварии за смену", "Сводка активных и завершенных аварий за смену.", "Готов", "Сегодня 12:00"),
+        new("Действия оператора", "Журнал действий пользователей и подтверждений.", "Черновик", "Вчера 18:00"),
+        new("Оповещения", "Доставка уведомлений, ошибки каналов и эскалации.", "Готов", "Сегодня 09:30")
+    };
+
+    private IReadOnlyList<HistoryValueRow> FilteredHistoryRows =>
+        HistoryRows
+            .Where(MatchesHistorySearch)
+            .ToList();
+
+    private IReadOnlyList<ReportCard> FilteredReports =>
+        Reports
+            .Where(MatchesReportSearch)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("История / Графики / Отчеты");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private void SelectTag(string tagName)
+    {
+        _historySearchQuery = tagName;
+        _chartTagQuery = tagName;
+    }
+
+    private bool MatchesHistorySearch(HistoryValueRow row)
+    {
+        if (string.IsNullOrWhiteSpace(_historySearchQuery))
+        {
+            return true;
+        }
+
+        return row.ObjectName.Contains(_historySearchQuery, StringComparison.OrdinalIgnoreCase)
+            || row.TagName.Contains(_historySearchQuery, StringComparison.OrdinalIgnoreCase)
+            || row.Value.Contains(_historySearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesReportSearch(ReportCard report)
+    {
+        if (string.IsNullOrWhiteSpace(_reportSearchQuery))
+        {
+            return true;
+        }
+
+        return report.Name.Contains(_reportSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || report.Description.Contains(_reportSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || report.Status.Contains(_reportSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static Color GetReportStatusColor(string status)
+    {
+        return status switch
+        {
+            "Готов" => Color.Success,
+            "Черновик" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record HistoryValueRow(
+        string Time,
+        string ObjectName,
+        string TagName,
+        string Value,
+        string Quality
+    );
+
+    private sealed record ReportCard(
+        string Name,
+        string Description,
+        string Status,
+        string LastRun
+    );
+}

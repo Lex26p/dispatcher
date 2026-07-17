@@ -1,0 +1,65 @@
+@implements IDisposable
+@inject DispatcherShellState ShellState
+
+@if (ShellState.ControlModeAvailable)
+{
+    <MudButton Variant="Variant.Outlined"
+               Color="@ButtonColor"
+               Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.PowerSettingsNew"
+               Class="control-mode-button"
+               OnClick="ToggleControlMode">
+        @ButtonText
+    </MudButton>
+}
+
+@code {
+    private Color ButtonColor =>
+        ShellState.ControlModeEnabled
+            ? Color.Warning
+            : Color.Inherit;
+
+    private string ButtonText
+    {
+        get
+        {
+            if (!ShellState.ControlModeEnabled)
+            {
+                return "Управление выкл.";
+            }
+
+            if (ShellState.ControlModeRemaining is null)
+            {
+                return "Управление вкл.";
+            }
+
+            return $"Управление: {ShellState.ControlModeRemaining.Value.ToString(@"mm\:ss")}";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        ShellState.Changed += OnShellStateChanged;
+    }
+
+    private void ToggleControlMode()
+    {
+        if (ShellState.ControlModeEnabled)
+        {
+            ShellState.SetControlMode(false);
+            return;
+        }
+
+        ShellState.SetControlMode(true, TimeSpan.FromMinutes(5));
+    }
+
+    private void OnShellStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ShellState.Changed -= OnShellStateChanged;
+    }
+}

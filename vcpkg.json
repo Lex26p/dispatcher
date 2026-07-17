@@ -1,0 +1,13 @@
+{
+  "name": "dispatcher",
+  "version-string": "0.1.0",
+  "description": "Industrial dispatching, monitoring and automation platform",
+  "dependencies": [
+    "spdlog",
+    "nlohmann-json",
+    "boost-beast",
+    "boost-asio",
+    "sqlite3"
+  ],
+  "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c"
+}

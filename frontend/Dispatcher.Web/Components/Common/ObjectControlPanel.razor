@@ -1,0 +1,260 @@
+@implements IDisposable
+@inject DispatcherShellState ShellState
+
+<div class="object-control-panel">
+    <div class="object-control-panel-header">
+        <div>
+            <div class="object-control-panel-title">
+                Управление объектом
+            </div>
+
+            <div class="object-control-panel-subtitle">
+                @Subtitle
+            </div>
+        </div>
+
+        <DispatcherStatusChip Text="@ModeText"
+                              Color="@ModeColor" />
+    </div>
+
+    @if (IsSystemObject)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            Для системных объектов управляющие команды скрыты. Доступны только просмотр состояния, журналов и настроек.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="@ControlAlertSeverity" Variant="Variant.Outlined">
+            @ControlAlertText
+        </MudAlert>
+
+        <div class="object-control-command-list">
+            @foreach (var command in Commands)
+            {
+                <div class="object-control-command">
+                    <div class="object-control-command-main">
+                        <div>
+                            <div class="object-control-command-title">
+                                @command.Name
+                            </div>
+
+                            <div class="object-control-command-description">
+                                @command.Description
+                            </div>
+                        </div>
+
+                        <DispatcherStatusChip Text="@command.Kind"
+                                              Color="@GetCommandKindColor(command.Kind)" />
+                    </div>
+
+                    @if (_selectedCommand?.Id == command.Id)
+                    {
+                        <div class="object-control-confirmation">
+                            <MudAlert Severity="@GetCommandSeverity(command.Kind)"
+                                      Variant="Variant.Outlined">
+                                @GetConfirmationText(command)
+                            </MudAlert>
+
+                            @if (command.RequiresReason)
+                            {
+                                <MudTextField T="string"
+                                              @bind-Value="_reason"
+                                              Label="Причина выполнения команды"
+                                              Placeholder="Укажи причину..."
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Lines="2" />
+                            }
+
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="@GetCommandButtonColor(command.Kind)"
+                                           Size="Size.Small"
+                                           Disabled="@IsConfirmDisabled(command)"
+                                           OnClick="ConfirmSelectedCommand">
+                                    Подтвердить
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined"
+                                           Size="Size.Small"
+                                           OnClick="CancelCommand">
+                                    Отмена
+                                </MudButton>
+                            </MudStack>
+                        </div>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="@GetCommandButtonColor(command.Kind)"
+                                   Size="Size.Small"
+                                   Disabled="@IsCommandDisabled"
+                                   OnClick="() => SelectCommand(command)">
+                            Выполнить
+                        </MudButton>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_lastCommand is not null)
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                Mock-команда выполнена: @_lastCommand.Name. Запись будет попадать в события и журнал смены после подключения backend.
+            </MudAlert>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string ObjectName { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsSystemObject { get; set; }
+
+    private ObjectCommand? _selectedCommand;
+    private ObjectCommand? _lastCommand;
+    private string _reason = string.Empty;
+
+    private IReadOnlyList<ObjectCommand> Commands => new List<ObjectCommand>
+    {
+        new("start", "Пуск оборудования", "Отправить команду пуска основного оборудования объекта.", "Обычная", false),
+        new("stop", "Стоп оборудования", "Отправить команду остановки основного оборудования объекта.", "Обычная", false),
+        new("reset", "Сброс аварии", "Сбросить локальную аварию после устранения причины.", "Опасная", false),
+        new("maintenance", "Перевести в обслуживание", "Временно отключить управляющие команды и отметить объект как обслуживаемый.", "Критическая", true)
+    };
+
+    private bool IsCommandDisabled =>
+        IsSystemObject || !ShellState.ControlModeEnabled;
+
+    private string Subtitle =>
+        IsSystemObject
+            ? "Системный объект"
+            : string.IsNullOrWhiteSpace(ObjectName)
+                ? "Команды объекта"
+                : ObjectName;
+
+    private string ModeText =>
+        IsSystemObject
+            ? "Недоступно"
+            : ShellState.ControlModeEnabled
+                ? "Control mode ON"
+                : "Control mode OFF";
+
+    private Color ModeColor =>
+        IsSystemObject
+            ? Color.Info
+            : ShellState.ControlModeEnabled
+                ? Color.Warning
+                : Color.Default;
+
+    private Severity ControlAlertSeverity =>
+        ShellState.ControlModeEnabled
+            ? Severity.Warning
+            : Severity.Info;
+
+    private string ControlAlertText =>
+        ShellState.ControlModeEnabled
+            ? "Режим управления включен. Команды требуют подтверждения и будут записываться в журнал событий."
+            : "Команды видны, но отключены. Включи режим управления в верхней панели, чтобы активировать команды.";
+
+    protected override void OnInitialized()
+    {
+        ShellState.Changed += OnShellStateChanged;
+    }
+
+    private void SelectCommand(ObjectCommand command)
+    {
+        _selectedCommand = command;
+        _reason = string.Empty;
+    }
+
+    private void CancelCommand()
+    {
+        _selectedCommand = null;
+        _reason = string.Empty;
+    }
+
+    private void ConfirmSelectedCommand()
+    {
+        if (_selectedCommand is null)
+        {
+            return;
+        }
+
+        if (IsConfirmDisabled(_selectedCommand))
+        {
+            return;
+        }
+
+        _lastCommand = _selectedCommand;
+        _selectedCommand = null;
+        _reason = string.Empty;
+    }
+
+    private bool IsConfirmDisabled(ObjectCommand command)
+    {
+        return IsCommandDisabled
+            || command.RequiresReason && string.IsNullOrWhiteSpace(_reason);
+    }
+
+    private static string GetConfirmationText(ObjectCommand command)
+    {
+        return command.Kind switch
+        {
+            "Критическая" => "Критическая команда. Требуется причина. В production такая команда будет требовать расширенного подтверждения и попадать в аудит.",
+            "Опасная" => "Опасная команда. Проверь состояние объекта перед подтверждением.",
+            _ => "Подтверди выполнение команды."
+        };
+    }
+
+    private static Severity GetCommandSeverity(string kind)
+    {
+        return kind switch
+        {
+            "Критическая" => Severity.Error,
+            "Опасная" => Severity.Warning,
+            _ => Severity.Info
+        };
+    }
+
+    private static Color GetCommandKindColor(string kind)
+    {
+        return kind switch
+        {
+            "Критическая" => Color.Error,
+            "Опасная" => Color.Warning,
+            _ => Color.Info
+        };
+    }
+
+    private static Color GetCommandButtonColor(string kind)
+    {
+        return kind switch
+        {
+            "Критическая" => Color.Error,
+            "Опасная" => Color.Warning,
+            _ => Color.Primary
+        };
+    }
+
+    private void OnShellStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ShellState.Changed -= OnShellStateChanged;
+    }
+
+    private sealed record ObjectCommand(
+        string Id,
+        string Name,
+        string Description,
+        string Kind,
+        bool RequiresReason
+    );
+}

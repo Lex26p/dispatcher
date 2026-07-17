@@ -1,0 +1,23 @@
+#pragma once
+
+#include <dispatcher/api/transport_adapter.hpp>
+#include <dispatcher/api/transport_adapter_options.hpp>
+#include <dispatcher/api/transport_adapter_registry.hpp>
+#include <dispatcher/api/transport_adapter_result.hpp>
+#include <dispatcher/api/transport_adapter_status.hpp>
+#include <dispatcher/api/transport_endpoint.hpp>
+#include <dispatcher/api/transport_endpoint_catalog.hpp>
+#include <dispatcher/api/transport_endpoint_registry.hpp>
+#include <dispatcher/api/transport_endpoint_result.hpp>
+#include <dispatcher/api/transport_endpoint_status.hpp>
+#include <dispatcher/api/transport_error.hpp>
+#include <dispatcher/api/transport_handler.hpp>
+#include <dispatcher/api/transport_method.hpp>
+#include <dispatcher/api/transport_protocol.hpp>
+#include <dispatcher/api/transport_request.hpp>
+#include <dispatcher/api/transport_request_context.hpp>
+#include <dispatcher/api/transport_response.hpp>
+#include <dispatcher/api/transport_router.hpp>
+#include <dispatcher/api/transport_router_result.hpp>
+#include <dispatcher/api/transport_router_status.hpp>
+#include <dispatcher/api/transport_status.hpp>

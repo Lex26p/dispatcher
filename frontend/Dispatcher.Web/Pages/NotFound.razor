@@ -1,0 +1,47 @@
+﻿@page "/not-found"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Страница не найдена</PageTitle>
+
+<DispatcherPageSurface>
+    <div class="logout-page">
+        <DispatcherCard Class="logout-card">
+            <MudStack Spacing="3" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                         Size="Size.Large"
+                         Color="Color.Warning" />
+
+                <MudText Typo="Typo.h5" Align="Align.Center">
+                    Страница не найдена
+                </MudText>
+
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                    Такой страницы нет или маршрут еще не подключен.
+                </MudText>
+
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Href="/"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary">
+                        Обзор системы
+                    </MudButton>
+
+                    <MudButton Href="/objects"
+                               Variant="Variant.Outlined">
+                        Объекты
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </DispatcherCard>
+    </div>
+</DispatcherPageSurface>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Страница не найдена");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+}

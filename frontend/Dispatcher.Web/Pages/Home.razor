@@ -1,0 +1,136 @@
+@page "/home"
+
+<PageTitle>Главная</PageTitle>
+
+<section class="page-grid home-page">
+    <div class="page-title-row">
+        <div>
+            <h1>Оперативный рабочий стол</h1>
+            <p>Главный комплекс · текущая смена · демо-данные шаблона</p>
+        </div>
+
+        <div class="live-chip">
+            Live
+        </div>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span>Требуют реакции</span>
+            <strong>3</strong>
+            <small>1 критическое событие</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Доступность оборудования</span>
+            <strong>97%</strong>
+            <small>2 устройства требуют проверки</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Моя работа</span>
+            <strong>5</strong>
+            <small>3 назначены текущему пользователю</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Качество данных</span>
+            <strong>Good</strong>
+            <small>Есть stale-точки в вентиляции</small>
+        </article>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Ситуации, требующие реакции</h2>
+                    <p>Единый контур событий, аварий и назначений</p>
+                </div>
+
+                <a href="/events">Открыть</a>
+            </div>
+
+            <div class="working-list">
+                <div class="working-row critical">
+                    <span class="status-pill danger">Critical</span>
+                    <div>
+                        <strong>Нет подтверждения работы вентилятора П1</strong>
+                        <small>Корпус A · Венткамера 2 · назначение не принято</small>
+                    </div>
+                    <time>14:21</time>
+                </div>
+
+                <div class="working-row warning">
+                    <span class="status-pill warning">Warning</span>
+                    <div>
+                        <strong>ИБП-2 работает от батареи</strong>
+                        <small>Энергетика · главный комплекс</small>
+                    </div>
+                    <time>13:58</time>
+                </div>
+
+                <div class="working-row info">
+                    <span class="status-pill info">Info</span>
+                    <div>
+                        <strong>План ППР требует согласования</strong>
+                        <small>ТОиР · неделя 29</small>
+                    </div>
+                    <time>12:30</time>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Быстрый доступ</h2>
+                    <p>Основные рабочие сервисы</p>
+                </div>
+            </div>
+
+            <div class="quick-links">
+                <a href="/dashboards">Каталог дашбордов</a>
+                <a href="/events">Диспетчер событий</a>
+                <a href="/equipment">Оборудование</a>
+                <a href="/maintenance">ТОиР и ППР</a>
+                <a href="/builder/dashboards/hvac">Конструктор</a>
+                <a href="/admin/settings">Системные настройки</a>
+            </div>
+        </article>
+
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Карта комплекса</h2>
+                    <p>Краткое состояние корпусов и площадок</p>
+                </div>
+            </div>
+
+            <div class="complex-map">
+                <div class="map-zone good">Корпус A</div>
+                <div class="map-zone warning">Корпус B</div>
+                <div class="map-zone good">ЦОД</div>
+                <div class="map-zone danger">Энергетика</div>
+                <div class="map-zone good">Периметр</div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Моя работа</h2>
+                    <p>Очередь текущего пользователя</p>
+                </div>
+
+                <a href="/my-work">Открыть</a>
+            </div>
+
+            <div class="compact-list">
+                <div>Принять координацию по EV-001</div>
+                <div>Согласовать окно работ QF-12</div>
+                <div>Провести приёмку ТО вентилятора П2</div>
+            </div>
+        </article>
+    </div>
+</section>

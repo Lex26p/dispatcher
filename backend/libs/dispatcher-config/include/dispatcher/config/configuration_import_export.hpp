@@ -1,0 +1,26 @@
+#pragma once
+
+#include <dispatcher/config/configuration_document.hpp>
+#include <dispatcher/config/configuration_document_result.hpp>
+#include <dispatcher/config/configuration_export_device.hpp>
+#include <dispatcher/config/configuration_export_metadata.hpp>
+#include <dispatcher/config/configuration_export_model.hpp>
+#include <dispatcher/config/configuration_export_model_result.hpp>
+#include <dispatcher/config/configuration_export_options.hpp>
+#include <dispatcher/config/configuration_export_tag.hpp>
+#include <dispatcher/config/configuration_exporter.hpp>
+#include <dispatcher/config/configuration_format.hpp>
+#include <dispatcher/config/configuration_import_device.hpp>
+#include <dispatcher/config/configuration_import_metadata.hpp>
+#include <dispatcher/config/configuration_import_model.hpp>
+#include <dispatcher/config/configuration_import_model_mapper.hpp>
+#include <dispatcher/config/configuration_import_model_result.hpp>
+#include <dispatcher/config/configuration_import_tag.hpp>
+#include <dispatcher/config/configuration_importer.hpp>
+#include <dispatcher/config/configuration_io_error.hpp>
+#include <dispatcher/config/configuration_io_result.hpp>
+#include <dispatcher/config/configuration_io_status.hpp>
+#include <dispatcher/config/configuration_json_export_serializer.hpp>
+#include <dispatcher/config/configuration_json_import_parser.hpp>
+#include <dispatcher/config/configuration_snapshot_export_mapper.hpp>
+#include <dispatcher/config/configuration_snapshot_import_result.hpp>

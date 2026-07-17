@@ -1,0 +1,163 @@
+﻿{
+    "schemaVersion":  1,
+    "packageName":  "dispatcher",
+    "versionTag":  "v1.8.0-service-packaging",
+    "packageRoot":  "artifacts/package/dispatcher",
+    "description":  "Dispatcher deployment package layout contract for backend service, Blazor frontend, runtime configuration, scripts, documentation, and smoke validation.",
+    "requiredDirectories":  [
+                                "bin",
+                                "config",
+                                "data",
+                                "logs",
+                                "scripts",
+                                "wwwroot",
+                                "docs"
+                            ],
+    "backendBinaries":  [
+                            {
+                                "name":  "dispatcher-http-server",
+                                "source":  "out/build/windows-vs-debug/backend/apps/dispatcher-http-server/Debug/dispatcher-http-server.exe",
+                                "destination":  "bin/dispatcher-http-server.exe",
+                                "required":  true,
+                                "description":  "HTTP API server executable."
+                            },
+                            {
+                                "name":  "dispatcher-e2e-smoke",
+                                "source":  "out/build/windows-vs-debug/backend/apps/dispatcher-e2e-smoke/Debug/dispatcher-e2e-smoke.exe",
+                                "destination":  "bin/dispatcher-e2e-smoke.exe",
+                                "required":  true,
+                                "description":  "Backend end-to-end smoke executable."
+                            }
+                        ],
+    "frontend":  {
+                     "project":  "frontend/Dispatcher.Web/Dispatcher.Web.csproj",
+                     "publishSource":  "artifacts/frontend/publish/wwwroot",
+                     "destination":  "wwwroot",
+                     "required":  true,
+                     "description":  "Blazor WebAssembly static assets."
+                 },
+    "configurationFiles":  [
+                               {
+                                   "name":  "backend-runtime",
+                                   "source":  "deployment/templates/backend-runtime.json",
+                                   "destination":  "config/backend-runtime.json",
+                                   "required":  true,
+                                   "description":  "Backend runtime configuration template."
+                               },
+                               {
+                                   "name":  "frontend-appsettings",
+                                   "source":  "deployment/templates/frontend-appsettings.json",
+                                   "destination":  "config/frontend-appsettings.json",
+                                   "required":  true,
+                                   "description":  "Frontend appsettings template for packaged deployments."
+                               }
+                           ],
+    "runtimeDirectories":  [
+                               {
+                                   "path":  "data",
+                                   "description":  "Persistent local data, including future SQLite deployment files."
+                               },
+                               {
+                                   "path":  "logs",
+                                   "description":  "Runtime logs and file-based notification outputs."
+                               }
+                           ],
+    "scripts":  [
+                    {
+                        "name":  "start-backend",
+                        "source":  "scripts/deployment/Start-DispatcherBackend.ps1",
+                        "destination":  "scripts/Start-DispatcherBackend.ps1",
+                        "required":  true,
+                        "description":  "Starts dispatcher-http-server from the package layout."
+                    },
+                    {
+                        "name":  "smoke-package",
+                        "source":  "scripts/deployment/Test-DispatcherPackage.ps1",
+                        "destination":  "scripts/Test-DispatcherPackage.ps1",
+                        "required":  true,
+                        "description":  "Runs package-level smoke checks."
+                    }
+                ],
+    "documentation":  [
+                          {
+                              "source":  "docs/api/http-api-contracts-v1.md",
+                              "destination":  "docs/http-api-contracts-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/frontend/blazor-local-development.md",
+                              "destination":  "docs/blazor-local-development.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/storage/sqlite-storage-v1.md",
+                              "destination":  "docs/sqlite-storage-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/telemetry/modbus-tcp-adapter-v1.md",
+                              "destination":  "docs/modbus-tcp-adapter-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/notifications/notification-delivery-v1.md",
+                              "destination":  "docs/notification-delivery-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/auth-audit/auth-audit-v1.md",
+                              "destination":  "docs/auth-audit-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/release/v1.7.0-auth-audit.md",
+                              "destination":  "docs/release-v1.7.0-auth-audit.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/deployment/deployment-packaging-v1.md",
+                              "destination":  "docs/deployment-packaging-v1.md",
+                              "required":  true
+                          },
+                          {
+                              "source":  "docs/release/v1.8.0-service-packaging.md",
+                              "destination":  "docs/release-v1.8.0-service-packaging.md",
+                              "required":  true
+                          }
+                      ],
+    "smokeChecks":  [
+                        {
+                            "name":  "backend-e2e-smoke",
+                            "command":  "bin/dispatcher-e2e-smoke.exe 10000",
+                            "description":  "Runs backend end-to-end smoke test from the package."
+                        },
+                        {
+                            "name":  "health-endpoint",
+                            "command":  "Invoke-RestMethod http://127.0.0.1:18080/health",
+                            "description":  "Checks packaged backend health endpoint."
+                        },
+                        {
+                            "name":  "ready-endpoint",
+                            "command":  "Invoke-RestMethod http://127.0.0.1:18080/ready",
+                            "description":  "Checks packaged backend readiness endpoint."
+                        },
+                        {
+                            "name":  "runtime-endpoint",
+                            "command":  "Invoke-RestMethod http://127.0.0.1:18080/api/v1/runtime",
+                            "description":  "Checks packaged runtime API endpoint."
+                        },
+                        {
+                            "name":  "alarms-endpoint",
+                            "command":  "Invoke-RestMethod http://127.0.0.1:18080/api/v1/alarms",
+                            "description":  "Checks packaged alarms API endpoint."
+                        }
+                    ],
+    "knownLimitations":  [
+                             "The package layout is a contract only until the package build script is added.",
+                             "Windows service installation is not implemented in this step.",
+                             "Frontend publish is not implemented in this step.",
+                             "Backend executable copying is not implemented in this step.",
+                             "Zip archive creation is not implemented in this step.",
+                             "Configuration templates are declared but added in a later step."
+                         ]
+}

@@ -1,0 +1,46 @@
+@implements IDisposable
+@inject DispatcherShellState ShellState
+
+<MudBadge Content="@AlarmCountText"
+          Color="Color.Error"
+          Visible="@ShellState.HasActiveAlarms"
+          Overlap="true"
+          Class="alarm-bell-badge">
+    <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                   Color="@BellColor"
+                   Variant="Variant.Text"
+                   Class="alarm-bell-button"
+                   OnClick="ToggleAlarmPanel" />
+</MudBadge>
+
+@code {
+    private string AlarmCountText =>
+        ShellState.ActiveAlarmCount > 99
+            ? "99+"
+            : ShellState.ActiveAlarmCount.ToString();
+
+    private Color BellColor =>
+        ShellState.HasActiveAlarms
+            ? Color.Error
+            : Color.Inherit;
+
+    protected override void OnInitialized()
+    {
+        ShellState.Changed += OnShellStateChanged;
+    }
+
+    private void ToggleAlarmPanel()
+    {
+        ShellState.ToggleAlarmPanel();
+    }
+
+    private void OnShellStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ShellState.Changed -= OnShellStateChanged;
+    }
+}

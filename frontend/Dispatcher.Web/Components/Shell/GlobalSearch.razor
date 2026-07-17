@@ -1,0 +1,13 @@
+<MudTextField T="string"
+              @bind-Value="_query"
+              Placeholder="Глобальный поиск..."
+              Variant="Variant.Outlined"
+              Margin="Margin.Dense"
+              Adornment="Adornment.Start"
+              AdornmentIcon="@Icons.Material.Filled.Search"
+              Immediate="true"
+              Class="global-search" />
+
+@code {
+    private string? _query;
+}

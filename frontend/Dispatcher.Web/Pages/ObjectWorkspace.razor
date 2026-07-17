@@ -1,0 +1,924 @@
+@page "/objects/{ObjectId}"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitle</PageTitle>
+
+<DispatcherPageSurface>
+    @if (CurrentObject is null)
+    {
+        <DispatcherEmptyState Title="Объект не найден"
+                              Description="Проверь адрес страницы или вернись к списку объектов."
+                              Icon="@Icons.Material.Filled.SearchOff">
+            <MudButton Href="/objects"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary">
+                К списку объектов
+            </MudButton>
+        </DispatcherEmptyState>
+    }
+    else
+    {
+        <MudStack Spacing="3">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <div>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.h5">@CurrentObject.Name</MudText>
+
+                        <DispatcherStatusChip Text="@CurrentObject.Status"
+                                              Color="@GetObjectStatusColor(CurrentObject.Status)" />
+                    </MudStack>
+
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @CurrentObject.Group · @CurrentObject.Type · @CurrentObject.WidgetCount виджетов
+                    </MudText>
+                </div>
+
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Href="/objects"
+                               Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.ArrowBack">
+                        Объекты
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Edit">
+                        Редактировать
+                    </MudButton>
+
+                    <MudButton Href="@PanelModeUrl"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Fullscreen">
+                        Полный экран
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+
+            <MudGrid>
+                <MudItem xs="12" md="2">
+                    <MudPaper Class="dispatcher-left-panel object-side-menu" Elevation="0">
+                        @foreach (var section in _sections)
+                        {
+                            <button type="button"
+                                    class="@GetSectionButtonClass(section)"
+                                    @onclick="() => SelectSection(section)">
+                                @section
+                            </button>
+                        }
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="10">
+                    @if (_activeSection == "Обзор")
+                    {
+                        <MudGrid>
+                            <MudItem xs="12" sm="6" lg="3">
+                                <DispatcherMetricCard Title="Статус"
+                                                      Value="@CurrentObject.Status"
+                                                      ValueColor="@GetObjectStatusColor(CurrentObject.Status)"
+                                                      ChipText="@CurrentObject.Type"
+                                                      ChipColor="Color.Info"
+                                                      Class="metric-card" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" lg="3">
+                                <DispatcherMetricCard Title="Активные аварии"
+                                                      Value="@CurrentObject.ActiveAlarmCount.ToString()"
+                                                      ValueColor="@AlarmsColor"
+                                                      ChipText="@($"{ActiveObjectAlarms.Count} в списке")"
+                                                      ChipColor="@AlarmsColor"
+                                                      Class="metric-card" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" lg="3">
+                                <DispatcherMetricCard Title="Устройства"
+                                                      Value="@ObjectDevices.Count.ToString()"
+                                                      ValueColor="Color.Primary"
+                                                      ChipText="Mock data"
+                                                      ChipColor="Color.Info"
+                                                      Class="metric-card" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" lg="3">
+                                <DispatcherMetricCard Title="Теги"
+                                                      Value="@ObjectTags.Count.ToString()"
+                                                      ValueColor="Color.Primary"
+                                                      ChipText="Mock data"
+                                                      ChipColor="Color.Info"
+                                                      Class="metric-card" />
+                            </MudItem>
+                        </MudGrid>
+
+                        <MudGrid Class="mt-3">
+                            <MudItem xs="12" lg="8">
+                                <DispatcherCard>
+                                    <MudStack Spacing="2">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <div>
+                                                <MudText Typo="Typo.h6">Рабочая область объекта</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                    @ScreenDescription
+                                                </MudText>
+                                            </div>
+
+                                            <DispatcherStatusChip Text="@($"Экран: {_activeScreen}")"
+                                                                  Color="Color.Info" />
+                                        </MudStack>
+
+                                        <div class="object-workspace-canvas">
+                                            <div class="object-mimic-placeholder">
+                                                <div class="object-mimic-title">
+                                                    @MimicTitle
+                                                </div>
+
+                                                <div class="object-mimic-grid">
+                                                    <div class="object-mimic-widget large">
+                                                        <strong>@PrimaryWidgetTitle</strong>
+                                                        <span>@PrimaryWidgetDescription</span>
+
+                                                        <div class="object-process-preview">
+                                                            <div class="@GetPreviewLineClass()"></div>
+                                                            <div class="@GetPreviewDeviceClass()"></div>
+                                                            <div class="object-process-preview-arrow"></div>
+                                                        </div>
+                                                    </div>
+
+                                                    @foreach (var widget in ScreenWidgets)
+                                                    {
+                                                        <div class="object-mimic-widget">
+                                                            <strong>@widget.Title</strong>
+                                                            <span>@widget.Value</span>
+                                                            <small>@widget.Description</small>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+
+                            <MudItem xs="12" lg="4">
+                                <MudStack Spacing="3">
+                                    <DispatcherCard>
+                                        <ObjectScreenNavigationWidget Screens="@Screens"
+                                                                      ActiveScreen="@_activeScreen"
+                                                                      ActiveScreenChanged="SelectScreen" />
+                                    </DispatcherCard>
+
+                                    <DispatcherCard>
+                                        <ObjectControlPanel ObjectName="@CurrentObject.Name"
+                                                            IsSystemObject="@CurrentObject.IsSystemObject" />
+                                    </DispatcherCard>
+
+                                    <DispatcherCard>
+                                        <MudStack Spacing="2">
+                                            <MudText Typo="Typo.h6">Быстрые действия</MudText>
+
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       StartIcon="@Icons.Material.Filled.Notifications"
+                                                       OnClick="SelectAlarmsSection">
+                                                Аварии объекта
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       StartIcon="@Icons.Material.Filled.QueryStats"
+                                                       OnClick="SelectHistorySection">
+                                                История тегов
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       StartIcon="@Icons.Material.Filled.Memory"
+                                                       OnClick="SelectDevicesSection">
+                                                Устройства
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       StartIcon="@Icons.Material.Filled.Widgets"
+                                                       OnClick="SelectWidgetsSection">
+                                                Виджеты
+                                            </MudButton>
+
+                                            <MudDivider />
+
+                                            <MudAlert Severity="@ControlAlertSeverity" Variant="Variant.Outlined">
+                                                @ControlAlertText
+                                            </MudAlert>
+                                        </MudStack>
+                                    </DispatcherCard>
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                    else if (_activeSection == "Аварии")
+                    {
+                        <DispatcherCard>
+                            <MudStack Spacing="2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.h6">Аварии объекта</MudText>
+
+                                    <MudButton Href="/alarms"
+                                               Variant="Variant.Outlined"
+                                               Size="Size.Small">
+                                        Глобальные аварии
+                                    </MudButton>
+                                </MudStack>
+
+                                @if (ObjectAlarms.Count == 0)
+                                {
+                                    <DispatcherEmptyState Title="Аварий нет"
+                                                          Description="Для этого объекта аварии не найдены."
+                                                          Icon="@Icons.Material.Filled.NotificationsOff" />
+                                }
+                                else
+                                {
+                                    <MudTable T="MockAlarm" Items="@ObjectAlarms" Dense="true" Hover="true">
+                                        <HeaderContent>
+                                            <MudTh>Время</MudTh>
+                                            <MudTh>Уровень</MudTh>
+                                            <MudTh>Устройство</MudTh>
+                                            <MudTh>Тег</MudTh>
+                                            <MudTh>Сообщение</MudTh>
+                                            <MudTh>Состояние</MudTh>
+                                        </HeaderContent>
+
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Время">@context.Time</MudTd>
+                                            <MudTd DataLabel="Уровень">
+                                                <DispatcherStatusChip Text="@context.Level"
+                                                                      Color="@GetAlarmLevelColor(context.Level)" />
+                                            </MudTd>
+                                            <MudTd DataLabel="Устройство">@context.DeviceName</MudTd>
+                                            <MudTd DataLabel="Тег">@context.TagName</MudTd>
+                                            <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                                            <MudTd DataLabel="Состояние">@context.State</MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+                            </MudStack>
+                        </DispatcherCard>
+                    }
+                    else if (_activeSection == "История")
+                    {
+                        <MudGrid>
+                            <MudItem xs="12" lg="8">
+                                <DispatcherCard>
+                                    <MudStack Spacing="2">
+                                        <MudText Typo="Typo.h6">История тегов объекта</MudText>
+
+                                        @if (ObjectTags.Count == 0)
+                                        {
+                                            <DispatcherEmptyState Title="Теги не найдены"
+                                                                  Description="У объекта пока нет тегов в mock-данных."
+                                                                  Icon="@Icons.Material.Filled.Tag" />
+                                        }
+                                        else
+                                        {
+                                            <MudTable T="MockTag" Items="@ObjectTags" Dense="true" Hover="true">
+                                                <HeaderContent>
+                                                    <MudTh>Тег</MudTh>
+                                                    <MudTh>Название</MudTh>
+                                                    <MudTh>Устройство</MudTh>
+                                                    <MudTh>Значение</MudTh>
+                                                    <MudTh>Качество</MudTh>
+                                                </HeaderContent>
+
+                                                <RowTemplate>
+                                                    <MudTd DataLabel="Тег">@context.Name</MudTd>
+                                                    <MudTd DataLabel="Название">@context.DisplayName</MudTd>
+                                                    <MudTd DataLabel="Устройство">@context.DeviceName</MudTd>
+                                                    <MudTd DataLabel="Значение">@context.Value @context.Unit</MudTd>
+                                                    <MudTd DataLabel="Качество">
+                                                        <DispatcherStatusChip Text="@context.Quality"
+                                                                              Color="Color.Success" />
+                                                    </MudTd>
+                                                </RowTemplate>
+                                            </MudTable>
+                                        }
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+
+                            <MudItem xs="12" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="2">
+                                        <MudText Typo="Typo.h6">График</MudText>
+
+                                        <div class="mock-trend-chart compact">
+                                            <div class="mock-trend-line line-a"></div>
+                                            <div class="mock-trend-line line-b"></div>
+
+                                            <div class="mock-trend-caption">
+                                                Быстрый график объекта. Реальный chart-компонент подключим позже.
+                                            </div>
+                                        </div>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                    else if (_activeSection == "Устройства")
+                    {
+                        <DispatcherCard>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h6">Устройства объекта</MudText>
+
+                                @if (ObjectDevices.Count == 0)
+                                {
+                                    <DispatcherEmptyState Title="Устройства не найдены"
+                                                          Description="Для объекта пока нет устройств в mock-данных."
+                                                          Icon="@Icons.Material.Filled.Memory" />
+                                }
+                                else
+                                {
+                                    <MudTable T="MockDevice" Items="@ObjectDevices" Dense="true" Hover="true">
+                                        <HeaderContent>
+                                            <MudTh>Устройство</MudTh>
+                                            <MudTh>Тип</MudTh>
+                                            <MudTh>Местоположение</MudTh>
+                                            <MudTh>Протокол</MudTh>
+                                            <MudTh>Адрес</MudTh>
+                                            <MudTh>Статус</MudTh>
+                                            <MudTh>Теги</MudTh>
+                                        </HeaderContent>
+
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Устройство">@context.Name</MudTd>
+                                            <MudTd DataLabel="Тип">@context.Type</MudTd>
+                                            <MudTd DataLabel="Местоположение">@context.Location</MudTd>
+                                            <MudTd DataLabel="Протокол">@context.Protocol</MudTd>
+                                            <MudTd DataLabel="Адрес">@context.Endpoint</MudTd>
+                                            <MudTd DataLabel="Статус">
+                                                <DispatcherStatusChip Text="@context.Status"
+                                                                      Color="@GetDeviceStatusColor(context.Status)" />
+                                            </MudTd>
+                                            <MudTd DataLabel="Теги">@context.TagCount</MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+                            </MudStack>
+                        </DispatcherCard>
+                    }
+                    else if (_activeSection == "Виджеты")
+                    {
+                        <MudGrid>
+                            @foreach (var widget in Widgets)
+                            {
+                                <MudItem xs="12" md="6" lg="4">
+                                    <DispatcherCard>
+                                        <MudStack Spacing="1">
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                <MudText Typo="Typo.h6">@widget.Name</MudText>
+
+                                                <DispatcherStatusChip Text="@widget.Status"
+                                                                      Color="@GetWidgetStatusColor(widget.Status)" />
+                                            </MudStack>
+
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                Тип: @widget.Type
+                                            </MudText>
+
+                                            <MudText Typo="Typo.body2">
+                                                Экран: @widget.Screen
+                                            </MudText>
+
+                                            <MudText Typo="Typo.body2">
+                                                Размер: @widget.Size
+                                            </MudText>
+
+                                            <MudStack Row="true" Spacing="1" Class="mt-2">
+                                                <MudButton Variant="Variant.Filled"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small">
+                                                    Открыть
+                                                </MudButton>
+
+                                                <MudButton Variant="Variant.Outlined"
+                                                           Size="Size.Small">
+                                                    Настроить
+                                                </MudButton>
+                                            </MudStack>
+                                        </MudStack>
+                                    </DispatcherCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                    else
+                    {
+                        <DispatcherCard>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h6">Настройки объекта</MudText>
+
+                                <MudGrid>
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField T="string"
+                                                      Label="Название"
+                                                      Value="@CurrentObject.Name"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField T="string"
+                                                      Label="Группа"
+                                                      Value="@CurrentObject.Group"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField T="string"
+                                                      Label="Тип"
+                                                      Value="@CurrentObject.Type"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField T="string"
+                                                      Label="Статус публикации"
+                                                      Value="@("Опубликован")"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+                                </MudGrid>
+
+                                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                                    Это mock-настройки. Реальное редактирование будет выполняться через редактор объектов и публикацию версии.
+                                </MudAlert>
+
+                                <MudStack Row="true" Spacing="1">
+                                    <MudButton Variant="Variant.Outlined"
+                                               StartIcon="@Icons.Material.Filled.Save">
+                                        Сохранить черновик
+                                    </MudButton>
+
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Publish">
+                                        Опубликовать
+                                    </MudButton>
+                                </MudStack>
+                            </MudStack>
+                        </DispatcherCard>
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    }
+</DispatcherPageSurface>
+
+@code {
+    [Parameter]
+    public string ObjectId { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "section")]
+    public string? SectionQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "screen")]
+    public string? ScreenQuery { get; set; }
+
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Обзор",
+        "Аварии",
+        "История",
+        "Устройства",
+        "Виджеты",
+        "Настройки"
+    };
+
+    private readonly IReadOnlyList<string> _defaultScreens = new List<string>
+    {
+        "Общий обзор",
+        "Электропитание",
+        "Вентиляция",
+        "Датчики",
+        "Управление"
+    };
+
+    private string _activeSection = "Обзор";
+    private string _activeScreen = "Общий обзор";
+
+    private MockObject? CurrentObject =>
+        string.IsNullOrWhiteSpace(ObjectId)
+            ? null
+            : MockData.GetObjectById(ObjectId);
+
+    private string PageTitle =>
+        CurrentObject is null
+            ? "Объект не найден"
+            : CurrentObject.Name;
+
+            private string PanelModeUrl =>
+        CurrentObject is null
+            ? "/objects"
+            : $"/objects/{CurrentObject.Id}/panel?screen={ToScreenQueryValue(_activeScreen)}";
+
+    private IReadOnlyList<string> Screens =>
+        CurrentObject?.IsSystemObject == true
+            ? new List<string>
+            {
+                "Общий обзор",
+                "Состояние",
+                "Журналы",
+                "Настройки"
+            }
+            : _defaultScreens;
+
+    private IReadOnlyList<MockAlarm> ObjectAlarms =>
+        CurrentObject is null
+            ? new List<MockAlarm>()
+            : MockData.GetAlarmsByObjectId(CurrentObject.Id);
+
+    private IReadOnlyList<MockAlarm> ActiveObjectAlarms =>
+        ObjectAlarms
+            .Where(item => item.State == "Активна")
+            .ToList();
+
+    private IReadOnlyList<MockDevice> ObjectDevices =>
+        CurrentObject is null
+            ? new List<MockDevice>()
+            : MockData.GetDevices()
+                .Where(item => item.ObjectId == CurrentObject.Id)
+                .ToList();
+
+    private IReadOnlyList<MockTag> ObjectTags =>
+        CurrentObject is null
+            ? new List<MockTag>()
+            : MockData.GetTags()
+                .Where(item => item.ObjectName == CurrentObject.Name)
+                .ToList();
+
+    private IReadOnlyList<ScreenWidget> ScreenWidgets =>
+        _activeScreen switch
+        {
+            "Электропитание" => new List<ScreenWidget>
+            {
+                new("Напряжение L1", "0 В", "Последнее значение тега"),
+                new("Ввод 1", CurrentObject?.Status ?? "Н/Д", "Состояние ввода"),
+                new("Аварии", $"{ActiveObjectAlarms.Count}", "Активные аварии")
+            },
+            "Вентиляция" => new List<ScreenWidget>
+            {
+                new("Вентмашина", "В-12", "Основное оборудование"),
+                new("Температура двигателя", "84.2 °C", "Текущее значение"),
+                new("Фильтр", "Загрязнен", "Предупреждение")
+            },
+            "Датчики" => new List<ScreenWidget>
+            {
+                new("Всего тегов", ObjectTags.Count.ToString(), "Связанные теги"),
+                new("Качество", "Хорошее", "Качество последних значений"),
+                new("Последний опрос", "8 сек назад", "Mock data")
+            },
+            "Управление" => new List<ScreenWidget>
+            {
+                new("Режим управления", CurrentObject?.IsSystemObject == true ? "Недоступен" : "Выключен", "Включается в верхней панели"),
+                new("Команды", CurrentObject?.IsSystemObject == true ? "0" : "4", "Доступные команды"),
+                new("Подтверждение", "Требуется", "Для опасных команд")
+            },
+            "Состояние" => new List<ScreenWidget>
+            {
+                new("Runtime", "Running", "Состояние системного объекта"),
+                new("Очереди", "0", "Нет задержек"),
+                new("Ошибки", "0", "Критических ошибок нет")
+            },
+            "Журналы" => new List<ScreenWidget>
+            {
+                new("События", MockData.GetEvents().Count.ToString(), "Последние события"),
+                new("Аудит", "Включен", "Запись действий пользователей"),
+                new("Ошибки", "0", "Ошибок записи нет")
+            },
+            "Настройки" => new List<ScreenWidget>
+            {
+                new("Профиль", "Системный", "Конфигурация объекта"),
+                new("Публикация", "Опубликован", "Текущая версия"),
+                new("Права", "По роли", "Доступ к объекту")
+            },
+            _ => new List<ScreenWidget>
+            {
+                new("Состояние", CurrentObject?.Status ?? "Н/Д", "Общий статус объекта"),
+                new("Аварии", CurrentObject?.ActiveAlarmCount.ToString() ?? "0", "Активные аварии"),
+                new("Последнее событие", CurrentObject?.LastEvent ?? "Н/Д", "Последняя активность")
+            }
+        };
+
+    private IReadOnlyList<WidgetCard> Widgets =>
+        CurrentObject is null
+            ? new List<WidgetCard>()
+            : new List<WidgetCard>
+            {
+                new("Основная мнемосхема", "Mimic", "Общий обзор", "Опубликован", "8 × 5"),
+                new("Навигация по экранам", "Navigation", "Общий обзор", "Опубликован", "4 × 2"),
+                new("Сводка аварий", "Alarm summary", "Общий обзор", "Опубликован", "4 × 2"),
+                new("Текущие параметры", "Tag values", "Датчики", "Опубликован", "4 × 3"),
+                new("Команды управления", "Control", "Управление", CurrentObject.IsSystemObject ? "Отключен" : "Черновик", "4 × 3")
+            };
+
+    private Color AlarmsColor =>
+        CurrentObject?.ActiveAlarmCount > 0
+            ? Color.Error
+            : Color.Success;
+
+    private string ScreenDescription =>
+        _activeScreen switch
+        {
+            "Общий обзор" => "Основной экран объекта с мнемосхемой, сводкой и быстрыми виджетами.",
+            "Электропитание" => "Экран электрических вводов, напряжений и аварий питания.",
+            "Вентиляция" => "Экран вентмашин, фильтров, температур и состояния вентиляции.",
+            "Датчики" => "Экран текущих значений тегов, качества и последних опросов.",
+            "Управление" => "Экран команд управления. Команды активны только в режиме управления.",
+            "Состояние" => "Состояние системного объекта и runtime-компонентов.",
+            "Журналы" => "События, аудит и служебные записи системного объекта.",
+            "Настройки" => "Настройки объекта, публикации и прав доступа.",
+            _ => "Экран объекта."
+        };
+
+    private string MimicTitle =>
+        $"Экран: {_activeScreen}";
+
+    private string PrimaryWidgetTitle =>
+        _activeScreen switch
+        {
+            "Управление" => "Панель управления",
+            "Датчики" => "Текущие значения тегов",
+            "Электропитание" => "Однолинейная схема",
+            "Вентиляция" => "Схема вентиляции",
+            "Состояние" => "Runtime status",
+            "Журналы" => "Журнал событий",
+            _ => "Основная мнемосхема"
+        };
+
+    private string PrimaryWidgetDescription =>
+        _activeScreen switch
+        {
+            "Управление" => "Здесь будут управляющие команды, блокировки и подтверждения.",
+            "Датчики" => "Здесь будет таблица и визуализация текущих значений тегов.",
+            "Электропитание" => "Здесь будет SCADA-мнемосхема электроснабжения.",
+            "Вентиляция" => "Здесь будет SCADA-мнемосхема вентканалов, вентмашин и фильтров.",
+            "Состояние" => "Здесь будет системная сводка runtime-компонентов.",
+            "Журналы" => "Здесь будут события, аудит и ошибки.",
+            _ => "Будет подключена через Widget → Mimic."
+        };
+
+    private Severity ControlAlertSeverity =>
+        CurrentObject?.IsSystemObject == true
+            ? Severity.Info
+            : Severity.Warning;
+
+    private string ControlAlertText =>
+        CurrentObject?.IsSystemObject == true
+            ? "Для системных объектов режим управления скрыт."
+            : "Управляющие команды будут активны только при включенном режиме управления и наличии прав.";
+
+    protected override void OnParametersSet()
+    {
+        if (CurrentObject is null)
+        {
+            ShellState.SetPageTitle("Объект не найден");
+            ShellState.SetControlModeAvailable(false);
+            return;
+        }
+
+        _activeSection = NormalizeSectionQuery(SectionQuery);
+
+        if (_activeSection == "Обзор")
+        {
+            _activeScreen = NormalizeScreenQuery(ScreenQuery);
+
+            if (!Screens.Contains(_activeScreen))
+            {
+                _activeScreen = Screens.First();
+            }
+        }
+        else if (!Screens.Contains(_activeScreen))
+        {
+            _activeScreen = Screens.First();
+        }
+
+        ShellState.SetPageTitle(CurrentObject.Name);
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(!CurrentObject.IsSystemObject);
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+        NavigateToCurrentObject(section, _activeScreen);
+    }
+
+    private void SelectScreen(string screen)
+    {
+        _activeSection = "Обзор";
+        _activeScreen = screen;
+        NavigateToCurrentObject("Обзор", screen);
+    }
+
+    private void SelectAlarmsSection()
+    {
+        SelectSection("Аварии");
+    }
+
+    private void SelectHistorySection()
+    {
+        SelectSection("История");
+    }
+
+    private void SelectDevicesSection()
+    {
+        SelectSection("Устройства");
+    }
+
+    private void SelectWidgetsSection()
+    {
+        SelectSection("Виджеты");
+    }
+
+    private void NavigateToCurrentObject(string section, string screen)
+    {
+        if (CurrentObject is null)
+        {
+            return;
+        }
+
+        var sectionValue = ToSectionQueryValue(section);
+
+        if (section == "Обзор")
+        {
+            var screenValue = ToScreenQueryValue(screen);
+            Navigation.NavigateTo($"/objects/{CurrentObject.Id}?section={sectionValue}&screen={screenValue}", replace: true);
+            return;
+        }
+
+        Navigation.NavigateTo($"/objects/{CurrentObject.Id}?section={sectionValue}", replace: true);
+    }
+
+    private string NormalizeSectionQuery(string? value)
+    {
+        return value switch
+        {
+            "overview" => "Обзор",
+            "alarms" => "Аварии",
+            "history" => "История",
+            "devices" => "Устройства",
+            "widgets" => "Виджеты",
+            "settings" => "Настройки",
+            "Обзор" => "Обзор",
+            "Аварии" => "Аварии",
+            "История" => "История",
+            "Устройства" => "Устройства",
+            "Виджеты" => "Виджеты",
+            "Настройки" => "Настройки",
+            _ => "Обзор"
+        };
+    }
+
+    private string NormalizeScreenQuery(string? value)
+    {
+        return value switch
+        {
+            "summary" => "Общий обзор",
+            "power" => "Электропитание",
+            "ventilation" => "Вентиляция",
+            "sensors" => "Датчики",
+            "control" => "Управление",
+            "state" => "Состояние",
+            "logs" => "Журналы",
+            "settings" => "Настройки",
+            "Общий обзор" => "Общий обзор",
+            "Электропитание" => "Электропитание",
+            "Вентиляция" => "Вентиляция",
+            "Датчики" => "Датчики",
+            "Управление" => "Управление",
+            "Состояние" => "Состояние",
+            "Журналы" => "Журналы",
+            "Настройки" => "Настройки",
+            _ => Screens.First()
+        };
+    }
+
+    private static string ToSectionQueryValue(string section)
+    {
+        return section switch
+        {
+            "Обзор" => "overview",
+            "Аварии" => "alarms",
+            "История" => "history",
+            "Устройства" => "devices",
+            "Виджеты" => "widgets",
+            "Настройки" => "settings",
+            _ => "overview"
+        };
+    }
+
+    private static string ToScreenQueryValue(string screen)
+    {
+        return screen switch
+        {
+            "Общий обзор" => "summary",
+            "Электропитание" => "power",
+            "Вентиляция" => "ventilation",
+            "Датчики" => "sensors",
+            "Управление" => "control",
+            "Состояние" => "state",
+            "Журналы" => "logs",
+            "Настройки" => "settings",
+            _ => "summary"
+        };
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private string GetPreviewLineClass()
+    {
+        return _activeScreen switch
+        {
+            "Электропитание" => "object-process-preview-line electrical",
+            "Вентиляция" => "object-process-preview-line ventilation",
+            "Датчики" => "object-process-preview-line sensors",
+            "Управление" => "object-process-preview-line control",
+            _ => "object-process-preview-line"
+        };
+    }
+
+    private string GetPreviewDeviceClass()
+    {
+        return _activeScreen switch
+        {
+            "Электропитание" => "object-process-preview-device electrical",
+            "Вентиляция" => "object-process-preview-device ventilation",
+            "Датчики" => "object-process-preview-device sensors",
+            "Управление" => "object-process-preview-device control",
+            _ => "object-process-preview-device"
+        };
+    }
+
+    private static Color GetObjectStatusColor(string status)
+    {
+        return status switch
+        {
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Норма" => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private static Color GetAlarmLevelColor(string level)
+    {
+        return level switch
+        {
+            "Критическая" => Color.Error,
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Информация" => Color.Info,
+            "Системная" => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private static Color GetDeviceStatusColor(string status)
+    {
+        return status switch
+        {
+            "На связи" => Color.Success,
+            "Авария" => Color.Error,
+            "Нет связи" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private static Color GetWidgetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Опубликован" => Color.Success,
+            "Черновик" => Color.Warning,
+            "Отключен" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record ScreenWidget(
+        string Title,
+        string Value,
+        string Description
+    );
+
+    private sealed record WidgetCard(
+        string Name,
+        string Type,
+        string Screen,
+        string Status,
+        string Size
+    );
+}

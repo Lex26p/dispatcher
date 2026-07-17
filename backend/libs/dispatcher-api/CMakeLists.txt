@@ -1,0 +1,65 @@
+add_library(dispatcher-api
+    src/api_status.cpp
+    src/api_status_mapping.cpp
+    src/api_result.cpp
+    src/api_page_request.cpp
+    src/api_page.cpp
+    src/runtime_snapshot_api_result.cpp
+    src/alarm_operator_snapshot_api_result.cpp
+    src/dispatcher_runtime_api.cpp
+    src/telemetry_ingest_request.cpp
+    src/telemetry_ingest_api_result.cpp
+    src/dispatcher_telemetry_api.cpp
+    src/alarm_acknowledgement_request.cpp
+    src/alarm_acknowledgement_api_result.cpp
+    src/unacknowledged_alarms_api_result.cpp
+    src/dispatcher_alarm_api.cpp
+    src/history_query_request.cpp
+    src/history_query_api_result.cpp
+    src/dispatcher_history_api.cpp
+    src/configuration_query_request.cpp
+    src/configuration_query_api_result.cpp
+    src/configuration_reload_request.cpp
+    src/configuration_reload_api_result.cpp
+    src/dispatcher_configuration_api.cpp
+    src/dispatcher_api.cpp
+    src/configuration_export_api_result.cpp
+    src/transport_protocol.cpp
+    src/transport_status.cpp
+    src/transport_error.cpp
+    src/transport_request_context.cpp
+    src/transport_response.cpp
+    src/transport_method.cpp
+    src/transport_endpoint_status.cpp
+    src/transport_endpoint.cpp
+    src/transport_endpoint_result.cpp
+    src/transport_endpoint_registry.cpp
+    src/transport_request.cpp
+    src/transport_handler.cpp
+    src/transport_router_status.cpp
+    src/transport_router_result.cpp
+    src/transport_router.cpp
+    src/transport_endpoint_catalog.cpp
+    src/transport_adapter_status.cpp
+    src/transport_adapter_result.cpp
+    src/transport_adapter_options.cpp
+    src/transport_adapter.cpp
+    src/transport_adapter_registry.cpp
+)
+
+target_include_directories(dispatcher-api
+    PUBLIC
+        include
+)
+
+target_link_libraries(dispatcher-api
+    PUBLIC
+        dispatcher-common
+        dispatcher-domain
+        dispatcher-telemetry
+        dispatcher-runtime
+        dispatcher-storage
+        dispatcher-config
+)
+
+target_compile_features(dispatcher-api PUBLIC cxx_std_20)

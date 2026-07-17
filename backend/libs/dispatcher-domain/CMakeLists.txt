@@ -1,0 +1,60 @@
+add_library(dispatcher-domain
+    src/tag_definition.cpp
+    src/tag_definition_validation.cpp
+    src/tag_definition_builder.cpp
+    src/tag_address.cpp
+    src/tag_catalog.cpp
+    src/device_definition.cpp
+    src/device_definition_builder.cpp
+    src/device_definition_validation.cpp
+    src/device_catalog.cpp
+    src/configuration_metadata.cpp
+    src/configuration_snapshot.cpp
+    src/configuration_snapshot_validation.cpp
+    src/configuration_snapshot_builder.cpp
+    src/operator_role.cpp
+    src/operator_status.cpp
+    src/operator_identity.cpp
+    src/operator_permission.cpp
+    src/operator_authorization_status.cpp
+    src/operator_authorization_result.cpp
+    src/operator_authorizer.cpp
+    src/operator_directory_status.cpp
+    src/operator_directory_result.cpp
+    src/operator_directory.cpp
+    src/operator_session_status.cpp
+    src/operator_session.cpp
+    src/operator_session_result.cpp
+    src/operator_session_store.cpp
+    src/operator_auth_context.cpp
+    src/notification_channel.cpp
+    src/notification_priority.cpp
+    src/notification_target.cpp
+    src/notification_message.cpp
+    src/notification_route_status.cpp
+    src/notification_route_result.cpp
+    src/notification_route.cpp
+    src/notification_routing_result.cpp
+    src/notification_route_table.cpp
+    src/notification_delivery_status.cpp
+    src/notification_delivery_attempt.cpp
+    src/notification_delivery_result.cpp
+    src/notification_dispatch_status.cpp
+    src/notification_dispatch_result.cpp
+    src/notification_dispatcher.cpp
+)
+
+target_include_directories(dispatcher-domain
+    PUBLIC
+        include
+)
+
+target_link_libraries(dispatcher-domain
+    PUBLIC
+        dispatcher-common
+)
+
+target_compile_features(dispatcher-domain
+    PUBLIC
+        cxx_std_20
+)

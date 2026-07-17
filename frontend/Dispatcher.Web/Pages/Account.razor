@@ -1,0 +1,367 @@
+@page "/account"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Личный кабинет</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Личный кабинет</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "Профиль")
+                {
+                    <MudGrid>
+                        <MudItem xs="12" lg="5">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">Профиль</MudText>
+
+                                    <div class="account-profile-card">
+                                        <div class="account-avatar">ОП</div>
+
+                                        <div>
+                                            <MudText Typo="Typo.h6">Оператор</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                Дежурная смена · Производственный участок
+                                            </MudText>
+                                        </div>
+                                    </div>
+
+                                    <MudDivider />
+
+                                    <MudTextField T="string"
+                                                  Label="Отображаемое имя"
+                                                  Value="@("Оператор")"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+
+                                    <MudTextField T="string"
+                                                  Label="Должность"
+                                                  Value="@("Оператор диспетчерской")"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+
+                                    <MudTextField T="string"
+                                                  Label="Рабочая смена"
+                                                  Value="@("Смена А")"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Save">
+                                        Сохранить профиль
+                                    </MudButton>
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="7">
+                            <DispatcherCard>
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h6">Права и доступ</MudText>
+
+                                    <div class="account-info-grid">
+                                        <span>Роль</span>
+                                        <strong>Оператор</strong>
+
+                                        <span>Доступные объекты</span>
+                                        <strong>@MockData.GetObjects().Count(item => !item.IsSystemObject)</strong>
+
+                                        <span>Системные объекты</span>
+                                        <strong>@MockData.GetObjects().Count(item => item.IsSystemObject)</strong>
+
+                                        <span>Режим управления</span>
+                                        <strong>Доступен по правам объекта</strong>
+
+                                        <span>Последний вход</span>
+                                        <strong>Сегодня 07:58</strong>
+                                    </div>
+
+                                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                                        Права будут подключены к backend после завершения frontend-макета.
+                                    </MudAlert>
+                                </MudStack>
+                            </DispatcherCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else if (_activeSection == "Стартовая страница")
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Стартовая страница</MudText>
+
+                            <MudSelect T="string"
+                                       Label="Открывать после входа"
+                                       Value="@_startPage"
+                                       ValueChanged="OnStartPageChanged"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense">
+                                <MudSelectItem T="string" Value="@("/")">Обзор системы</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("/objects")">Объекты</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("/alarms")">Аварии</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("/configuration")">Конфигурация</MudSelectItem>
+                            </MudSelect>
+
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                                Выбрана стартовая страница: @GetStartPageName(_startPage)
+                            </MudAlert>
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Save">
+                                Сохранить
+                            </MudButton>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Подписки на уведомления")
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Подписки на уведомления</MudText>
+
+                            @foreach (var subscription in _subscriptions)
+                            {
+                                <MudPaper Class="account-preference-row" Elevation="0">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2">@subscription.Name</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@subscription.Description</MudText>
+                                    </div>
+
+                                    <DispatcherStatusChip Text="@subscription.State"
+                                                          Color="@GetSubscriptionColor(subscription.State)" />
+                                </MudPaper>
+                            }
+
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                                Реальные правила подписок будут связаны с модулем оповещений.
+                            </MudAlert>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Каналы доставки")
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Каналы доставки</MudText>
+
+                            @foreach (var channel in _channels)
+                            {
+                                <MudPaper Class="account-preference-row" Elevation="0">
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2">@channel.Name</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@channel.Address</MudText>
+                                    </div>
+
+                                    <DispatcherStatusChip Text="@channel.State"
+                                                          Color="@GetSubscriptionColor(channel.State)" />
+                                </MudPaper>
+                            }
+
+                            <MudButton Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.Add">
+                                Добавить канал
+                            </MudButton>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Отпуск")
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Отпуск</MudText>
+
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                                Сейчас отпуск не включен. Уведомления доставляются по обычным правилам.
+                            </MudAlert>
+
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string"
+                                                  Label="Дата начала"
+                                                  Value="@("Не задано")"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudTextField T="string"
+                                                  Label="Дата окончания"
+                                                  Value="@("Не задано")"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+                                </MudItem>
+                            </MudGrid>
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary">
+                                Сохранить отпуск
+                            </MudButton>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Замещение")
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Замещение</MudText>
+
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                                Замещающий пользователь не выбран.
+                            </MudAlert>
+
+                            <MudTextField T="string"
+                                          Label="Замещающий пользователь"
+                                          Value="@("Не задано")"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" />
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary">
+                                Назначить замещение
+                            </MudButton>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+                else
+                {
+                    <DispatcherCard>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6">Безопасность аккаунта</MudText>
+
+                            <div class="account-info-grid">
+                                <span>Пароль</span>
+                                <strong>Обновлен 30 дней назад</strong>
+
+                                <span>Двухфакторная защита</span>
+                                <strong>Не включена</strong>
+
+                                <span>Активные сессии</span>
+                                <strong>1</strong>
+
+                                <span>Последнее событие безопасности</span>
+                                <strong>Успешный вход сегодня 07:58</strong>
+                            </div>
+
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Outlined">
+                                    Сменить пароль
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined">
+                                    Включить 2FA
+                                </MudButton>
+                            </MudStack>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Профиль",
+        "Стартовая страница",
+        "Подписки на уведомления",
+        "Каналы доставки",
+        "Отпуск",
+        "Замещение",
+        "Безопасность аккаунта"
+    };
+
+    private string _activeSection = "Профиль";
+    private string _startPage = "/";
+
+    private readonly IReadOnlyList<AccountPreference> _subscriptions = new List<AccountPreference>
+    {
+        new("Критические аварии", "Получать всегда, включая нерабочее время.", "Включено"),
+        new("Аварии объектов смены", "Получать аварии по доступным производственным объектам.", "Включено"),
+        new("Системные события", "Получать только важные системные события.", "Отключено"),
+        new("Отчеты по смене", "Получать итоговый отчет после смены.", "Включено")
+    };
+
+    private readonly IReadOnlyList<DeliveryChannel> _channels = new List<DeliveryChannel>
+    {
+        new("Email", "operator@example.local", "Включено"),
+        new("Telegram", "Не подключен", "Отключено"),
+        new("SMS", "+7 *** ***-**-12", "Включено")
+    };
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Личный кабинет");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private void OnStartPageChanged(string value)
+    {
+        _startPage = value;
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static string GetStartPageName(string url)
+    {
+        return url switch
+        {
+            "/" => "Обзор системы",
+            "/objects" => "Объекты",
+            "/alarms" => "Аварии",
+            "/configuration" => "Конфигурация",
+            _ => url
+        };
+    }
+
+    private static Color GetSubscriptionColor(string state)
+    {
+        return state switch
+        {
+            "Включено" => Color.Success,
+            "Отключено" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record AccountPreference(
+        string Name,
+        string Description,
+        string State
+    );
+
+    private sealed record DeliveryChannel(
+        string Name,
+        string Address,
+        string State
+    );
+}

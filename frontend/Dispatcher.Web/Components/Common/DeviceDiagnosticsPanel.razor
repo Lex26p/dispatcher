@@ -1,0 +1,154 @@
+<DispatcherCard Class="device-diagnostics-panel">
+    @if (Device is null)
+    {
+        <DispatcherEmptyState Title="Устройство не выбрано"
+                              Description="Выбери устройство в таблице."
+                              Icon="@Icons.Material.Filled.Cable" />
+    }
+    else
+    {
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h6">Диагностика устройства</MudText>
+
+            <MudDivider />
+
+            <MudText Typo="Typo.subtitle2">Устройство</MudText>
+            <MudText Typo="Typo.body2">@Device.Name</MudText>
+
+            <MudText Typo="Typo.subtitle2">Адрес</MudText>
+            <MudText Typo="Typo.body2">@Device.Endpoint</MudText>
+
+            <MudText Typo="Typo.subtitle2">Протокол</MudText>
+            <MudText Typo="Typo.body2">@Device.Protocol</MudText>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.NetworkPing"
+                       OnClick="OnCheckConnection">
+                Проверить связь
+            </MudButton>
+
+            @if (PingResult is not null)
+            {
+                <MudAlert Severity="@(PingResult.Success ? Severity.Success : Severity.Error)"
+                          Variant="Variant.Outlined">
+                    @if (PingResult.Success)
+                    {
+                        <span>Связь есть. Время ответа: @PingResult.ResponseTimeMs мс.</span>
+                    }
+                    else
+                    {
+                        <span>Связь не установлена. Ошибка: @PingResult.Error</span>
+                    }
+                </MudAlert>
+            }
+
+            <MudDivider />
+
+            <MudText Typo="Typo.subtitle2">Тестовый опрос</MudText>
+
+            <MudNumericField T="int"
+                             Value="@PollRequestCount"
+                             ValueChanged="@PollRequestCountChanged"
+                             Label="Количество запросов"
+                             Min="1"
+                             Max="100"
+                             Step="1"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                       OnClick="OnRunPollTest">
+                Запустить опрос
+            </MudButton>
+
+            @if (PollResult is not null)
+            {
+                <MudPaper Class="device-diagnostics-result" Elevation="0">
+                    <MudText Typo="Typo.subtitle2">Результат опроса</MudText>
+
+                    <div class="device-diagnostics-grid">
+                        <span>Всего запросов</span>
+                        <strong>@PollResult.TotalRequests</strong>
+
+                        <span>Ответов получено</span>
+                        <strong>@PollResult.SuccessfulResponses</strong>
+
+                        <span>Неудачных запросов</span>
+                        <strong>@PollResult.FailedRequests</strong>
+
+                        <span>Среднее время</span>
+                        <strong>@PollResult.AverageResponseTimeMs мс</strong>
+
+                        <span>Минимальное время</span>
+                        <strong>@PollResult.MinResponseTimeMs мс</strong>
+
+                        <span>Максимальное время</span>
+                        <strong>@PollResult.MaxResponseTimeMs мс</strong>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(PollResult.LastError))
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2">
+                            Последняя ошибка: @PollResult.LastError
+                        </MudAlert>
+                    }
+
+                    <MudExpansionPanels Class="mt-2">
+                        <MudExpansionPanel Text="Подробный лог">
+                            <MudTable T="MockDevicePollAttempt"
+                                      Items="@PollResult.Attempts"
+                                      Dense="true"
+                                      Hover="true">
+                                <HeaderContent>
+                                    <MudTh>#</MudTh>
+                                    <MudTh>Статус</MudTh>
+                                    <MudTh>Время</MudTh>
+                                    <MudTh>Ошибка</MudTh>
+                                </HeaderContent>
+
+                                <RowTemplate>
+                                    <MudTd DataLabel="#">@context.Number</MudTd>
+                                    <MudTd DataLabel="Статус">
+                                        @(context.Success ? "Успешно" : "Ошибка")
+                                    </MudTd>
+                                    <MudTd DataLabel="Время">
+                                        @(context.Success ? $"{context.ResponseTimeMs} мс" : "—")
+                                    </MudTd>
+                                    <MudTd DataLabel="Ошибка">
+                                        @(context.Error ?? "—")
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                </MudPaper>
+            }
+        </MudStack>
+    }
+</DispatcherCard>
+
+@code {
+    [Parameter]
+    public MockDevice? Device { get; set; }
+
+    [Parameter]
+    public MockDevicePingResult? PingResult { get; set; }
+
+    [Parameter]
+    public MockDevicePollTestResult? PollResult { get; set; }
+
+    [Parameter]
+    public int PollRequestCount { get; set; }
+
+    [Parameter]
+    public EventCallback<int> PollRequestCountChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnCheckConnection { get; set; }
+
+    [Parameter]
+    public EventCallback OnRunPollTest { get; set; }
+}

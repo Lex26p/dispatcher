@@ -1,0 +1,295 @@
+@implements IDisposable
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject NavigationManager Navigation
+
+@if (ShellState.AlarmPanelOpen)
+{
+    <div class="@PanelClass">
+        <div class="bottom-alarm-panel-header">
+            <div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudIcon Icon="@Icons.Material.Filled.NotificationsActive"
+                             Color="Color.Error" />
+
+                    <MudText Typo="Typo.h6">
+                        Аварийная панель
+                    </MudText>
+
+                    <DispatcherStatusChip Text="@ActiveAlarmCountText"
+                                          Color="@ActiveAlarmChipColor" />
+                </MudStack>
+
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Глобальный обзор аварий, событий и журнала смены.
+                </MudText>
+            </div>
+
+            <div class="bottom-alarm-panel-actions">
+                <MudButton Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           OnClick="ToggleExpanded">
+                    @ExpandButtonText
+                </MudButton>
+
+                <MudButton Href="/alarms"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Small">
+                    Открыть раздел
+                </MudButton>
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Color="Color.Default"
+                               Variant="Variant.Text"
+                               OnClick="ClosePanel" />
+            </div>
+        </div>
+
+        <div class="bottom-alarm-panel-body">
+            <div class="bottom-alarm-panel-tabs">
+                @foreach (var section in _sections)
+                {
+                    <button type="button"
+                            class="@GetSectionButtonClass(section)"
+                            @onclick="() => SelectSection(section)">
+                        @section
+                    </button>
+                }
+            </div>
+
+            <div class="bottom-alarm-panel-content">
+                @if (_activeSection == "Активные")
+                {
+                    @if (ActiveAlarms.Count == 0)
+                    {
+                        <DispatcherEmptyState Title="Активных аварий нет"
+                                              Description="Система не сообщает об активных авариях."
+                                              Icon="@Icons.Material.Filled.NotificationsOff" />
+                    }
+                    else
+                    {
+                        <MudTable T="MockAlarm" Items="@ActiveAlarms" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Время</MudTh>
+                                <MudTh>Уровень</MudTh>
+                                <MudTh>Объект</MudTh>
+                                <MudTh>Устройство</MudTh>
+                                <MudTh>Сообщение</MudTh>
+                                <MudTh>Состояние</MudTh>
+                                <MudTh>Действия</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Время">@context.Time</MudTd>
+
+                                <MudTd DataLabel="Уровень">
+                                    <DispatcherStatusChip Text="@context.Level"
+                                                          Color="@GetAlarmLevelColor(context.Level)" />
+                                </MudTd>
+
+                                <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                <MudTd DataLabel="Устройство">@context.DeviceName</MudTd>
+                                <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                                <MudTd DataLabel="Состояние">@context.State</MudTd>
+
+                                <MudTd DataLabel="Действия">
+                                    <MudStack Row="true" Spacing="1">
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   OnClick="() => OpenObject(context)">
+                                            Объект
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Size="Size.Small">
+                                            Подтвердить
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Size="Size.Small">
+                                            История
+                                        </MudButton>
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                }
+                else if (_activeSection == "Подтвержденные")
+                {
+                    @if (AcknowledgedAlarms.Count == 0)
+                    {
+                        <DispatcherEmptyState Title="Подтвержденных аварий нет"
+                                              Description="Нет аварий с признаком подтверждения."
+                                              Icon="@Icons.Material.Filled.DoneAll" />
+                    }
+                    else
+                    {
+                        <MudTable T="MockAlarm" Items="@AcknowledgedAlarms" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Время</MudTh>
+                                <MudTh>Уровень</MudTh>
+                                <MudTh>Объект</MudTh>
+                                <MudTh>Сообщение</MudTh>
+                                <MudTh>Состояние</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Время">@context.Time</MudTd>
+
+                                <MudTd DataLabel="Уровень">
+                                    <DispatcherStatusChip Text="@context.Level"
+                                                          Color="@GetAlarmLevelColor(context.Level)" />
+                                </MudTd>
+
+                                <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                                <MudTd DataLabel="Состояние">@context.State</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                }
+                else if (_activeSection == "События")
+                {
+                    <MudTable T="MockEvent" Items="@MockData.GetEvents()" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Время</MudTh>
+                            <MudTh>Тип</MudTh>
+                            <MudTh>Уровень</MudTh>
+                            <MudTh>Объект</MudTh>
+                            <MudTh>Пользователь</MudTh>
+                            <MudTh>Сообщение</MudTh>
+                        </HeaderContent>
+
+                        <RowTemplate>
+                            <MudTd DataLabel="Время">@context.Time</MudTd>
+                            <MudTd DataLabel="Тип">@context.Type</MudTd>
+
+                            <MudTd DataLabel="Уровень">
+                                <DispatcherStatusChip Text="@context.Level"
+                                                      Color="@GetAlarmLevelColor(context.Level)" />
+                            </MudTd>
+
+                            <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                            <MudTd DataLabel="Пользователь">@(context.UserName ?? "Система")</MudTd>
+                            <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <div class="bottom-alarm-shift-log">
+                        <DispatcherEmptyState Title="Журнал смены"
+                                              Description="Здесь будут важные комментарии, события смены и записи операторов."
+                                              Icon="@Icons.Material.Filled.Assignment">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add">
+                                Добавить запись
+                            </MudButton>
+                        </DispatcherEmptyState>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Активные",
+        "Подтвержденные",
+        "События",
+        "Журнал смены"
+    };
+
+    private string _activeSection = "Активные";
+
+    private string PanelClass =>
+        ShellState.AlarmPanelExpanded
+            ? "bottom-alarm-panel expanded"
+            : "bottom-alarm-panel";
+
+    private IReadOnlyList<MockAlarm> ActiveAlarms =>
+        MockData.GetActiveAlarms();
+
+    private IReadOnlyList<MockAlarm> AcknowledgedAlarms =>
+        MockData.GetAlarms()
+            .Where(item => item.Acknowledged)
+            .ToList();
+
+    private string ActiveAlarmCountText =>
+        ActiveAlarms.Count == 0
+            ? "Нет активных"
+            : $"Активных: {ActiveAlarms.Count}";
+
+    private Color ActiveAlarmChipColor =>
+        ActiveAlarms.Count == 0
+            ? Color.Success
+            : Color.Error;
+
+    private string ExpandButtonText =>
+        ShellState.AlarmPanelExpanded
+            ? "Уменьшить"
+            : "Увеличить";
+
+    protected override void OnInitialized()
+    {
+        ShellState.Changed += OnShellStateChanged;
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private void ToggleExpanded()
+    {
+        ShellState.ToggleAlarmPanelExpanded();
+    }
+
+    private void ClosePanel()
+    {
+        ShellState.CloseAlarmPanel();
+    }
+
+    private void OpenObject(MockAlarm alarm)
+    {
+        ShellState.CloseAlarmPanel();
+        Navigation.NavigateTo($"/objects/{alarm.ObjectId}?section=alarms");
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "bottom-alarm-panel-tab selected"
+            : "bottom-alarm-panel-tab";
+    }
+
+    private static Color GetAlarmLevelColor(string level)
+    {
+        return level switch
+        {
+            "Критическая" => Color.Error,
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Информация" => Color.Info,
+            "Системная" => Color.Secondary,
+            "Диагностическая" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private void OnShellStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ShellState.Changed -= OnShellStateChanged;
+    }
+}

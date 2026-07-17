@@ -1,0 +1,52 @@
+add_library(dispatcher-alarm
+    src/alarm_acknowledgement_result.cpp
+    src/alarm_catalog.cpp
+    src/alarm_catalog_validation.cpp
+    src/alarm_condition_catalog.cpp
+    src/alarm_condition_catalog_validation.cpp
+    src/alarm_condition_definition.cpp
+    src/alarm_condition_definition_validation.cpp
+    src/alarm_configuration_snapshot.cpp
+    src/alarm_configuration_snapshot_builder.cpp
+    src/alarm_configuration_snapshot_validation.cpp
+    src/alarm_definition.cpp
+    src/alarm_definition_builder.cpp
+    src/alarm_definition_validation.cpp
+    src/alarm_evaluation_result.cpp
+    src/alarm_evaluator.cpp
+    src/alarm_event_store.cpp
+    src/alarm_runtime.cpp
+    src/alarm_runtime_event.cpp
+    src/alarm_state_store.cpp
+    src/alarm_state_transition.cpp
+    src/threshold_alarm_condition.cpp
+    src/alarm_acknowledgement_command.cpp
+    src/alarm_acknowledgement_record.cpp
+    src/alarm_acknowledgement_store.cpp
+    src/alarm_acknowledgement_command_validation.cpp
+    src/alarm_suppression_mode.cpp
+    src/alarm_suppression_reason.cpp
+    src/alarm_suppression_status.cpp
+    src/alarm_suppression_command.cpp
+    src/alarm_suppression_record.cpp
+    src/alarm_suppression_result.cpp
+    src/alarm_suppression_store.cpp
+    src/alarm_suppression_runtime_snapshot.cpp
+)
+
+target_include_directories(dispatcher-alarm
+    PUBLIC
+        include
+)
+
+target_link_libraries(dispatcher-alarm
+    PUBLIC
+        dispatcher-common
+        dispatcher-domain
+        dispatcher-telemetry
+)
+
+target_compile_features(dispatcher-alarm
+    PUBLIC
+        cxx_std_20
+)

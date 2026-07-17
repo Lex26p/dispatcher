@@ -1,0 +1,52 @@
+<MudPaper Class="@RootClass" Elevation="0">
+    <MudStack AlignItems="AlignItems.Center"
+              Justify="Justify.Center"
+              Spacing="2">
+        <MudIcon Icon="@Icon"
+                 Size="Size.Large"
+                 Color="@IconColor" />
+
+        <MudText Typo="Typo.h6">
+            @Title
+        </MudText>
+
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                @Description
+            </MudText>
+        }
+
+        @if (ChildContent is not null)
+        {
+            <div class="dispatcher-empty-state-actions">
+                @ChildContent
+            </div>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Нет данных";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string Icon { get; set; } = Icons.Material.Filled.Info;
+
+    [Parameter]
+    public Color IconColor { get; set; } = Color.Info;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private string RootClass =>
+        string.IsNullOrWhiteSpace(Class)
+            ? "dispatcher-empty-state"
+            : $"dispatcher-empty-state {Class}";
+}

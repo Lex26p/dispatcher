@@ -1,0 +1,65 @@
+<div class="object-screen-navigation-widget">
+    <div class="object-screen-navigation-header">
+        <div>
+            <div class="object-screen-navigation-title">
+                Навигация по экранам
+            </div>
+
+            <div class="object-screen-navigation-subtitle">
+                @ScreenCaption
+            </div>
+        </div>
+
+        <DispatcherStatusChip Text="Widget Navigation"
+                              Color="Color.Info" />
+    </div>
+
+    <div class="object-screen-navigation-list">
+        @foreach (var screen in Screens)
+        {
+            <button type="button"
+                    class="@GetButtonClass(screen)"
+                    @onclick="() => SelectScreen(screen)">
+                <span>@screen</span>
+
+                @if (screen == ActiveScreen)
+                {
+                    <small>Открыт</small>
+                }
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> Screens { get; set; } = Array.Empty<string>();
+
+    [Parameter]
+    public string ActiveScreen { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ActiveScreenChanged { get; set; }
+
+    private string ScreenCaption =>
+        string.IsNullOrWhiteSpace(ActiveScreen)
+            ? "Экран не выбран"
+            : $"Текущий экран: {ActiveScreen}";
+
+    private async Task SelectScreen(string screen)
+    {
+        if (screen == ActiveScreen)
+        {
+            return;
+        }
+
+        await ActiveScreenChanged.InvokeAsync(screen);
+    }
+
+    private string GetButtonClass(string screen)
+    {
+        return screen == ActiveScreen
+            ? "object-screen-navigation-button selected"
+            : "object-screen-navigation-button";
+    }
+}

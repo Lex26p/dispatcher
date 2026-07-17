@@ -1,0 +1,363 @@
+@page "/alarms"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Аварии</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Аварии</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "События")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_eventSearchQuery"
+                                      Placeholder="Поиск событий..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+                    </DispatcherToolbar>
+
+                    <DispatcherCard Class="mt-3">
+                        <MudTable T="MockEvent" Items="@FilteredEvents" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Время</MudTh>
+                                <MudTh>Тип</MudTh>
+                                <MudTh>Уровень</MudTh>
+                                <MudTh>Объект</MudTh>
+                                <MudTh>Пользователь</MudTh>
+                                <MudTh>Сообщение</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Время">@context.Time</MudTd>
+                                <MudTd DataLabel="Тип">@context.Type</MudTd>
+                                <MudTd DataLabel="Уровень">
+                                    <DispatcherStatusChip Text="@context.Level"
+                                                          Color="@GetLevelColor(context.Level)" />
+                                </MudTd>
+                                <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                <MudTd DataLabel="Пользователь">@(context.UserName ?? "Система")</MudTd>
+                                <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </DispatcherCard>
+                }
+                else if (_activeSection == "Журнал смены")
+                {
+                    <DispatcherEmptyState Title="Журнал смены"
+                                          Description="Детальный UX журнала смены будет реализован отдельным этапом."
+                                          Icon="@Icons.Material.Filled.Assignment" />
+                }
+                else
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_alarmSearchQuery"
+                                      Placeholder="Поиск аварий..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudSelect T="string"
+                                   Label="Уровень"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Value="_levelFilter">
+                            <MudSelectItem T="string" Value="@("all")">Все</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Критическая")">Критическая</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Авария")">Авария</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Предупреждение")">Предупреждение</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Системная")">Системная</MudSelectItem>
+                        </MudSelect>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        <MudItem xs="12" lg="9">
+                            @if (FilteredAlarms.Count == 0)
+                            {
+                                <DispatcherEmptyState Title="Аварии не найдены"
+                                                      Description="В выбранном разделе нет аварий по текущим фильтрам."
+                                                      Icon="@Icons.Material.Filled.NotificationsOff" />
+                            }
+                            else
+                            {
+                                <DispatcherCard>
+                                    <MudTable T="MockAlarm" Items="@FilteredAlarms" Dense="true" Hover="true">
+                                        <HeaderContent>
+                                            <MudTh>Время</MudTh>
+                                            <MudTh>Уровень</MudTh>
+                                            <MudTh>Объект</MudTh>
+                                            <MudTh>Устройство</MudTh>
+                                            <MudTh>Сообщение</MudTh>
+                                            <MudTh>Состояние</MudTh>
+                                            <MudTh>Действия</MudTh>
+                                        </HeaderContent>
+
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Время">@context.Time</MudTd>
+                                            <MudTd DataLabel="Уровень">
+                                                <DispatcherStatusChip Text="@context.Level"
+                                                                      Color="@GetLevelColor(context.Level)" />
+                                            </MudTd>
+                                            <MudTd DataLabel="Объект">@context.ObjectName</MudTd>
+                                            <MudTd DataLabel="Устройство">@context.DeviceName</MudTd>
+                                            <MudTd DataLabel="Сообщение">@context.Message</MudTd>
+                                            <MudTd DataLabel="Состояние">@context.State</MudTd>
+                                            <MudTd DataLabel="Действия">
+                                                <MudStack Row="true" Spacing="1">
+                                                    <MudButton Size="Size.Small"
+                                                               Variant="Variant.Filled"
+                                                               Color="Color.Primary"
+                                                               OnClick="() => SelectAlarm(context)">
+                                                        Открыть
+                                                    </MudButton>
+
+                                                    <MudButton Size="Size.Small"
+                                                               Variant="Variant.Outlined"
+                                                               Color="Color.Primary">
+                                                        Подтвердить
+                                                    </MudButton>
+
+                                                    <MudButton Size="Size.Small"
+                                                               Variant="Variant.Outlined">
+                                                        История
+                                                    </MudButton>
+                                                </MudStack>
+                                            </MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                </DispatcherCard>
+                            }
+                        </MudItem>
+
+                        <MudItem xs="12" lg="3">
+                            <DispatcherCard Class="alarm-details-panel">
+                                @if (SelectedAlarm is null)
+                                {
+                                    <DispatcherEmptyState Title="Авария не выбрана"
+                                                          Description="Выбери строку аварии, чтобы увидеть детали."
+                                                          Icon="@Icons.Material.Filled.Info" />
+                                }
+                                else
+                                {
+                                    <MudStack Spacing="2">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">
+                                                Детали
+                                            </MudText>
+
+                                            <DispatcherStatusChip Text="@SelectedAlarm.Level"
+                                                                  Color="@GetLevelColor(SelectedAlarm.Level)" />
+                                        </MudStack>
+
+                                        <MudDivider />
+
+                                        <MudText Typo="Typo.subtitle2">Объект</MudText>
+                                        <MudText Typo="Typo.body2">@SelectedAlarm.ObjectName</MudText>
+
+                                        <MudText Typo="Typo.subtitle2">Устройство</MudText>
+                                        <MudText Typo="Typo.body2">@SelectedAlarm.DeviceName</MudText>
+
+                                        <MudText Typo="Typo.subtitle2">Тег</MudText>
+                                        <MudText Typo="Typo.body2">@SelectedAlarm.TagName</MudText>
+
+                                        <MudText Typo="Typo.subtitle2">Сообщение</MudText>
+                                        <MudText Typo="Typo.body2">@SelectedAlarm.Message</MudText>
+
+                                        <MudText Typo="Typo.subtitle2">Состояние</MudText>
+                                        <MudText Typo="Typo.body2">@SelectedAlarm.State</MudText>
+
+                                        <MudDivider />
+
+                                        <MudStack Spacing="1">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                                                Открыть объект
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">
+                                                Подтвердить
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small">
+                                                История тега
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small">
+                                                Запись в журнал смены
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                }
+                            </DispatcherCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Активные",
+        "Подтвержденные",
+        "История аварий",
+        "Отключенные и подавленные",
+        "События",
+        "Журнал смены"
+    };
+
+    private string _activeSection = "Активные";
+    private string _alarmSearchQuery = string.Empty;
+    private string _eventSearchQuery = string.Empty;
+    private string _levelFilter = "all";
+    private string? _selectedAlarmId;
+
+    private MockAlarm? SelectedAlarm =>
+        string.IsNullOrWhiteSpace(_selectedAlarmId)
+            ? null
+            : MockData.GetAlarms().FirstOrDefault(item => item.Id == _selectedAlarmId);
+
+    private IReadOnlyList<MockAlarm> FilteredAlarms =>
+        MockData.GetAlarms()
+            .Where(MatchesCurrentAlarmSection)
+            .Where(MatchesAlarmSearch)
+            .Where(MatchesLevel)
+            .OrderByDescending(item => GetLevelOrder(item.Level))
+            .ThenByDescending(item => item.Time)
+            .ToList();
+
+    private IReadOnlyList<MockEvent> FilteredEvents =>
+        MockData.GetEvents()
+            .Where(MatchesEventSearch)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Аварии");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+
+        _selectedAlarmId = MockData.GetActiveAlarms().FirstOrDefault()?.Id;
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+
+        if (_activeSection is "События" or "Журнал смены")
+        {
+            _selectedAlarmId = null;
+            return;
+        }
+
+        _selectedAlarmId = FilteredAlarms.FirstOrDefault()?.Id;
+    }
+
+    private void SelectAlarm(MockAlarm alarm)
+    {
+        _selectedAlarmId = alarm.Id;
+    }
+
+    private bool MatchesCurrentAlarmSection(MockAlarm alarm)
+    {
+        return _activeSection switch
+        {
+            "Активные" => alarm.State == "Активна",
+            "Подтвержденные" => alarm.Acknowledged,
+            "История аварий" => true,
+            "Отключенные и подавленные" => alarm.Shelved || alarm.Suppressed,
+            _ => true
+        };
+    }
+
+    private bool MatchesAlarmSearch(MockAlarm alarm)
+    {
+        if (string.IsNullOrWhiteSpace(_alarmSearchQuery))
+        {
+            return true;
+        }
+
+        return alarm.ObjectName.Contains(_alarmSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || alarm.DeviceName.Contains(_alarmSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || alarm.TagName.Contains(_alarmSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || alarm.Message.Contains(_alarmSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || alarm.State.Contains(_alarmSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesEventSearch(MockEvent item)
+    {
+        if (string.IsNullOrWhiteSpace(_eventSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Type.Contains(_eventSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Level.Contains(_eventSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.ObjectName.Contains(_eventSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Message.Contains(_eventSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || (item.UserName?.Contains(_eventSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private bool MatchesLevel(MockAlarm alarm)
+    {
+        return _levelFilter == "all" || alarm.Level == _levelFilter;
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static Color GetLevelColor(string level)
+    {
+        return level switch
+        {
+            "Критическая" => Color.Error,
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Информация" => Color.Info,
+            "Системная" => Color.Secondary,
+            "Диагностическая" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private static int GetLevelOrder(string level)
+    {
+        return level switch
+        {
+            "Критическая" => 6,
+            "Авария" => 5,
+            "Предупреждение" => 4,
+            "Системная" => 3,
+            "Информация" => 2,
+            "Диагностическая" => 1,
+            _ => 0
+        };
+    }
+}

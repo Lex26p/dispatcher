@@ -1,0 +1,64 @@
+# Dispatcher / CMake build outputs
+/out/
+/build/
+/_build/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# CMake user-local presets
+CMakeUserPresets.json
+
+# Visual Studio user/local files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.VC.db
+*.VC.opendb
+
+# vcpkg local artifacts
+/vcpkg_installed/
+/vcpkg-manifest-install.log
+
+# FetchContent / external build artifacts
+_deps/
+
+# .NET / Blazor build outputs
+**/bin/
+**/obj/
+
+# .NET packages and local user files
+*.nupkg
+*.snupkg
+*.csproj.user
+*.sln.DotSettings.user
+
+# Rider / JetBrains
+.idea/
+
+# VS Code local settings
+.vscode/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+# Deployment/generated artifacts
+/artifacts/

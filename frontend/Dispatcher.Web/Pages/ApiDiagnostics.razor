@@ -1,0 +1,130 @@
+@page "/api-diagnostics"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject DispatcherApiOptions ApiOptions
+
+<PageTitle>API-диагностика</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <div>
+                <MudText Typo="Typo.h5">API-диагностика</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Проверка настроек frontend-клиента для backend API.
+                </MudText>
+            </div>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="RunMockCheck">
+                Проверить
+            </MudButton>
+        </MudStack>
+
+        <MudGrid>
+            <MudItem xs="12" lg="6">
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Настройки API</MudText>
+
+                        <div class="account-info-grid">
+                            <span>Базовый URL</span>
+                            <strong>@ApiOptions.BaseUrl</strong>
+
+                            <span>Health</span>
+                            <strong>@ApiOptions.HealthEndpoint</strong>
+
+                            <span>Readiness</span>
+                            <strong>@ApiOptions.ReadinessEndpoint</strong>
+
+                            <span>Runtime</span>
+                            <strong>@ApiOptions.RuntimeEndpoint</strong>
+
+                            <span>Alarms</span>
+                            <strong>@ApiOptions.AlarmsEndpoint</strong>
+
+                            <span>Таймаут</span>
+                            <strong>@ApiOptions.TimeoutSeconds секунд</strong>
+                        </div>
+                    </MudStack>
+                </DispatcherCard>
+            </MudItem>
+
+            <MudItem xs="12" lg="6">
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Проверка endpoints</MudText>
+
+                        <MudTable T="ApiEndpointCheck" Items="@_checks" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Endpoint</MudTh>
+                                <MudTh>Статус</MudTh>
+                                <MudTh>Время</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Endpoint">@context.Name</MudTd>
+                                <MudTd DataLabel="Статус">
+                                    <DispatcherStatusChip Text="@context.Status"
+                                                          Color="@GetApiStatusColor(context.Status)" />
+                                </MudTd>
+                                <MudTd DataLabel="Время">@context.Duration</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                            Сейчас это UI-mock проверки. Реальные запросы оставим на отдельный backend/frontend integration этап.
+                        </MudAlert>
+                    </MudStack>
+                </DispatcherCard>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private IReadOnlyList<ApiEndpointCheck> _checks = new List<ApiEndpointCheck>
+    {
+        new("Health", "Не проверено", "—"),
+        new("Readiness", "Не проверено", "—"),
+        new("Runtime", "Не проверено", "—"),
+        new("Alarms", "Не проверено", "—")
+    };
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("API-диагностика");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void RunMockCheck()
+    {
+        _checks = new List<ApiEndpointCheck>
+        {
+            new("Health", "OK", "24 мс"),
+            new("Readiness", "OK", "22 мс"),
+            new("Runtime", "OK", "31 мс"),
+            new("Alarms", "OK", "29 мс")
+        };
+    }
+
+    private static Color GetApiStatusColor(string status)
+    {
+        return status switch
+        {
+            "OK" => Color.Success,
+            "Ошибка" => Color.Error,
+            "Не проверено" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record ApiEndpointCheck(
+        string Name,
+        string Status,
+        string Duration
+    );
+}

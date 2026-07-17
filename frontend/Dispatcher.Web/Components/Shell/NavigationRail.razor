@@ -1,0 +1,58 @@
+<nav class="@RailClass"
+     @onmouseenter="Open"
+     @onmouseleave="Close">
+    <div class="nav-rail-top">
+        @foreach (var item in NavItems)
+        {
+            <NavLink href="@item.Route"
+                     class="nav-item"
+                     activeClass="active"
+                     Match="NavLinkMatch.Prefix">
+                <CoreIcon Name="@item.Icon" />
+                <span>@item.Label</span>
+
+                @if (item.Badge is not null)
+                {
+                    <em>@item.Badge</em>
+                }
+            </NavLink>
+        }
+    </div>
+</nav>
+
+@code {
+    private bool _open;
+
+    private string RailClass =>
+        _open
+            ? "nav-rail open"
+            : "nav-rail";
+
+    private IReadOnlyList<NavItem> NavItems => new List<NavItem>
+    {
+        new("/home", "Главная", "home", null),
+        new("/dashboards", "Дашборды", "dashboard", null),
+        new("/events", "Диспетчер событий", "alert", "3"),
+        new("/equipment", "Оборудование", "equipment", null),
+        new("/maintenance", "ТОиР и ППР", "work", null),
+        new("/builder/dashboards/hvac", "Конструктор", "editor", null),
+        new("/admin/settings", "Системные настройки", "settings", null)
+    };
+
+    private void Open()
+    {
+        _open = true;
+    }
+
+    private void Close()
+    {
+        _open = false;
+    }
+
+    private sealed record NavItem(
+        string Route,
+        string Label,
+        string Icon,
+        string? Badge
+    );
+}

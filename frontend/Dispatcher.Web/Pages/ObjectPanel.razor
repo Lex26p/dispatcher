@@ -1,0 +1,433 @@
+@page "/objects/{ObjectId}/panel"
+@layout PanelLayout
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitle</PageTitle>
+
+@if (CurrentObject is null)
+{
+    <div class="object-panel-page">
+        <div class="object-panel-center">
+            <DispatcherEmptyState Title="Объект не найден"
+                                  Description="Проверь адрес panel mode или вернись к списку объектов."
+                                  Icon="@Icons.Material.Filled.SearchOff">
+                <MudButton Href="/objects"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary">
+                    К списку объектов
+                </MudButton>
+            </DispatcherEmptyState>
+        </div>
+    </div>
+}
+else
+{
+    <div class="object-panel-page">
+        <header class="object-panel-topbar">
+            <div class="object-panel-title-block">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Dashboard"
+                             Color="Color.Info" />
+
+                    <MudText Typo="Typo.h6">
+                        @CurrentObject.Name
+                    </MudText>
+
+                    <DispatcherStatusChip Text="@CurrentObject.Status"
+                                          Color="@GetObjectStatusColor(CurrentObject.Status)" />
+                </MudStack>
+
+                <div class="object-panel-subtitle">
+                    @CurrentObject.Group · @CurrentObject.Type · экран: @_activeScreen
+                </div>
+            </div>
+
+            <div class="object-panel-topbar-actions">
+                <DispatcherStatusChip Text="@ActiveAlarmCountText"
+                                      Color="@ActiveAlarmColor" />
+
+                <MudButton Href="@BackToWorkspaceUrl"
+                           Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.OpenInBrowser">
+                    Обычный режим
+                </MudButton>
+
+                <MudButton Href="/objects"
+                           Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.List">
+                    Объекты
+                </MudButton>
+            </div>
+        </header>
+
+        <main class="object-panel-main">
+            <section class="object-panel-canvas">
+                <div class="object-panel-screen-header">
+                    <div>
+                        <MudText Typo="Typo.h5">@PrimaryWidgetTitle</MudText>
+
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @PrimaryWidgetDescription
+                        </MudText>
+                    </div>
+
+                    <DispatcherStatusChip Text="Panel mode"
+                                          Color="Color.Info" />
+                </div>
+
+                <div class="object-panel-mimic">
+                    <div class="object-panel-mimic-stage">
+                        <div class="@GetPanelLineClass()"></div>
+                        <div class="@GetPanelDeviceClass()"></div>
+                        <div class="object-panel-flow-arrow"></div>
+
+                        <div class="object-panel-value value-a">
+                            <strong>@PanelValueA.Title</strong>
+                            <span>@PanelValueA.Value</span>
+                            <small>@PanelValueA.Description</small>
+                        </div>
+
+                        <div class="object-panel-value value-b">
+                            <strong>@PanelValueB.Title</strong>
+                            <span>@PanelValueB.Value</span>
+                            <small>@PanelValueB.Description</small>
+                        </div>
+
+                        <div class="object-panel-value value-c">
+                            <strong>@PanelValueC.Title</strong>
+                            <span>@PanelValueC.Value</span>
+                            <small>@PanelValueC.Description</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="object-panel-side">
+                <DispatcherCard>
+                    <ObjectScreenNavigationWidget Screens="@Screens"
+                                                  ActiveScreen="@_activeScreen"
+                                                  ActiveScreenChanged="SelectScreen" />
+                </DispatcherCard>
+
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Сводка объекта</MudText>
+
+                        <div class="object-panel-info-grid">
+                            <span>Аварии</span>
+                            <strong>@CurrentObject.ActiveAlarmCount</strong>
+
+                            <span>Устройства</span>
+                            <strong>@ObjectDevices.Count</strong>
+
+                            <span>Теги</span>
+                            <strong>@ObjectTags.Count</strong>
+
+                            <span>Виджеты</span>
+                            <strong>@CurrentObject.WidgetCount</strong>
+
+                            <span>Последнее событие</span>
+                            <strong>@CurrentObject.LastEvent</strong>
+                        </div>
+                    </MudStack>
+                </DispatcherCard>
+
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Действия</MudText>
+
+                        <MudButton Href="@AlarmsUrl"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Notifications">
+                            Аварии объекта
+                        </MudButton>
+
+                        <MudButton Href="@HistoryUrl"
+                                   Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.QueryStats">
+                            История
+                        </MudButton>
+
+                        <MudButton Href="@DevicesUrl"
+                                   Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.Memory">
+                            Устройства
+                        </MudButton>
+
+                        <MudAlert Severity="@ControlAlertSeverity"
+                                  Variant="Variant.Outlined">
+                            @ControlAlertText
+                        </MudAlert>
+                    </MudStack>
+                </DispatcherCard>
+            </aside>
+        </main>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ObjectId { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "screen")]
+    public string? ScreenQuery { get; set; }
+
+    private readonly IReadOnlyList<string> _defaultScreens = new List<string>
+    {
+        "Общий обзор",
+        "Электропитание",
+        "Вентиляция",
+        "Датчики",
+        "Управление"
+    };
+
+    private string _activeScreen = "Общий обзор";
+
+    private MockObject? CurrentObject =>
+        string.IsNullOrWhiteSpace(ObjectId)
+            ? null
+            : MockData.GetObjectById(ObjectId);
+
+    private string PageTitle =>
+        CurrentObject is null
+            ? "Panel mode"
+            : $"{CurrentObject.Name} · Panel";
+
+    private IReadOnlyList<string> Screens =>
+        CurrentObject?.IsSystemObject == true
+            ? new List<string>
+            {
+                "Общий обзор",
+                "Состояние",
+                "Журналы",
+                "Настройки"
+            }
+            : _defaultScreens;
+
+    private IReadOnlyList<MockDevice> ObjectDevices =>
+        CurrentObject is null
+            ? new List<MockDevice>()
+            : MockData.GetDevices()
+                .Where(item => item.ObjectId == CurrentObject.Id)
+                .ToList();
+
+    private IReadOnlyList<MockTag> ObjectTags =>
+        CurrentObject is null
+            ? new List<MockTag>()
+            : MockData.GetTags()
+                .Where(item => item.ObjectName == CurrentObject.Name)
+                .ToList();
+
+    private string BackToWorkspaceUrl =>
+        CurrentObject is null
+            ? "/objects"
+            : $"/objects/{CurrentObject.Id}?section=overview&screen={ToScreenQueryValue(_activeScreen)}";
+
+    private string AlarmsUrl =>
+        CurrentObject is null
+            ? "/alarms"
+            : $"/objects/{CurrentObject.Id}?section=alarms";
+
+    private string HistoryUrl =>
+        CurrentObject is null
+            ? "/history"
+            : $"/objects/{CurrentObject.Id}?section=history";
+
+    private string DevicesUrl =>
+        CurrentObject is null
+            ? "/configuration"
+            : $"/objects/{CurrentObject.Id}?section=devices";
+
+    private string ActiveAlarmCountText =>
+        CurrentObject is null
+            ? "Аварии: 0"
+            : $"Аварии: {CurrentObject.ActiveAlarmCount}";
+
+    private Color ActiveAlarmColor =>
+        CurrentObject?.ActiveAlarmCount > 0
+            ? Color.Error
+            : Color.Success;
+
+    private PanelValue PanelValueA =>
+        _activeScreen switch
+        {
+            "Электропитание" => new("Напряжение L1", "0 В", "Mock-тег"),
+            "Вентиляция" => new("Температура двигателя", "84.2 °C", "Предупреждение"),
+            "Датчики" => new("Тегов", ObjectTags.Count.ToString(), "Связанные теги"),
+            "Управление" => new("Режим", "Выключен", "Включается в header обычного режима"),
+            "Состояние" => new("Runtime", "Running", "Системный объект"),
+            "Журналы" => new("События", MockData.GetEvents().Count.ToString(), "Последние записи"),
+            _ => new("Статус", CurrentObject?.Status ?? "Н/Д", "Общий статус")
+        };
+
+    private PanelValue PanelValueB =>
+        _activeScreen switch
+        {
+            "Электропитание" => new("Ввод", "Отключен", "Состояние ввода"),
+            "Вентиляция" => new("Вентмашина", "В-12", "Основной агрегат"),
+            "Датчики" => new("Качество", "Хорошее", "Последние значения"),
+            "Управление" => new("Команды", CurrentObject?.IsSystemObject == true ? "0" : "4", "Доступно по правам"),
+            "Состояние" => new("Очереди", "0", "Нет задержек"),
+            "Журналы" => new("Аудит", "Включен", "Запись действий"),
+            _ => new("Устройства", ObjectDevices.Count.ToString(), "Связанные устройства")
+        };
+
+    private PanelValue PanelValueC =>
+        _activeScreen switch
+        {
+            "Электропитание" => new("Аварии питания", CurrentObject?.ActiveAlarmCount.ToString() ?? "0", "Активные"),
+            "Вентиляция" => new("Фильтр", "Загрязнен", "Mock-предупреждение"),
+            "Датчики" => new("Последний опрос", "8 сек назад", "Mock data"),
+            "Управление" => new("Подтверждение", "Требуется", "Для опасных команд"),
+            "Состояние" => new("Ошибки", "0", "Критических нет"),
+            "Журналы" => new("Ошибки записи", "0", "Норма"),
+            _ => new("Последнее событие", CurrentObject?.LastEvent ?? "Н/Д", "Активность")
+        };
+
+    private string PrimaryWidgetTitle =>
+        _activeScreen switch
+        {
+            "Управление" => "Панель управления",
+            "Датчики" => "Текущие значения тегов",
+            "Электропитание" => "Однолинейная схема",
+            "Вентиляция" => "Схема вентиляции",
+            "Состояние" => "Runtime status",
+            "Журналы" => "Журнал событий",
+            _ => "Основная мнемосхема"
+        };
+
+    private string PrimaryWidgetDescription =>
+        _activeScreen switch
+        {
+            "Управление" => "Команды, блокировки и подтверждения. В panel mode команды только отображаются.",
+            "Датчики" => "Крупный экран текущих значений и качества тегов.",
+            "Электропитание" => "Крупный экран электроснабжения для операторской панели.",
+            "Вентиляция" => "Крупный экран вентиляции, вентмашин и фильтров.",
+            "Состояние" => "Системная сводка runtime-компонентов.",
+            "Журналы" => "События, аудит и ошибки системного объекта.",
+            _ => "Основной panel-экран объекта."
+        };
+
+    private Severity ControlAlertSeverity =>
+        CurrentObject?.IsSystemObject == true
+            ? Severity.Info
+            : Severity.Warning;
+
+    private string ControlAlertText =>
+        CurrentObject?.IsSystemObject == true
+            ? "Для системных объектов режим управления скрыт."
+            : "Panel mode предназначен для просмотра. Команды включим позже через отдельный control flow.";
+
+    protected override void OnParametersSet()
+    {
+        if (CurrentObject is null)
+        {
+            ShellState.SetPageTitle("Panel mode");
+            ShellState.SetControlModeAvailable(false);
+            return;
+        }
+
+        _activeScreen = NormalizeScreenQuery(ScreenQuery);
+
+        if (!Screens.Contains(_activeScreen))
+        {
+            _activeScreen = Screens.First();
+        }
+
+        ShellState.SetPageTitle(CurrentObject.Name);
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void SelectScreen(string screen)
+    {
+        _activeScreen = screen;
+        Navigation.NavigateTo($"/objects/{ObjectId}/panel?screen={ToScreenQueryValue(screen)}", replace: true);
+    }
+
+    private string NormalizeScreenQuery(string? value)
+    {
+        return value switch
+        {
+            "summary" => "Общий обзор",
+            "power" => "Электропитание",
+            "ventilation" => "Вентиляция",
+            "sensors" => "Датчики",
+            "control" => "Управление",
+            "state" => "Состояние",
+            "logs" => "Журналы",
+            "settings" => "Настройки",
+            "Общий обзор" => "Общий обзор",
+            "Электропитание" => "Электропитание",
+            "Вентиляция" => "Вентиляция",
+            "Датчики" => "Датчики",
+            "Управление" => "Управление",
+            "Состояние" => "Состояние",
+            "Журналы" => "Журналы",
+            "Настройки" => "Настройки",
+            _ => Screens.First()
+        };
+    }
+
+    private static string ToScreenQueryValue(string screen)
+    {
+        return screen switch
+        {
+            "Общий обзор" => "summary",
+            "Электропитание" => "power",
+            "Вентиляция" => "ventilation",
+            "Датчики" => "sensors",
+            "Управление" => "control",
+            "Состояние" => "state",
+            "Журналы" => "logs",
+            "Настройки" => "settings",
+            _ => "summary"
+        };
+    }
+
+    private string GetPanelLineClass()
+    {
+        return _activeScreen switch
+        {
+            "Электропитание" => "object-panel-process-line electrical",
+            "Вентиляция" => "object-panel-process-line ventilation",
+            "Датчики" => "object-panel-process-line sensors",
+            "Управление" => "object-panel-process-line control",
+            _ => "object-panel-process-line"
+        };
+    }
+
+    private string GetPanelDeviceClass()
+    {
+        return _activeScreen switch
+        {
+            "Электропитание" => "object-panel-process-device electrical",
+            "Вентиляция" => "object-panel-process-device ventilation",
+            "Датчики" => "object-panel-process-device sensors",
+            "Управление" => "object-panel-process-device control",
+            _ => "object-panel-process-device"
+        };
+    }
+
+    private static Color GetObjectStatusColor(string status)
+    {
+        return status switch
+        {
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Норма" => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record PanelValue(
+        string Title,
+        string Value,
+        string Description
+    );
+}

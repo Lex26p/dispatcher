@@ -1,0 +1,1 @@
+#include <dispatcher/telemetry/telemetry_adapter.hpp>

@@ -1,0 +1,379 @@
+@page "/objects"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+@inject NavigationManager Navigation
+
+<PageTitle>Объекты</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.h5">Объекты</MudText>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add">
+                Добавить объект
+            </MudButton>
+        </MudStack>
+
+        <DispatcherToolbar>
+            <MudTextField T="string"
+                          @bind-Value="_searchQuery"
+                          Placeholder="Поиск объектов..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" />
+
+            <MudSelect T="string"
+                       Label="Статус"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       @bind-Value="_statusFilter">
+                <MudSelectItem T="string" Value="@("all")">Все</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Норма")">Норма</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Предупреждение")">Предупреждение</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Авария")">Авария</MudSelectItem>
+            </MudSelect>
+
+            <MudSelect T="string"
+                       Label="Тип"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       @bind-Value="_typeFilter">
+                <MudSelectItem T="string" Value="@("all")">Все</MudSelectItem>
+
+                @foreach (var type in ObjectTypes)
+                {
+                    <MudSelectItem T="string" Value="@type">@type</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="string"
+                       Label="Вид"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       @bind-Value="_viewMode">
+                <MudSelectItem T="string" Value="@("cards")">Карточки</MudSelectItem>
+                <MudSelectItem T="string" Value="@("table")">Таблица</MudSelectItem>
+            </MudSelect>
+        </DispatcherToolbar>
+
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Class="dispatcher-left-panel objects-tree-panel" Elevation="0">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">
+                        Дерево объектов
+                    </MudText>
+
+                    <div class="objects-tree">
+                        @foreach (var group in ObjectsByGroup)
+                        {
+                            <div class="objects-tree-group">
+                                <div class="objects-tree-group-title">
+                                    @group.Key
+                                </div>
+
+                                @foreach (var item in group)
+                                {
+                                    <button type="button"
+                                            class="@GetTreeItemClass(item)"
+                                            @onclick="() => SelectObject(item)">
+                                        <span class="objects-tree-status-dot @GetStatusDotClass(item.Status)"></span>
+                                        <span class="objects-tree-name">@item.Name</span>
+
+                                        @if (item.ActiveAlarmCount > 0)
+                                        {
+                                            <span class="objects-tree-alarm-count">
+                                                @item.ActiveAlarmCount
+                                            </span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="9">
+                @if (FilteredObjects.Count == 0)
+                {
+                    <DispatcherEmptyState Title="Объекты не найдены"
+                                          Description="Измени строку поиска или фильтры."
+                                          Icon="@Icons.Material.Filled.SearchOff" />
+                }
+                else if (_viewMode == "table")
+                {
+                    <DispatcherCard>
+                        <MudTable T="MockObject" Items="@FilteredObjects" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Объект</MudTh>
+                                <MudTh>Группа</MudTh>
+                                <MudTh>Тип</MudTh>
+                                <MudTh>Статус</MudTh>
+                                <MudTh>Аварии</MudTh>
+                                <MudTh>Виджеты</MudTh>
+                                <MudTh>Последнее событие</MudTh>
+                                <MudTh>Действия</MudTh>
+                            </HeaderContent>
+
+                            <RowTemplate>
+                                <MudTd DataLabel="Объект">@context.Name</MudTd>
+                                <MudTd DataLabel="Группа">@context.Group</MudTd>
+                                <MudTd DataLabel="Тип">@context.Type</MudTd>
+                                <MudTd DataLabel="Статус">
+                                    <DispatcherStatusChip Text="@context.Status"
+                                                          Color="@GetStatusColor(context.Status)" />
+                                </MudTd>
+                                <MudTd DataLabel="Аварии">@context.ActiveAlarmCount</MudTd>
+                                <MudTd DataLabel="Виджеты">@context.WidgetCount</MudTd>
+                                <MudTd DataLabel="Последнее событие">@context.LastEvent</MudTd>
+                                <MudTd DataLabel="Действия">
+                                    <MudStack Row="true" Spacing="1">
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   OnClick="() => OpenObject(context)">
+                                            Открыть
+                                        </MudButton>
+
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Error"
+                                                   OnClick="() => OpenObjectAlarms(context)">
+                                            Аварии
+                                        </MudButton>
+
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Outlined"
+                                                   OnClick="() => OpenObjectHistory(context)">
+                                            История
+                                        </MudButton>
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </DispatcherCard>
+                }
+                else
+                {
+                    <MudGrid>
+                        @foreach (var item in FilteredObjects)
+                        {
+                            <MudItem xs="12" sm="6" lg="4">
+                                <DispatcherCard Class="@GetObjectCardClass(item)">
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@item.Name</MudText>
+
+                                            <DispatcherStatusChip Text="@item.Status"
+                                                                  Color="@GetStatusColor(item.Status)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Группа: @item.Group
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Тип: @item.Type
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Активные аварии: @item.ActiveAlarmCount
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Виджеты: @item.WidgetCount
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Последнее событие: @item.LastEvent
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OpenObject(item)">
+                                                Открыть
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OpenObjectAlarms(item)">
+                                                Аварии
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small"
+                                                       OnClick="() => OpenObjectHistory(item)">
+                                                История
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+
+                @if (SelectedObject is not null)
+                {
+                    <DispatcherCard Class="mt-3 selected-object-panel">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <div>
+                                <MudText Typo="Typo.h6">
+                                    Выбран объект: @SelectedObject.Name
+                                </MudText>
+
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @SelectedObject.Group · @SelectedObject.Type · @SelectedObject.WidgetCount виджетов
+                                </MudText>
+                            </div>
+
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <DispatcherStatusChip Text="@SelectedObject.Status"
+                                                      Color="@GetStatusColor(SelectedObject.Status)" />
+
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="() => OpenObject(SelectedObject)">
+                                    Открыть объект
+                                </MudButton>
+                            </MudStack>
+                        </MudStack>
+                    </DispatcherCard>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private string _searchQuery = string.Empty;
+    private string _statusFilter = "all";
+    private string _typeFilter = "all";
+    private string _viewMode = "cards";
+    private string? _selectedObjectId;
+
+    private MockObject? SelectedObject =>
+        string.IsNullOrWhiteSpace(_selectedObjectId)
+            ? null
+            : MockData.GetObjectById(_selectedObjectId);
+
+    private IReadOnlyList<MockObject> FilteredObjects =>
+        MockData.GetObjects()
+            .Where(MatchesSearch)
+            .Where(MatchesStatus)
+            .Where(MatchesType)
+            .OrderByDescending(item => item.ActiveAlarmCount)
+            .ThenBy(item => item.Group)
+            .ThenBy(item => item.Name)
+            .ToList();
+
+    private IReadOnlyList<string> ObjectTypes =>
+        MockData.GetObjects()
+            .Select(item => item.Type)
+            .Distinct()
+            .OrderBy(item => item)
+            .ToList();
+
+    private IEnumerable<IGrouping<string, MockObject>> ObjectsByGroup =>
+        MockData.GetObjects()
+            .GroupBy(item => item.Group)
+            .OrderBy(group => group.Key == "Система" ? 1 : 0)
+            .ThenBy(group => group.Key);
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Объекты");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+
+        _selectedObjectId = MockData.GetObjects().FirstOrDefault()?.Id;
+    }
+
+    private void SelectObject(MockObject item)
+    {
+        _selectedObjectId = item.Id;
+    }
+
+    private void OpenObject(MockObject item)
+    {
+        Navigation.NavigateTo($"/objects/{item.Id}");
+    }
+
+    private void OpenObjectAlarms(MockObject item)
+    {
+        Navigation.NavigateTo($"/objects/{item.Id}?section=alarms");
+    }
+
+    private void OpenObjectHistory(MockObject item)
+    {
+        Navigation.NavigateTo($"/objects/{item.Id}?section=history");
+    }
+
+    private bool MatchesSearch(MockObject item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Group.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Type.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesStatus(MockObject item)
+    {
+        return _statusFilter == "all" || item.Status == _statusFilter;
+    }
+
+    private bool MatchesType(MockObject item)
+    {
+        return _typeFilter == "all" || item.Type == _typeFilter;
+    }
+
+    private static Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Авария" => Color.Error,
+            "Предупреждение" => Color.Warning,
+            "Норма" => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private string GetTreeItemClass(MockObject item)
+    {
+        return item.Id == _selectedObjectId
+            ? "objects-tree-item selected"
+            : "objects-tree-item";
+    }
+
+    private string GetObjectCardClass(MockObject item)
+    {
+        return item.Id == _selectedObjectId
+            ? "object-card selected"
+            : "object-card";
+    }
+
+    private static string GetStatusDotClass(string status)
+    {
+        return status switch
+        {
+            "Авария" => "status-dot-error",
+            "Предупреждение" => "status-dot-warning",
+            "Норма" => "status-dot-success",
+            _ => "status-dot-default"
+        };
+    }
+}

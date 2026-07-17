@@ -1,0 +1,258 @@
+@page "/security/preview-role"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Просмотр как роль</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <div>
+                <MudText Typo="Typo.h5">Просмотр как роль</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Проверка видимости страниц, объектов и действий для выбранной роли.
+                </MudText>
+            </div>
+
+            <DispatcherStatusChip Text="Макет" Color="Color.Info" />
+        </MudStack>
+
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+            В финальной версии этот раздел будет доступен только администратору.
+        </MudAlert>
+
+        <MudGrid>
+            <MudItem xs="12" lg="4">
+                <DispatcherCard>
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Роль</MudText>
+
+                        <MudSelect T="string"
+                                   Label="Выбрать роль"
+                                   @bind-Value="_selectedRole"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            <MudSelectItem T="string" Value="@("Администратор")">Администратор</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Инженер")">Инженер</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Оператор")">Оператор</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Наблюдатель")">Наблюдатель</MudSelectItem>
+                        </MudSelect>
+
+                        <div class="account-info-grid">
+                            <span>Страниц видно</span>
+                            <strong>@VisiblePageCount</strong>
+
+                            <span>Объектов видно</span>
+                            <strong>@VisibleObjectCount</strong>
+
+                            <span>Управление</span>
+                            <strong>@ControlAccessText</strong>
+
+                            <span>Администрирование</span>
+                            <strong>@AdminAccessText</strong>
+                        </div>
+                    </MudStack>
+                </DispatcherCard>
+            </MudItem>
+
+            <MudItem xs="12" lg="8">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <DispatcherCard>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h6">Доступные страницы</MudText>
+
+                                @foreach (var visiblePageName in VisiblePages)
+                                {
+                                    <MudPaper Class="security-preview-row" Elevation="0">
+                                        <span>@visiblePageName</span>
+                                        <DispatcherStatusChip Text="Видно" Color="Color.Success" />
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        </DispatcherCard>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <DispatcherCard>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.h6">Доступные объекты</MudText>
+
+                                @foreach (var objectItem in VisibleObjects)
+                                {
+                                    <MudPaper Class="security-preview-row" Elevation="0">
+                                        <span>@objectItem.Name</span>
+
+                                        <DispatcherStatusChip Text="@objectItem.Group"
+                                                              Color="@GetObjectAccessColor(objectItem)" />
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        </DispatcherCard>
+                    </MudItem>
+                </MudGrid>
+            </MudItem>
+        </MudGrid>
+
+        <DispatcherCard>
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.h6">Доступ к действиям</MudText>
+
+                <MudTable T="ActionAccessRow" Items="@ActionAccessRows" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Действие</MudTh>
+                        <MudTh>Описание</MudTh>
+                        <MudTh>Доступ</MudTh>
+                    </HeaderContent>
+
+                    <RowTemplate>
+                        <MudTd DataLabel="Действие">@context.Name</MudTd>
+                        <MudTd DataLabel="Описание">@context.Description</MudTd>
+                        <MudTd DataLabel="Доступ">
+                            <DispatcherStatusChip Text="@GetActionAccessText(context.Allowed)"
+                                                  Color="@GetActionAccessColor(context.Allowed)" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudStack>
+        </DispatcherCard>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private string _selectedRole = "Оператор";
+
+    private int VisiblePageCount =>
+        VisiblePages.Count;
+
+    private int VisibleObjectCount =>
+        VisibleObjects.Count;
+
+    private IReadOnlyList<string> VisiblePages =>
+        _selectedRole switch
+        {
+            "Администратор" => new List<string>
+            {
+                "Обзор системы",
+                "Объекты",
+                "Аварии",
+                "История / Графики / Отчеты",
+                "Конфигурация",
+                "Дизайн",
+                "Автоматизация",
+                "Личный кабинет",
+                "Просмотр как роль"
+            },
+            "Инженер" => new List<string>
+            {
+                "Обзор системы",
+                "Объекты",
+                "Аварии",
+                "История / Графики / Отчеты",
+                "Конфигурация",
+                "Дизайн",
+                "Личный кабинет"
+            },
+            "Оператор" => new List<string>
+            {
+                "Обзор системы",
+                "Объекты",
+                "Аварии",
+                "История / Графики / Отчеты",
+                "Личный кабинет"
+            },
+            _ => new List<string>
+            {
+                "Обзор системы",
+                "Объекты",
+                "История / Графики / Отчеты",
+                "Личный кабинет"
+            }
+        };
+
+    private IReadOnlyList<MockObject> VisibleObjects =>
+        _selectedRole switch
+        {
+            "Администратор" => MockData.GetObjects().ToList(),
+            "Инженер" => MockData.GetObjects().ToList(),
+            "Оператор" => MockData.GetObjects()
+                .Where(item => !item.IsSystemObject)
+                .ToList(),
+            _ => MockData.GetObjects()
+                .Where(item => !item.IsSystemObject && item.Status != "Авария")
+                .ToList()
+        };
+
+    private string ControlAccessText =>
+        _selectedRole switch
+        {
+            "Администратор" => "Полный",
+            "Инженер" => "Разрешен",
+            "Оператор" => "По объекту",
+            _ => "Нет"
+        };
+
+    private string AdminAccessText =>
+        _selectedRole == "Администратор"
+            ? "Есть"
+            : "Нет";
+
+    private IReadOnlyList<ActionAccessRow> ActionAccessRows => new List<ActionAccessRow>
+    {
+        new("Открыть объект", "Просмотр рабочего пространства объекта.", true),
+        new("Подтвердить аварию", "Подтверждение активной аварии.", CanAcknowledgeAlarms),
+        new("Включить режим управления", "Временный доступ к управляющим командам.", CanUseControlMode),
+        new("Изменить конфигурацию устройства", "Редактирование устройств и тегов.", CanEditConfiguration),
+        new("Опубликовать объект", "Публикация версии объекта.", CanPublishObjects),
+        new("Управлять ролями", "Изменение ролей и прав.", CanManageRoles)
+    };
+
+    private bool CanAcknowledgeAlarms =>
+        _selectedRole is "Администратор" or "Инженер" or "Оператор";
+
+    private bool CanUseControlMode =>
+        _selectedRole is "Администратор" or "Инженер" or "Оператор";
+
+    private bool CanEditConfiguration =>
+        _selectedRole is "Администратор" or "Инженер";
+
+    private bool CanPublishObjects =>
+        _selectedRole is "Администратор" or "Инженер";
+
+    private bool CanManageRoles =>
+        _selectedRole is "Администратор";
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Просмотр как роль");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private static Color GetObjectAccessColor(MockObject objectItem)
+    {
+        return objectItem.IsSystemObject
+            ? Color.Info
+            : Color.Success;
+    }
+
+    private static string GetActionAccessText(bool allowed)
+    {
+        return allowed
+            ? "Разрешено"
+            : "Запрещено";
+    }
+
+    private static Color GetActionAccessColor(bool allowed)
+    {
+        return allowed
+            ? Color.Success
+            : Color.Error;
+    }
+
+    private sealed record ActionAccessRow(
+        string Name,
+        string Description,
+        bool Allowed
+    );
+}

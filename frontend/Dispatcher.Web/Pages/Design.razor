@@ -1,0 +1,358 @@
+@page "/design"
+@inject DispatcherShellState ShellState
+@inject DispatcherMockDataService MockData
+
+<PageTitle>Дизайн</PageTitle>
+
+<DispatcherPageSurface>
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Дизайн</MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudPaper Class="dispatcher-left-panel section-side-menu" Elevation="0">
+                    @foreach (var section in _sections)
+                    {
+                        <button type="button"
+                                class="@GetSectionButtonClass(section)"
+                                @onclick="() => SelectSection(section)">
+                            @section
+                        </button>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="10">
+                @if (_activeSection == "Редактор объектов")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_objectSearchQuery"
+                                      Placeholder="Поиск объектов для редактирования..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новый объект
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.ContentCopy">
+                            Копировать объект
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        @foreach (var item in FilteredObjects)
+                        {
+                            <MudItem xs="12" md="6" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@item.Name</MudText>
+                                            <DispatcherStatusChip Text="@GetPublicationStatus(item)"
+                                                                  Color="@GetPublicationColor(item)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            @item.Group · @item.Type
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Виджеты: @item.WidgetCount
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small">
+                                                Редактировать
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small">
+                                                Версии
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small">
+                                                Проверить
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else if (_activeSection == "Шаблоны виджетов")
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_templateSearchQuery"
+                                      Placeholder="Поиск шаблонов виджетов..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новый шаблон
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        @foreach (var template in FilteredWidgetTemplates)
+                        {
+                            <MudItem xs="12" md="6" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@template.Name</MudText>
+                                            <DispatcherStatusChip Text="@template.Status"
+                                                                  Color="@GetDesignStatusColor(template.Status)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Категория: @template.Category
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Использований: @template.UsageCount
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small">
+                                                Открыть
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small">
+                                                Копировать
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else
+                {
+                    <DispatcherToolbar>
+                        <MudTextField T="string"
+                                      @bind-Value="_mimicSearchQuery"
+                                      Placeholder="Поиск мнемосхем..."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add">
+                            Новая мнемосхема
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.ContentCopy">
+                            Копировать
+                        </MudButton>
+                    </DispatcherToolbar>
+
+                    <MudGrid Class="mt-3">
+                        @foreach (var mimic in FilteredMimics)
+                        {
+                            <MudItem xs="12" md="6" lg="4">
+                                <DispatcherCard>
+                                    <MudStack Spacing="1">
+                                        <div class="mimic-preview">
+                                            <div class="mimic-preview-pipe"></div>
+                                            <div class="mimic-preview-device"></div>
+                                            <div class="mimic-preview-arrow"></div>
+                                        </div>
+
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.h6">@mimic.Name</MudText>
+                                            <DispatcherStatusChip Text="@mimic.Status"
+                                                                  Color="@GetDesignStatusColor(mimic.Status)" />
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            Теги: @mimic.Tags
+                                        </MudText>
+
+                                        <MudText Typo="Typo.body2">
+                                            Связь: @mimic.LinkedTo
+                                        </MudText>
+
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small">
+                                                Редактировать
+                                            </MudButton>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Size="Size.Small">
+                                                Открыть
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </DispatcherCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</DispatcherPageSurface>
+
+@code {
+    private readonly IReadOnlyList<string> _sections = new List<string>
+    {
+        "Редактор объектов",
+        "Шаблоны виджетов",
+        "Библиотека мнемосхем"
+    };
+
+    private string _activeSection = "Редактор объектов";
+    private string _objectSearchQuery = string.Empty;
+    private string _templateSearchQuery = string.Empty;
+    private string _mimicSearchQuery = string.Empty;
+
+    private IReadOnlyList<MockObject> FilteredObjects =>
+        MockData.GetObjects()
+            .Where(MatchesObjectSearch)
+            .ToList();
+
+    private IReadOnlyList<WidgetTemplateCard> FilteredWidgetTemplates =>
+        WidgetTemplates
+            .Where(MatchesTemplateSearch)
+            .ToList();
+
+    private IReadOnlyList<MimicCard> FilteredMimics =>
+        Mimics
+            .Where(MatchesMimicSearch)
+            .ToList();
+
+    private IReadOnlyList<WidgetTemplateCard> WidgetTemplates => new List<WidgetTemplateCard>
+    {
+        new("Состояние оборудования", "Оборудование", "Опубликован", 18),
+        new("Команда управления", "Управление", "Черновик", 6),
+        new("График параметра", "История", "Опубликован", 11),
+        new("Сводка аварий", "Аварии", "Опубликован", 7)
+    };
+
+    private IReadOnlyList<MimicCard> Mimics => new List<MimicCard>
+    {
+        new("Электроснабжение — однолинейная", "Опубликована", "power, electrical, switchgear", "Объект Электроснабжение"),
+        new("Вентиляция — приточная система", "Черновик", "ventilation, duct, fan", "Виджет Вентиляция"),
+        new("Водоснабжение — насосная", "Опубликована", "water, pump, valve", "Объект Водоснабжение"),
+        new("Runtime pipeline", "Архив", "system, runtime, storage", "Система / Runtime")
+    };
+
+    protected override void OnInitialized()
+    {
+        ShellState.SetPageTitle("Дизайн");
+        ShellState.SetActiveAlarmCount(MockData.GetActiveAlarms().Count);
+        ShellState.SetControlModeAvailable(false);
+    }
+
+    private void SelectSection(string section)
+    {
+        _activeSection = section;
+    }
+
+    private bool MatchesObjectSearch(MockObject item)
+    {
+        if (string.IsNullOrWhiteSpace(_objectSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_objectSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Group.Contains(_objectSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Type.Contains(_objectSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesTemplateSearch(WidgetTemplateCard item)
+    {
+        if (string.IsNullOrWhiteSpace(_templateSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_templateSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Category.Contains(_templateSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_templateSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesMimicSearch(MimicCard item)
+    {
+        if (string.IsNullOrWhiteSpace(_mimicSearchQuery))
+        {
+            return true;
+        }
+
+        return item.Name.Contains(_mimicSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Tags.Contains(_mimicSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.LinkedTo.Contains(_mimicSearchQuery, StringComparison.OrdinalIgnoreCase)
+            || item.Status.Contains(_mimicSearchQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSectionButtonClass(string section)
+    {
+        return section == _activeSection
+            ? "section-menu-button selected"
+            : "section-menu-button";
+    }
+
+    private static string GetPublicationStatus(MockObject item)
+    {
+        return item.IsSystemObject ? "Системный" : "Опубликован";
+    }
+
+    private static Color GetPublicationColor(MockObject item)
+    {
+        return item.IsSystemObject ? Color.Info : Color.Success;
+    }
+
+    private static Color GetDesignStatusColor(string status)
+    {
+        return status switch
+        {
+            "Опубликован" => Color.Success,
+            "Опубликована" => Color.Success,
+            "Черновик" => Color.Warning,
+            "Архив" => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private sealed record WidgetTemplateCard(
+        string Name,
+        string Category,
+        string Status,
+        int UsageCount
+    );
+
+    private sealed record MimicCard(
+        string Name,
+        string Status,
+        string Tags,
+        string LinkedTo
+    );
+}

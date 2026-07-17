@@ -1,0 +1,4 @@
+# Proto
+
+Protocol Buffers contracts.
+
