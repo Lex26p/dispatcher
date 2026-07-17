@@ -1,0 +1,96 @@
+@page "/equipment"
+
+<PageTitle>Оборудование</PageTitle>
+
+<section class="page-grid">
+    <div class="page-title-row">
+        <div>
+            <h1>Оборудование</h1>
+            <p>Реестр устройств, объектов обслуживания и связей с дашбордами.</p>
+        </div>
+
+        <a class="live-chip" href="/equipment/add">Добавить</a>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span>Устройств</span>
+            <strong>42</strong>
+            <small>Modbus TCP и SNMP</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Online</span>
+            <strong>39</strong>
+            <small>3 требуют проверки</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Теги</span>
+            <strong>1 284</strong>
+            <small>Good / Stale / Offline</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Черновики</span>
+            <strong>1</strong>
+            <small>Staging add/update/skip</small>
+        </article>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Реестр</h2>
+                    <p>Крупные списки используют единый механизм фильтров, представлений и массовых действий.</p>
+                </div>
+            </div>
+
+            <div class="working-list">
+                <div class="working-row warning">
+                    <span class="status-pill warning">AHU</span>
+                    <div>
+                        <strong>Приточная установка П1</strong>
+                        <small>Корпус A · Modbus TCP · host скрыт · есть alarm occurrence</small>
+                    </div>
+                    <time>2 с</time>
+                </div>
+
+                <div class="working-row info">
+                    <span class="status-pill info">SNMP</span>
+                    <div>
+                        <strong>Коммутатор ЦОД-1</strong>
+                        <small>SNMP v2c · community masked · диагностика информационная</small>
+                    </div>
+                    <time>8 с</time>
+                </div>
+
+                <div class="working-row critical">
+                    <span class="status-pill danger">UPS</span>
+                    <div>
+                        <strong>ИБП-2</strong>
+                        <small>Энергетика · батарея · событие требует реакции</small>
+                    </div>
+                    <time>14:05</time>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Действия</h2>
+                    <p>Добавление выполняется через единый staging.</p>
+                </div>
+            </div>
+
+            <div class="quick-links">
+                <a href="/equipment/add">Добавить оборудование</a>
+                <a href="/events">События оборудования</a>
+                <a href="/d/main/overview">Открыть на дашборде</a>
+                <a href="/maintenance/assets">Связанные объекты ТОиР</a>
+            </div>
+        </article>
+    </div>
+</section>

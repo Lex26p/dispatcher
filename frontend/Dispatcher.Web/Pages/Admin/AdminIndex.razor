@@ -1,0 +1,32 @@
+@page "/admin"
+
+<PageTitle>Администрирование</PageTitle>
+
+<section class="page-grid">
+    <div class="page-title-row">
+        <div>
+            <h1>Администрирование</h1>
+            <p>Admin-only область. Скрытый пункт меню не является авторизацией.</p>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Сервисы администратора</h2>
+                    <p>Все прямые URL должны повторно проверять право.</p>
+                </div>
+            </div>
+
+            <div class="quick-links">
+                <a href="/admin/settings">Системные настройки</a>
+                <a href="/admin/users">Учётные записи и роли</a>
+                <a href="/admin/notifications">Оповещения</a>
+                <a href="/admin/terminals">Терминалы</a>
+                <a href="/admin/health">Состояние платформы</a>
+                <a href="/admin/audit">Read-only аудит</a>
+            </div>
+        </article>
+    </div>
+</section>

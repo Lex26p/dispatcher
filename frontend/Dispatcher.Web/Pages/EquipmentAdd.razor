@@ -1,0 +1,61 @@
+@page "/equipment/add"
+
+<PageTitle>Добавить оборудование</PageTitle>
+
+<section class="page-grid">
+    <div class="page-title-row">
+        <div>
+            <h1>Добавить оборудование</h1>
+            <p>Единый staging: ручные черновики и CSV-импорт попадают в одну таблицу.</p>
+        </div>
+
+        <div class="live-chip">Staging</div>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Черновики</h2>
+                    <p>Apply доступен только для структурно валидных create/update. Connection и poll не являются gate.</p>
+                </div>
+            </div>
+
+            <div class="working-list">
+                <div class="working-row info">
+                    <span class="status-pill info">create</span>
+                    <div>
+                        <strong>Приточная установка П3</strong>
+                        <small>Modbus TCP · 192.168.30.43:502 · Unit ID 1 · valid</small>
+                    </div>
+                    <time>draft</time>
+                </div>
+
+                <div class="working-row warning">
+                    <span class="status-pill warning">review</span>
+                    <div>
+                        <strong>Коммутатор ЦОД-2</strong>
+                        <small>SNMP v2c · community masked · требуется admin-update</small>
+                    </div>
+                    <time>skip</time>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Диагностика</h2>
+                    <p>Информационная симуляция без отправки команд.</p>
+                </div>
+            </div>
+
+            <div class="compact-list">
+                <div>Проверить связь: endpoint маскируется</div>
+                <div>Запустить poll: независим от Apply</div>
+                <div>Секреты не отображаются и не попадают в аудит</div>
+                <div>CSV: comma/semicolon по header</div>
+            </div>
+        </article>
+    </div>
+</section>

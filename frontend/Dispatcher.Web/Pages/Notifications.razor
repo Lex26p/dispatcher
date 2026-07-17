@@ -1,0 +1,61 @@
+@page "/notifications"
+
+<PageTitle>Оповещения</PageTitle>
+
+<section class="page-grid notification-inbox-page">
+    <div class="page-title-row">
+        <div>
+            <h1>Персональные оповещения</h1>
+            <p>Личный inbox отделён от общего Диспетчера событий. Прочтение не подтверждает событие.</p>
+        </div>
+
+        <div class="live-chip">2 unread</div>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Inbox</h2>
+                    <p>Переход к источнику повторно проверяет доступную сущность.</p>
+                </div>
+            </div>
+
+            <div class="working-list">
+                <div class="working-row critical">
+                    <span class="status-pill danger">new</span>
+                    <div>
+                        <strong>Назначение по EV-001</strong>
+                        <small>Перейти к событию · read/unread только для сообщения</small>
+                    </div>
+                    <time>14:22</time>
+                </div>
+
+                <div class="working-row warning">
+                    <span class="status-pill warning">new</span>
+                    <div>
+                        <strong>Проверить ИБП-2</strong>
+                        <small>Источник: оборудование · доступ проверяется повторно</small>
+                    </div>
+                    <time>13:59</time>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Настройки</h2>
+                    <p>Личные подписки расширяют mandatory-покрытие.</p>
+                </div>
+            </div>
+
+            <div class="quick-links">
+                <a href="/settings/notifications">Настроить оповещения</a>
+                <a href="/settings/notifications/subscriptions">Подписки</a>
+                <a href="/settings/notifications/channels">Каналы</a>
+                <a href="/settings/notifications/schedule">График</a>
+            </div>
+        </article>
+    </div>
+</section>

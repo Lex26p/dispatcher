@@ -1,0 +1,42 @@
+@page "/kiosk/{TerminalId}"
+@layout PanelLayout
+
+<PageTitle>Kiosk</PageTitle>
+
+<div class="dispatcher-panel-layout">
+    <section class="page-grid" style="padding: 18px; min-height: 100vh;">
+        <div class="page-title-row">
+            <div>
+                <h1>Kiosk runtime · @TerminalId</h1>
+                <p>Назначенный дашборд без global header, rail, личных оповещений и остальных сервисов.</p>
+            </div>
+
+            <div class="live-chip">Kiosk</div>
+        </div>
+
+        <div class="content-grid">
+            <article class="panel-card large">
+                <div class="panel-card-header">
+                    <div>
+                        <h2>Климат · Корпус A</h2>
+                        <p>Команды блокируются offline и не ставятся в очередь.</p>
+                    </div>
+                </div>
+
+                <div class="complex-map">
+                    <div class="map-zone danger">Вентилятор П1</div>
+                    <div class="map-zone warning">Заслонка</div>
+                    <div class="map-zone good">Фильтр</div>
+                    <div class="map-zone good">Датчики</div>
+                    <div class="map-zone warning">События</div>
+                    <div class="map-zone good">Связь</div>
+                </div>
+            </article>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter]
+    public string TerminalId { get; set; } = "terminal-a";
+}

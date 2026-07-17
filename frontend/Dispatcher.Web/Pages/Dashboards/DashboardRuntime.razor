@@ -1,0 +1,111 @@
+@page "/d/{DashboardId}/{WindowId}"
+
+<PageTitle>@RuntimeTitle</PageTitle>
+
+<section class="page-grid">
+    <div class="page-title-row">
+        <div>
+            <h1>@RuntimeTitle</h1>
+            <p>@RuntimeSubtitle</p>
+        </div>
+
+        <div class="live-chip">@ModeLabel</div>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span>Температура притока</span>
+            <strong>18,7 °C</strong>
+            <small>Good · 2 с назад</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Давление</span>
+            <strong>286 Па</strong>
+            <small>Uncertain · обратная связь нестабильна</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Установки online</span>
+            <strong>8 / 9</strong>
+            <small>1 устройство требует проверки</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Требуют реакции</span>
+            <strong>1</strong>
+            <small>Нет подтверждения работы</small>
+        </article>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>@WindowTitle</h2>
+                    <p>Клик по символу только выбирает target и открывает faceplate. Команда не отправляется первым кликом.</p>
+                </div>
+
+                <a href="/dashboards">Все дашборды</a>
+            </div>
+
+            <div class="complex-map">
+                <div class="map-zone danger">Вентилятор П1</div>
+                <div class="map-zone warning">Заслонка П1</div>
+                <div class="map-zone good">Фильтр</div>
+                <div class="map-zone good">Датчики</div>
+                <div class="map-zone warning">Тренд</div>
+                <div class="map-zone good">События</div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Выбранный объект</h2>
+                    <p>Faceplate синхронизирует мнемосхему, тренд и события.</p>
+                </div>
+            </div>
+
+            <div class="compact-list">
+                <div>Приточный вентилятор П1</div>
+                <div>Состояние: остановлен</div>
+                <div>Режим: автомат</div>
+                <div>Команда: preview доступен только в Live</div>
+            </div>
+
+            <div class="quick-links" style="margin-top: 12px;">
+                <a href="/events">Связанные события</a>
+                <a href="/equipment">Карточка оборудования</a>
+                <a href="/d/@DashboardId/widgets">Окно Widgets</a>
+                <a href="/d/@DashboardId/mimic">Окно Mimic</a>
+            </div>
+        </article>
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public string DashboardId { get; set; } = "main";
+
+    [Parameter]
+    public string WindowId { get; set; } = "overview";
+
+    private string RuntimeTitle => DashboardId switch
+    {
+        "energy" => "Энергетика · Главный комплекс",
+        "maintenance" => "ТОиР · Сегодня",
+        _ => "Климат · Корпус A"
+    };
+
+    private string RuntimeSubtitle => $"Runtime · окно {WindowId} · опубликованная revision · Live контекст";
+
+    private string WindowTitle => WindowId switch
+    {
+        "mimic" => "Мнемосхема П1",
+        "widgets" => "Параметры П1",
+        _ => "Combined · Установка П1"
+    };
+
+    private string ModeLabel => WindowId == "history" ? "History" : "Live";
+}

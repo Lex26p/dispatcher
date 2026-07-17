@@ -1,0 +1,76 @@
+@page "/settings/notifications"
+@page "/settings/notifications/effective"
+@page "/settings/notifications/subscriptions"
+@page "/settings/notifications/schedule"
+@page "/settings/notifications/channels"
+
+<PageTitle>Настройка оповещений</PageTitle>
+
+<section class="page-grid">
+    <div class="page-title-row">
+        <div>
+            <h1>Настройка оповещений</h1>
+            <p>Личные подписки расширяют обязательное покрытие; mandatory-каналы read-only.</p>
+        </div>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card">
+            <span>Mandatory</span>
+            <strong>3</strong>
+            <small>Критические сервисы</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Личные подписки</span>
+            <strong>3</strong>
+            <small>ОВиК, UPS, ППР</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Каналы</span>
+            <strong>3</strong>
+            <small>Push, SMS, Email</small>
+        </article>
+
+        <article class="metric-card">
+            <span>Отпуск</span>
+            <strong>Draft</strong>
+            <small>Активен после принятия замещения</small>
+        </article>
+    </div>
+
+    <div class="content-grid">
+        <article class="panel-card large">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Effective policy</h2>
+                    <p>Итоговое покрытие собирается из роли, подписок, графика и замещения.</p>
+                </div>
+            </div>
+
+            <div class="compact-list">
+                <div>Critical: доставляется даже в quiet hours.</div>
+                <div>ОВиК: личная подписка включена.</div>
+                <div>UPS: mandatory + личное расширение.</div>
+                <div>Замещение: ожидает принятия.</div>
+            </div>
+        </article>
+
+        <article class="panel-card">
+            <div class="panel-card-header">
+                <div>
+                    <h2>Разделы</h2>
+                    <p>Настройка уведомлений</p>
+                </div>
+            </div>
+
+            <div class="quick-links">
+                <a href="/settings/notifications/effective">Effective</a>
+                <a href="/settings/notifications/subscriptions">Подписки</a>
+                <a href="/settings/notifications/schedule">График</a>
+                <a href="/settings/notifications/channels">Каналы</a>
+            </div>
+        </article>
+    </div>
+</section>
