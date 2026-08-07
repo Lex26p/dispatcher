@@ -1,10 +1,10 @@
 # Engineering & Configuration — Functional Specification
 
 **ID namespace:** `ENG-*`  
-**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q1527` и `ENG-FR001–ENG-FR281`; checkpoint `ENG-CP05` подготовлен.  
+**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q1953` и `ENG-FR001–ENG-FR357`; checkpoint `ENG-CP06` подготовлен.  
 **Основание Product Concept:** `PRD-Q001–PRD-Q803`.  
-**Последний подтверждённый Git SHA перед `ENG-CP05`:** `2ae985a8e99fb329e5860bd528007271966de3f4`.  
-**Следующая точка:** `ENG-Q1528` — Configuration Governance Lifecycle: full Validation → Impact Analysis → Review/Approval → Publish.
+**Последний подтверждённый Git SHA перед `ENG-CP06`:** `e47b3a2003bda70385903aaa26d126d7089542b3`.  
+**Следующая точка:** `ENG-Q1954` — Deploy / Activate / Edge: desired → delivered → prepared → active, prerequisites, offline Edge, reconciliation и authority-safe activation.
 
 ## 1. Назначение
 
@@ -43,8 +43,8 @@
 | Parameters / Values / Sources / Quality / Historization / Substitution | `DONE FUNCTIONAL BLOCK` | `ENG-Q341–ENG-Q790` |
 | Semantic Commands | `DONE FUNCTIONAL BLOCK` | `ENG-Q791–ENG-Q1167` |
 | Discovery proposal / Observed / Promotion / Import | `DONE FUNCTIONAL BLOCK` | `ENG-Q1168–ENG-Q1527` |
-| Validation / Impact / Approval / Publish | `NEXT` | с `ENG-Q1528`; foundation принят |
-| Deploy / Activate / Edge | `OPEN` | — |
+| Validation / Impact / Approval / Publish | `DONE FUNCTIONAL BLOCK` | `ENG-Q1528–ENG-Q1953` |
+| Deploy / Activate / Edge | `NEXT` | с `ENG-Q1954` |
 | Versions / Recovery / Diagnostics / Permissions / Compact setup | `OPEN` | — |
 
 ## 5. Decision Register — `ENG-Q001–ENG-Q050`
@@ -1720,7 +1720,436 @@
 - **ENG-Q1526.** Import не устанавливает dependencies скрытно.
 - **ENG-Q1527.** Import остаётся внутри governed configuration lifecycle.
 
-## 13. Принятые Functional Requirements — `ENG-FR001–ENG-FR281`
+## 13. Decision Register — `ENG-Q1528–ENG-Q1953`
+
+- **ENG-Q1528.** Full Validation выполняется над конкретной immutable revision change set.
+- **ENG-Q1529.** Validation Result ссылается на identity/hash/version проверенной revision.
+- **ENG-Q1530.** Любое изменение draft после Full Validation делает прежний результат недостаточным для Publish.
+- **ENG-Q1531.** Старый Validation Result сохраняется как historical evidence своей revision, а не удаляется.
+- **ENG-Q1532.** UI явно показывает, когда validated revision отличается от current draft.
+- **ENG-Q1533.** Validation многоуровневая: field/schema, entity, dependency/relation, change-set, consistency-domain, installation/system и runtime/environment readiness там, где это проверяемо.
+- **ENG-Q1534.** Lightweight проверки выполняются интерактивно, дорогие validators — асинхронно/по Full Validation; не все уровни запускаются на каждое изменение поля.
+- **ENG-Q1535.** Field validation выполняется максимально рано.
+- **ENG-Q1536.** Dependency/cross-object validation может выполняться асинхронно.
+- **ENG-Q1537.** Full Validation завершается только после всех mandatory validators.
+- **ENG-Q1538.** Core platform может предоставлять validators.
+- **ENG-Q1539.** Packages могут предоставлять validators.
+- **ENG-Q1540.** Specialized service extensions могут предоставлять validators.
+- **ENG-Q1541.** Organization policy может добавлять validators поверх platform/package contracts.
+- **ENG-Q1542.** Validation Issue показывает provenance validator.
+- **ENG-Q1543.** Package validator возвращает structured issue contract с localized text/details, а не arbitrary HTML.
+- **ENG-Q1544.** При одинаковой revision и declared validation context deterministic validator обязан давать одинаковый результат.
+- **ENG-Q1545.** Validators, зависящие от external environment/runtime, явно объявляют эту зависимость.
+- **ENG-Q1546.** Configuration-invalid и environment-not-ready являются разными состояниями.
+- **ENG-Q1547.** Отсутствующий Adapter на Edge может быть deployment/readiness issue, а не обязательно schema error; classification зависит от publication/deployment plan.
+- **ENG-Q1548.** Validation может учитывать certificates, licenses и resources, актуальные на момент проверки.
+- **ENG-Q1549.** Time-sensitive checks имеют checked-at/freshness semantics.
+- **ENG-Q1550.** Publish использует runtime-readiness evidence только пока оно считается fresh по policy; устаревшие checks перепроверяются.
+- **ENG-Q1551.** Validation Issue имеет stable identity в рамках Validation Result.
+- **ENG-Q1552.** Issue содержит severity, validator, affected entity/property/scope, summary, explanation, remediation/navigation и blocking status.
+- **ENG-Q1553.** Severity и blocking status являются разными характеристиками.
+- **ENG-Q1554.** Organization policy может сделать определённую warning category blocking.
+- **ENG-Q1555.** Configuration Error по смыслу является blocking; non-blocking advisory issue не следует классифицировать как Error.
+- **ENG-Q1556.** Warnings продолжают lifecycle по policy; часть требует explicit acknowledgment/reason, а не просто игнорируется.
+- **ENG-Q1557.** Warning acknowledgment относится к конкретной revision.
+- **ENG-Q1558.** Material change затронутой configuration аннулирует/перепроверяет warning acknowledgment.
+- **ENG-Q1559.** Organization policy может запретить bypass выбранных warning categories.
+- **ENG-Q1560.** Governed waiver допустим для повторяющихся известных issues, но не для hard invariant violations.
+- **ENG-Q1561.** Waiver имеет explicit scope.
+- **ENG-Q1562.** Waiver может/должен иметь expiry согласно policy.
+- **ENG-Q1563.** Waiver имеет reason.
+- **ENG-Q1564.** Waiver фиксирует authority/approver.
+- **ENG-Q1565.** Waiver не скрывает сам факт issue.
+- **ENG-Q1566.** UI показывает accepted-by-waiver state, а не изображает полностью clean validation.
+- **ENG-Q1567.** Недоступность/failure mandatory validator делает Validation incomplete и блокирует Publish затронутого scope.
+- **ENG-Q1568.** Optional advisory validator может быть unavailable без блокировки, но degraded validation остаётся видимой.
+- **ENG-Q1569.** Full Validation может иметь timeout.
+- **ENG-Q1570.** Timeout mandatory validator никогда не считается Passed.
+- **ENG-Q1571.** Validator timeout/incomplete state отличается от configuration Error.
+- **ENG-Q1572.** Cross-service change set validation учитывает dependencies между service-owned configuration.
+- **ENG-Q1573.** Specialized service не может объявить весь cross-service change set valid, проверив только свою часть.
+- **ENG-Q1574.** Common Validation Result агрегирует service-specific issues.
+- **ENG-Q1575.** Full Validation проверяет rights feasibility там, где configuration создаёт/меняет policies/resources.
+- **ENG-Q1576.** Full Validation проверяет secret references.
+- **ENG-Q1577.** Full Validation проверяет certificate/trust references.
+- **ENG-Q1578.** Full Validation проверяет listener exposure/network capabilities.
+- **ENG-Q1579.** Full Validation проверяет insecure protocol/crypto exceptions.
+- **ENG-Q1580.** Security exception является governed artifact/policy, а не свободным checkbox.
+- **ENG-Q1581.** Validation учитывает declared polling/load/resource budgets.
+- **ENG-Q1582.** Validation оценивает aggregate load shared bus/Connection.
+- **ENG-Q1583.** Validation оценивает Edge/node resource budget.
+- **ENG-Q1584.** Validation оценивает historian load.
+- **ENG-Q1585.** Validation оценивает Rule/calculation load.
+- **ENG-Q1586.** Approximate capacity estimate показывает confidence/assumptions.
+- **ENG-Q1587.** License/capacity constraints могут быть Validation Issues.
+- **ENG-Q1588.** License issue не может предлагать ослабление safety/security/recovery существующего contour.
+- **ENG-Q1589.** Expansion сверх licensed capacity может блокировать publication новых resources.
+- **ENG-Q1590.** Missing Object Type/Profile/Template/Adapter/package dependency является explicit issue.
+- **ENG-Q1591.** Version incompatibility является explicit dependency issue.
+- **ENG-Q1592.** Broken reference является explicit issue.
+- **ENG-Q1593.** Forbidden circular dependency выявляется Validation.
+- **ENG-Q1594.** Relation endpoint incompatibility выявляется Validation.
+- **ENG-Q1595.** Из Validation Issue можно перейти к affected editor/property/context.
+- **ENG-Q1596.** Mass issue показывает aggregate summary + drill-down.
+- **ENG-Q1597.** UI агрегирует common root cause вместо тысяч одинаковых top-level errors.
+- **ENG-Q1598.** Engineer может запускать local validation выбранного object/scope для быстрой проверки.
+- **ENG-Q1599.** Local/entity validation не заменяет mandatory full publication validation.
+- **ENG-Q1600.** Full Validation может ограничиваться publication consistency domain вместо unrelated installation, если scope действительно изолирован.
+- **ENG-Q1601.** Изменение active published baseline во время работы change set создаёт baseline divergence/conflict state.
+- **ENG-Q1602.** Перед Publication Full Validation/ready state учитывает current authoritative baseline, а не только исходный baseline change set.
+- **ENG-Q1603.** Automatic semantic rebase допустим только при доказуемо non-conflicting changes.
+- **ENG-Q1604.** Semantic conflict при rebase требует explicit resolution; hidden LWW недопустим.
+- **ENG-Q1605.** Impact Analysis является отдельной стадией от Validation: correctness и consequences не смешиваются.
+- **ENG-Q1606.** Valid configuration может иметь большой или опасный impact.
+- **ENG-Q1607.** Impact Analysis относится к конкретной immutable revision.
+- **ENG-Q1608.** Изменение draft делает прежний Impact Analysis stale для новой revision.
+- **ENG-Q1609.** Impact анализирует changed entities.
+- **ENG-Q1610.** Impact анализирует direct consumers.
+- **ENG-Q1611.** Impact анализирует transitive consumers.
+- **ENG-Q1612.** Impact анализирует runtime operational scopes.
+- **ENG-Q1613.** Impact анализирует deployment targets.
+- **ENG-Q1614.** Impact анализирует security/rights consequences.
+- **ENG-Q1615.** Impact анализирует performance/resource consequences.
+- **ENG-Q1616.** Impact анализирует historical semantics и migrations.
+- **ENG-Q1617.** Move object между locations показывает affected navigation/views/policies.
+- **ENG-Q1618.** Relation change показывает dependent calculations/Rules/Scenarios и другие consumers.
+- **ENG-Q1619.** Object deletion impact включает references, alarms, dashboards, TOiR/service extensions и другие consumers.
+- **ENG-Q1620.** Parameter type/unit change анализирует Rules.
+- **ENG-Q1621.** Parameter type/unit change анализирует Alarms.
+- **ENG-Q1622.** Parameter type/unit change анализирует Dashboards/Mimics.
+- **ENG-Q1623.** Parameter type/unit change анализирует Historian/Reports.
+- **ENG-Q1624.** Parameter type/unit change анализирует API/integrations.
+- **ENG-Q1625.** Parameter type/unit change анализирует Command success criteria и другие command dependencies.
+- **ENG-Q1626.** Command signature/risk/precondition changes анализируют automated callers.
+- **ENG-Q1627.** Impact показывает Commands, которые станут недоступны roles/service principals.
+- **ENG-Q1628.** Impact оценивает необходимость restart/reconnect/rebind/reinitialize и иных activation disruptions.
+- **ENG-Q1629.** Operational disruption явно классифицируется как no disruption, reconnect, restart, communication interruption, authority handover, potential unavailability и другие appropriate classes.
+- **ENG-Q1630.** Downtime показывается как class/estimate/range/confidence; точная длительность не обещается без достаточной уверенности.
+- **ENG-Q1631.** Profile change может требовать communication restart.
+- **ENG-Q1632.** Polling-rate change может применяться без restart, если Adapter capability это поддерживает.
+- **ENG-Q1633.** Impact показывает expected activation behaviour по фактическим capabilities, а не универсальному правилу.
+- **ENG-Q1634.** Impact Result может содержать Unknown/Needs runtime confirmation.
+- **ENG-Q1635.** Unknown impact остаётся видимым и может усиливать risk/review/approval requirements.
+- **ENG-Q1636.** Impact предоставляет executive summary количества changes, scopes/nodes, disruptions, warnings, breaking refs, resource delta и approval/risk class.
+- **ENG-Q1637.** Impact summary поддерживает drill-down до entity/property.
+- **ENG-Q1638.** Impact поддерживает grouping/filtering по location/service/Edge/risk/type и другим useful dimensions.
+- **ENG-Q1639.** Impact Analysis рассчитана на десятки тысяч affected entities.
+- **ENG-Q1640.** UI не обязана одновременно рендерить individual diff каждого affected entity.
+- **ENG-Q1641.** Repeated identical effects агрегируются как patterns с count и drill-down.
+- **ENG-Q1642.** Review использует semantic diff, а не только textual/raw JSON diff.
+- **ENG-Q1643.** Semantic diff показывает Added/Changed/Removed.
+- **ENG-Q1644.** Semantic diff показывает previous и proposed effective values.
+- **ENG-Q1645.** Semantic diff показывает provenance/template/override changes там, где они изменились.
+- **ENG-Q1646.** Semantic diff показывает structural relation changes.
+- **ENG-Q1647.** Raw technical diff доступен в advanced/diagnostic view.
+- **ENG-Q1648.** Semantic diff скрывает irrelevant formatting/order noise.
+- **ENG-Q1649.** Normalization/noise reduction не может скрывать semantic changes.
+- **ENG-Q1650.** Change set получает overall change risk classification.
+- **ENG-Q1651.** Overall risk вычисляется policy по scope, control impact, security, disruption, uncertainty, irreversibility, scale и другим meaningful factors, а не простым max field.
+- **ENG-Q1652.** Risk calculation explainable.
+- **ENG-Q1653.** Organization policy может усиливать risk classification/requirements.
+- **ENG-Q1654.** Potentially irreversible changes классифицируются отдельно.
+- **ENG-Q1655.** Destructive external migrations/one-way device actions, если входят в flow, относятся к potentially irreversible changes.
+- **ENG-Q1656.** Irreversibility усиливает approval/recovery requirements.
+- **ENG-Q1657.** UI не обещает обычный Rollback там, где обратная операция не гарантирована.
+- **ENG-Q1658.** Publication по возможности free of hidden unmanaged external side effects.
+- **ENG-Q1659.** External side effects последующей Activation описываются в Impact/plan заранее.
+- **ENG-Q1660.** Review является отдельной governance stage от formal Approval.
+- **ENG-Q1661.** Low-risk policy может не требовать отдельного reviewer.
+- **ENG-Q1662.** High-risk change может требовать mandatory review.
+- **ENG-Q1663.** Review относится к конкретной revision.
+- **ENG-Q1664.** Reviewer видит exact validated revision/evidence.
+- **ENG-Q1665.** Изменение draft после Review не переносит Review автоматически на новую revision.
+- **ENG-Q1666.** Review поддерживает comments на change set.
+- **ENG-Q1667.** Review поддерживает comments на entity.
+- **ENG-Q1668.** Review поддерживает comments на property/diff item там, где возможно.
+- **ENG-Q1669.** Review comments поддерживают threads/resolution states без превращения Engineering в general chat.
+- **ENG-Q1670.** Review comment может быть blocking request-change.
+- **ENG-Q1671.** Blocking review comment должен быть resolved/waived по policy перед Approval.
+- **ENG-Q1672.** Reviewer decision поддерживает Accept, Request changes и Comment only.
+- **ENG-Q1673.** Review Accept не обязательно является formal Approval; stages могут быть разными.
+- **ENG-Q1674.** Review assignments могут быть scoped; один reviewer не обязан покрывать все domains change set.
+- **ENG-Q1675.** Разные experts могут review разные scopes, например Connections и process/control configuration.
+- **ENG-Q1676.** UI показывает required review coverage и уже закрытые scopes.
+- **ENG-Q1677.** Low-risk self-review возможен как self-check; policy может требовать independent reviewer.
+- **ENG-Q1678.** Review right отдельно от edit right.
+- **ENG-Q1679.** Reviewer может комментировать без права изменять draft.
+- **ENG-Q1680.** Reviewer не редактирует author draft без collaborator/edit rights; suggestions остаются явными.
+- **ENG-Q1681.** Approval requirements вычисляются policy engine из конкретного change impact/risk.
+- **ENG-Q1682.** Одного универсального Requires approval checkbox недостаточно.
+- **ENG-Q1683.** Approval policy может учитывать change class, object/service scope, risk, location, security/control impact, downtime, size, irreversibility и environment.
+- **ENG-Q1684.** Low-risk changes могут Publish без human approval, если active organization policy это разрешает.
+- **ENG-Q1685.** No-human-approval path не обходит audit.
+- **ENG-Q1686.** UI объясняет, по какой policy approval не требуется.
+- **ENG-Q1687.** Approval относится к exact revision + relevant Impact Result/evidence.
+- **ENG-Q1688.** Approval сохраняет approver, time, policy/version и decision.
+- **ENG-Q1689.** Approval reason/comment может быть mandatory по policy.
+- **ENG-Q1690.** Material draft change после Approval требует нового approval; только platform-defined non-semantic metadata changes могут не инвалидировать evidence.
+- **ENG-Q1691.** Список non-semantic changes, не инвалидирующих Approval, явно определён platform policy.
+- **ENG-Q1692.** UI не определяет случайно, сохранять ли старое Approval после изменения revision.
+- **ENG-Q1693.** Approval model поддерживает несколько stages.
+- **ENG-Q1694.** Поддерживаются sequential approvals.
+- **ENG-Q1695.** Поддерживаются parallel approvals.
+- **ENG-Q1696.** Поддерживается quorum/N-of-M, где policy этого требует.
+- **ENG-Q1697.** Approval model остаётся ограниченной policy-driven системой, а не generic BPMN engine.
+- **ENG-Q1698.** Policy может запрещать author одобрять собственный change set.
+- **ENG-Q1699.** Policy может запрещать reviewer быть единственным approver.
+- **ENG-Q1700.** Policy может требовать approver из другой role/team/authority scope.
+- **ENG-Q1701.** UI объясняет, почему конкретный user не удовлетворяет approver policy.
+- **ENG-Q1702.** Approval authority может использовать temporary IAM delegation/substitution.
+- **ENG-Q1703.** Approval provenance фиксирует фактическую delegation/substitution.
+- **ENG-Q1704.** Audit сохраняет фактического delegate approver, а не подменяет его original manager.
+- **ENG-Q1705.** Approval может иметь validity period.
+- **ENG-Q1706.** Expired Approval блокирует Publish до получения нового evidence.
+- **ENG-Q1707.** Approval expiry policy может зависеть от risk.
+- **ENG-Q1708.** High-risk Approval может требовать reauthentication/MFA.
+- **ENG-Q1709.** Approval confirmation использует strength, требуемую policy, и не сводится к обычной кнопке при high-risk.
+- **ENG-Q1710.** Approver видит unresolved warnings и waivers.
+- **ENG-Q1711.** Approver видит Impact uncertainty.
+- **ENG-Q1712.** Accepted waivers явно присутствуют в approval summary.
+- **ENG-Q1713.** Approver может revoke Approval до начала Publication, если policy это позволяет.
+- **ENG-Q1714.** Approval revocation auditируется.
+- **ENG-Q1715.** После начала atomic Publication revocation не пытается автоматически разорвать transaction; publication следует safe lifecycle.
+- **ENG-Q1716.** Publish доступен только когда current revision имеет complete required Validation, Impact, Review/Approval и rights state.
+- **ENG-Q1717.** UI показывает Publish readiness checklist.
+- **ENG-Q1718.** Readiness checklist включает autosave, conflicts, validation, impact, reviews, approvals и publish rights/other policy gates.
+- **ENG-Q1719.** Edit configuration right не даёт Publish автоматически.
+- **ENG-Q1720.** Approve и Publish могут быть разными rights.
+- **ENG-Q1721.** Policy может разрешить authorized approver сразу Publish после Approval.
+- **ENG-Q1722.** Publish создаёт новую immutable published configuration version.
+- **ENG-Q1723.** Published version имеет stable identity/version number.
+- **ENG-Q1724.** Published version ссылается на source change set/revision.
+- **ENG-Q1725.** Published version сохраняет author/review/approval provenance.
+- **ENG-Q1726.** Published version фиксирует Publish timestamp.
+- **ENG-Q1727.** Publish означает, что новая configuration стала official desired truth.
+- **ENG-Q1728.** Publish не означает, что configuration доставлена на все nodes.
+- **ENG-Q1729.** Publish не означает, что configuration уже active runtime.
+- **ENG-Q1730.** После Publish UI различает Published/Desired, Delivered и Active states.
+- **ENG-Q1731.** Publish может использовать только exact revision, которая прошла required validation/approval evidence.
+- **ENG-Q1732.** Publish confirmation показывает revision/version/scope summary.
+- **ENG-Q1733.** Перед publication commit baseline повторно проверяется на incompatible concurrent changes.
+- **ENG-Q1734.** Semantic rebase создаёт новую revision и требует revalidation/re-impact; approvals пересчитываются по policy.
+- **ENG-Q1735.** Даже non-conflicting semantic rebase фиксируется как новая revision.
+- **ENG-Q1736.** Publication имеет явно определяемый consistency domain.
+- **ENG-Q1737.** Consistency domain может охватывать несколько objects/services.
+- **ENG-Q1738.** Изменения внутри consistency domain становятся official desired truth атомарно.
+- **ENG-Q1739.** Нельзя оставлять половину тесно связанного consistency domain на другой desired version.
+- **ENG-Q1740.** Один change set может содержать несколько independent consistency domains.
+- **ENG-Q1741.** Ready independent domains можно Publish частично только при доказанной dependency isolation и explicit user action.
+- **ENG-Q1742.** Partial publication создаёт новую remaining-draft revision/state для непубликуемой части.
+- **ENG-Q1743.** Published subset становится immutable publication, remaining subset продолжает governed draft lineage.
+- **ENG-Q1744.** UI явно показывает partial publication state.
+- **ENG-Q1745.** Dependent domain B нельзя Publish без required domain A, если dependency требует совместной consistency.
+- **ENG-Q1746.** Platform либо объединяет dependent scopes в consistency domain, либо строит допустимый ordered publication plan.
+- **ENG-Q1747.** Non-trivial Publish использует explicit publication plan.
+- **ENG-Q1748.** Publication plan показывает domains, versions, dependencies, deployment targets, activation effects, approvals и irreversible warnings.
+- **ENG-Q1749.** Compact может показывать сокращённый UX того же publication plan.
+- **ENG-Q1750.** Publish может быть scheduled как governed publication capability.
+- **ENG-Q1751.** Scheduled Publish повторно проверяет readiness в момент исполнения.
+- **ENG-Q1752.** Expired approval, new conflict или другой new blocking evidence останавливает Scheduled Publish.
+- **ENG-Q1753.** Scheduled Publish и Scheduled Activate являются разными concepts.
+- **ENG-Q1754.** Publication имеет persistent lifecycle: Prepared/Starting/Committing/Published/Failed/Uncertain-or-Recovery-required where applicable.
+- **ENG-Q1755.** Browser disconnect не отменяет publication lifecycle.
+- **ENG-Q1756.** Пользователь может позже открыть publication status/result.
+- **ENG-Q1757.** При commit failure official desired truth consistency domain остаётся однозначной.
+- **ENG-Q1758.** Hidden half-published consistency-domain state недопустим.
+- **ENG-Q1759.** Contribution, не способный обеспечить требуемую atomicity, объявляет более крупный safe consistency/recovery contract.
+- **ENG-Q1760.** Publication infrastructure failure не означает configuration validation failure.
+- **ENG-Q1761.** Change set/revision сохраняется после publication failure для retry/recovery.
+- **ENG-Q1762.** Retry Publication разрешён только после проверки актуального baseline/readiness.
+- **ENG-Q1763.** Publication lifecycle допускает Uncertain/Requires reconciliation category для инфраструктурных ambiguous failures.
+- **ENG-Q1764.** При uncertain publication нельзя просто повторить Publish без reconciliation.
+- **ENG-Q1765.** Перед retry uncertain publication определяется authoritative published state.
+- **ENG-Q1766.** Publish создаёт immutable audit record.
+- **ENG-Q1767.** Publication audit включает change set/revision/published version.
+- **ENG-Q1768.** Publication audit включает actor/origin.
+- **ENG-Q1769.** Publication audit ссылается на Validation/Impact/Approval evidence.
+- **ENG-Q1770.** Publication audit фиксирует result.
+- **ENG-Q1771.** Полностью опубликованный change set становится immutable Published/Closed record.
+- **ENG-Q1772.** Дальнейшие изменения создают новый change set/revision lineage.
+- **ENG-Q1773.** Из Published change set можно создать follow-up change.
+- **ENG-Q1774.** Change set можно Abandon/Close without Publish.
+- **ENG-Q1775.** Abandoned change set не удаляется без следа; provenance/history сохраняются по retention.
+- **ENG-Q1776.** Продолжение abandoned work выполняется новым draft из выбранной revision; original abandoned record остаётся immutable.
+- **ENG-Q1777.** Rollback не означает общий product contract физического возврата database snapshot.
+- **ENG-Q1778.** Rollback создаёт новую corrective configuration publication, обычно на основе previous known-good version.
+- **ENG-Q1779.** Предыдущие published versions остаются в history.
+- **ENG-Q1780.** Rollback не переписывает audit/history.
+- **ENG-Q1781.** Corrective rollback проходит Validation/Impact.
+- **ENG-Q1782.** Emergency rollback policy может ускорять approvals, не обходя hard validation/safety invariants.
+- **ENG-Q1783.** Предыдущая configuration не гарантированно применима после новых migrations.
+- **ENG-Q1784.** Impact показывает rollback feasibility.
+- **ENG-Q1785.** Unsupported reverse migration/rollback limitation показывается до исходного Publish, где это можно определить.
+- **ENG-Q1786.** Potentially irreversible publication требует explicit acknowledgment.
+- **ENG-Q1787.** Irreversible publication может требовать extra approval.
+- **ENG-Q1788.** Irreversible publication может требовать backup/recovery prerequisite.
+- **ENG-Q1789.** Irreversible publication может требовать maintenance window.
+- **ENG-Q1790.** Package install/update использует отдельный deployment lifecycle, а не configuration Publish.
+- **ENG-Q1791.** Configuration change может зависеть от package deployment readiness.
+- **ENG-Q1792.** Publication plan может ссылаться на prerequisite package deployment plan.
+- **ENG-Q1793.** Configuration intent можно Publish до package deployment только при явном pending activation prerequisite и видимом desired-vs-actual state.
+- **ENG-Q1794.** Secret value rotation/change является отдельной secret operation, а не normal Publish.
+- **ENG-Q1795.** Secret reference/policy в configuration изменяется через normal managed config Publish.
+- **ENG-Q1796.** Impact/Validation учитывают unavailable/expired referenced secret.
+- **ENG-Q1797.** Emergency listener disable не является normal Publish.
+- **ENG-Q1798.** Emergency listener disable является protective administrative override со своим audit/lifecycle.
+- **ENG-Q1799.** Desired config может оставаться Enabled при active protective Disabled override.
+- **ENG-Q1800.** Governance/UI показывает Desired enabled / Protective override disabled одновременно.
+- **ENG-Q1801.** Publish actuator configuration не передаёт execution authority автоматически.
+- **ENG-Q1802.** Authority handover относится к Deploy/Activate/runtime lifecycle.
+- **ENG-Q1803.** Publication может задавать desired authority placement, но не доказывает actual handover.
+- **ENG-Q1804.** Full может Publish новый desired config для offline Edge.
+- **ENG-Q1805.** Offline Edge продолжает current active local config до доставки/activation новой version.
+- **ENG-Q1806.** UI показывает Desired newer than Edge active.
+- **ENG-Q1807.** Full Publish не изображает offline Edge как уже updated.
+- **ENG-Q1808.** После Publish разные Edges могут временно иметь разные active versions.
+- **ENG-Q1809.** Official desired truth остаётся определённой отдельно от per-node active versions.
+- **ENG-Q1810.** Engineering предоставляет registry published configuration versions.
+- **ENG-Q1811.** Published-version registry показывает version, source change, scope/domains, actor, time, risk/status и successor/rollback lineage.
+- **ENG-Q1812.** Из Published version можно открыть semantic diff к предыдущей.
+- **ENG-Q1813.** Semantic diff между другими compatible published versions доступен, где это возможно.
+- **ENG-Q1814.** Human-readable Publish description required по policy/risk; system summary существует всегда.
+- **ENG-Q1815.** System-generated summary не заменяет human reason там, где policy требует reason.
+- **ENG-Q1816.** Publish не рассылает notification всем пользователям автоматически.
+- **ENG-Q1817.** Publication notifications маршрутизируются по scope/risk/role/subscription policy.
+- **ENG-Q1818.** Critical publication может требовать mandatory notification.
+- **ENG-Q1819.** Policy может ограничивать определённые changes maintenance window.
+- **ENG-Q1820.** Вне maintenance window можно Prepare/Review/Approve, если policy позволяет, но blocked stage остаётся явным.
+- **ENG-Q1821.** Maintenance window может относиться к Publish, Activate или обоим; semantics explicit.
+- **ENG-Q1822.** Emergency Publish является ускоренной governance policy в общей configuration system.
+- **ENG-Q1823.** Emergency Publish может сокращать review/approval steps только по prepublished policy.
+- **ENG-Q1824.** Emergency Publish не обходит hard Full Validation errors/invariants.
+- **ENG-Q1825.** Emergency Publish требует appropriate reason/break-glass/audit evidence.
+- **ENG-Q1826.** Policy может требовать mandatory post-fact review emergency publication.
+- **ENG-Q1827.** Critical policy может требовать отдельного person для Publish после Approval.
+- **ENG-Q1828.** Less strict policy может разрешать одному authorized approver approve+publish.
+- **ENG-Q1829.** Scheduled/Prepared Publication можно Cancel до commit по rights/policy.
+- **ENG-Q1830.** После начала committing safe Cancel не гарантируется.
+- **ENG-Q1831.** UI различает cancel schedule и abort in-progress publication, если abort capability существует.
+- **ENG-Q1832.** Independent consistency domains могут публиковаться concurrently.
+- **ENG-Q1833.** Conflicting publication scopes сериализуются/блокируются.
+- **ENG-Q1834.** Concurrent publications не разрешаются по last-publication-wins semantics.
+- **ENG-Q1835.** Permanent global Engineering lock не требуется; publication locking scoped.
+- **ENG-Q1836.** UI показывает publication, блокирующую конкретный scope.
+- **ENG-Q1837.** Template/auto-generated change set проходит common Validation/Impact/Review/Approval lifecycle.
+- **ENG-Q1838.** Automation origin не предоставляет governance bypass.
+- **ENG-Q1839.** Prepublished auto-compatible policy может автоматически удовлетворять разрешённые governance steps с traceability.
+- **ENG-Q1840.** Recovery/system tooling может генерировать corrective draft.
+- **ENG-Q1841.** Generated corrective draft становится ordinary governed change set с явным origin.
+- **ENG-Q1842.** System-generated change не активируется скрытно, кроме отдельно определённых protective/recovery operations Product Concept.
+- **ENG-Q1843.** Submit for Review не обязан навсегда лишать author edit rights; новая revision сбрасывает applicable review/approval evidence.
+- **ENG-Q1844.** Change set может быть optionally frozen на review.
+- **ENG-Q1845.** Organization policy может требовать freeze после submission.
+- **ENG-Q1846.** Change-set lifecycle поддерживает Draft, Validating, Ready for review, In review, Changes requested, Awaiting approval, Approved/Ready to publish, Scheduled, Publishing, Published, Failed/Needs recovery и Abandoned states/categories.
+- **ENG-Q1847.** Change-set workflow не обязан быть одной linear FSM: policy может пропускать необязательные human stages.
+- **ENG-Q1848.** Validated state нельзя выставить вручную.
+- **ENG-Q1849.** Ready to publish является derived state из evidence/policy.
+- **ENG-Q1850.** Approved state нельзя редактировать как обычное property.
+- **ENG-Q1851.** Published versions образуют explicit lineage.
+- **ENG-Q1852.** В normal operation существует one authoritative lineage per installation/consistency domain.
+- **ENG-Q1853.** Recovery divergence может создать special lineage branches, требующие explicit reconciliation.
+- **ENG-Q1854.** Restore старого Full не объявляет автоматически его старую configuration последней official truth поверх newer Edge state/facts.
+- **ENG-Q1855.** Recovery divergence обрабатывается отдельным reconciliation process, а не blind Publish.
+- **ENG-Q1856.** IAM change validation проверяет last-admin/lockout invariants.
+- **ENG-Q1857.** IAM impact показывает users/service principals, теряющих rights.
+- **ENG-Q1858.** High-risk permission change может требовать security approval.
+- **ENG-Q1859.** Enable listener/API выполняется через normal managed configuration.
+- **ENG-Q1860.** Listener/API impact показывает newly exposed network surface.
+- **ENG-Q1861.** Listener/API validation проверяет address/port/certificate/policy conflicts.
+- **ENG-Q1862.** Emergency listener/API disable остаётся protective override, не меняющим desired publication автоматически.
+- **ENG-Q1863.** Alarm rule changes показывают affected alarm definitions/operational scope.
+- **ENG-Q1864.** Automation impact показывает Commands, которые Rule потенциально сможет вызвать.
+- **ENG-Q1865.** Замена human approval на automated execution классифицируется как security/control impact.
+- **ENG-Q1866.** Type/Parameter migration impact показывает history continuity и semantic boundaries.
+- **ENG-Q1867.** Publication не переписывает history скрытно.
+- **ENG-Q1868.** Planned historical recalculation/migration выполняется как отдельный visible post-publication job/plan.
+- **ENG-Q1869.** Required schema/config migration может быть частью publication plan.
+- **ENG-Q1870.** Long-running data migration не маскируется мгновенным Publish Complete, если readiness/usability ещё affected.
+- **ENG-Q1871.** Configuration committed и migration/readiness complete являются разными states.
+- **ENG-Q1872.** Package-contribution removal validation проверяет preservation historical semantic descriptors.
+- **ENG-Q1873.** Removal блокируется, если history станет uninterpretable без migration/retention solution.
+- **ENG-Q1874.** Для published change можно объяснить, почему она была допустима.
+- **ENG-Q1875.** Change explainability включает Validation evidence.
+- **ENG-Q1876.** Change explainability включает Impact evidence.
+- **ENG-Q1877.** Change explainability включает Reviews.
+- **ENG-Q1878.** Change explainability включает Approvals.
+- **ENG-Q1879.** Change explainability включает warnings/waivers.
+- **ENG-Q1880.** Governance policies являются versioned managed configuration.
+- **ENG-Q1881.** Approval фиксирует governance policy version, по которой requirements были рассчитаны.
+- **ENG-Q1882.** Изменение governance policy до Publish вызывает readiness recalculation.
+- **ENG-Q1883.** Старое Approval не считается автоматически valid при более строгой новой policy.
+- **ENG-Q1884.** Изменение approval/governance policy само проходит governed lifecycle с bootstrap safeguards.
+- **ENG-Q1885.** Нельзя в одной неподтверждённой revision сначала ослабить governance, затем этим ослаблением авторизовать опасное изменение.
+- **ENG-Q1886.** Governance/security policy change оценивается по currently active policy до publication.
+- **ENG-Q1887.** При governance lockout существует break-glass/recovery path.
+- **ENG-Q1888.** Break-glass governance recovery является отдельным security/recovery mechanism с усиленным audit, а не hidden Publish bypass.
+- **ENG-Q1889.** Compact может скрывать отдельные screens Validation/Impact/Approval для simple low-risk change.
+- **ENG-Q1890.** Compact simplified flow всё равно формирует underlying validation/impact/policy evidence.
+- **ENG-Q1891.** Compact Apply может композировать validate → impact → no-approval-required → publish для безопасного curated workflow.
+- **ENG-Q1892.** Compact Apply не создаёт альтернативную configuration model.
+- **ENG-Q1893.** Professional Engineering предоставляет полный доступ к Validation Results, Impact, Reviews, Approvals и publication history.
+- **ENG-Q1894.** Public/configuration API может создавать/edit change sets согласно rights.
+- **ENG-Q1895.** Configuration API не может напрямую изменить active configuration в обход change set.
+- **ENG-Q1896.** API может trigger Validate/Submit/Approve/Publish при соответствующих rights.
+- **ENG-Q1897.** API использует те же governance evidence/policies, что UI.
+- **ENG-Q1898.** Integration API не получает hidden force=true governance bypass.
+- **ENG-Q1899.** CLI использует тот же governance lifecycle.
+- **ENG-Q1900.** UI/API/CLI origin не меняет governance semantics.
+- **ENG-Q1901.** Failed Publish UI показывает точную stage failure.
+- **ENG-Q1902.** Publish failure reasons различают readiness changed, baseline conflict, infrastructure failure, consistency commit failure и policy/approval expiry.
+- **ENG-Q1903.** Retry Publish доступен только когда retry семантически safe после recheck/reconciliation.
+- **ENG-Q1904.** Successful Publish result показывает new published version IDs.
+- **ENG-Q1905.** Successful Publish result показывает affected consistency domains.
+- **ENG-Q1906.** Successful Publish result показывает next deployment/activation status.
+- **ENG-Q1907.** Successful Publish result показывает outstanding warnings/follow-up work.
+- **ENG-Q1908.** Publication может создавать follow-up work items, например deployment to offline Edges.
+- **ENG-Q1909.** Outstanding follow-up work не означает, что Publish failed.
+- **ENG-Q1910.** Immediately after Publish runtime может ещё соответствовать предыдущей active version.
+- **ENG-Q1911.** Normal desired-vs-active transition pending не классифицируется как erroneous configuration drift.
+- **ENG-Q1912.** UI различает transition pending и true drift.
+- **ENG-Q1913.** Publication-significant Validation/Impact/Review/Approval evidence сохраняется с publication provenance по retention policy.
+- **ENG-Q1914.** Transient lightweight validation runs не обязаны храниться столько же, сколько publication-significant governance evidence.
+- **ENG-Q1915.** Published configuration/governance evidence integrity-verifiable.
+- **ENG-Q1916.** Integrity-verifiable является functional requirement без фиксации конкретной cryptographic architecture.
+- **ENG-Q1917.** Change diff/Validation/Impact/Approvals можно экспортировать как review/governance evidence.
+- **ENG-Q1918.** Governance evidence export соблюдает rights/sensitivity.
+- **ENG-Q1919.** До submission UI может симулировать, какие approvals потребует current revision/policy.
+- **ENG-Q1920.** Policy simulation не гарантирует future requirements после context/revision/policy changes.
+- **ENG-Q1921.** Engineering поддерживает Publish readiness/dry-run без actual Publish.
+- **ENG-Q1922.** Dry-run проверяет baseline, dependencies, permissions и deployment/readiness prerequisites там, где доступно.
+- **ENG-Q1923.** Dry-run не резервирует publication slot/resources навсегда.
+- **ENG-Q1924.** Engineering revision history и security/audit trail являются разными layers.
+- **ENG-Q1925.** Revision history служит collaboration/undo, audit — accountability/integrity.
+- **ENG-Q1926.** Review comment может редактироваться только с visible edit history/correction semantics; нельзя silent rewrite discussion.
+- **ENG-Q1927.** Approval decision нельзя silently edit after fact.
+- **ENG-Q1928.** Material runtime/resource environment change может сделать Impact stale.
+- **ENG-Q1929.** Publish readiness переоценивает runtime-sensitive impact/readiness checks по policy.
+- **ENG-Q1930.** Temporary external vendor endpoint unavailability не всегда блокирует Publish; semantics определяют publishability, а activation/readiness impact остаётся explicit.
+- **ENG-Q1931.** Два draft change sets можно merge через governed operation.
+- **ENG-Q1932.** Change-set merge создаёт новую revision и выполняет conflict detection.
+- **ENG-Q1933.** Validation/Approvals исходных change sets не переносятся на merged revision автоматически.
+- **ENG-Q1934.** Selected semantic changes можно cherry-pick между change sets как advanced governed operation.
+- **ENG-Q1935.** Cherry-pick создаёт новую revision и требует dependency revalidation.
+- **ENG-Q1936.** Impact/readiness выявляет другие pending/approved change sets, меняющие тот же scope.
+- **ENG-Q1937.** UI показывает potentially competing change sets согласно rights.
+- **ENG-Q1938.** Change set может стать obsolete из-за другой уже published change.
+- **ENG-Q1939.** Для obsolete/diverged change set доступен guided rebase/reconcile/abandon flow.
+- **ENG-Q1940.** Любой blocked Publish имеет explainable cause.
+- **ENG-Q1941.** Blocking reasons включают unsaved, conflicts, validation errors/staleness, incomplete impact, review changes, missing/expired approval, baseline changes, missing publish right, closed maintenance window и другие policy gates.
+- **ENG-Q1942.** Change set имеет human-readable timeline значимых governance events.
+- **ENG-Q1943.** Detailed draft edits не обязаны дублироваться в governance timeline; для них существует revision history.
+- **ENG-Q1944.** Governance timeline включает submit/review/approval/schedule/publish/failure/revocation и другие significant events.
+- **ENG-Q1945.** Draft может быть неполным или invalid.
+- **ENG-Q1946.** Validation подтверждает correctness конкретной revision.
+- **ENG-Q1947.** Impact описывает consequences конкретной revision.
+- **ENG-Q1948.** Review оценивает revision технически/предметно.
+- **ENG-Q1949.** Approval формально разрешает Publication согласно policy.
+- **ENG-Q1950.** Publish создаёт новую official desired configuration version.
+- **ENG-Q1951.** Deploy доставляет Published Desired configuration execution nodes; подробности относятся к следующему Engineering block.
+- **ENG-Q1952.** Activate делает delivered version фактически active/executable там, где требуется; подробности относятся к следующему Engineering block.
+- **ENG-Q1953.** Draft→Validation→Impact→Review/Approval→Publish→Deploy→Activate нельзя схлопывать в одно непрозрачное Save.
+
+## 14. Принятые Functional Requirements — `ENG-FR001–ENG-FR357`
 
 - **ENG-FR001.** Engineering является специализированным workspace внутри общего Web Shell Dispatcher, а не отдельным приложением.
 - **ENG-FR002.** Engineering работает с общей объектной и конфигурационной моделью Dispatcher; специализированные сервисы не получают параллельный механизм сохранения managed configuration.
@@ -2003,30 +2432,106 @@
 - **ENG-FR279.** Fuzzy/ML matching может предлагать correspondence, но не выполняет irreversible identity changes самостоятельно.
 - **ENG-FR280.** Source/package removal не делает historical observed data семантически нечитаемыми.
 - **ENG-FR281.** Discovery, Observed Object, Promotion и Import являются четырьмя различными functional mechanisms и не сливаются в hidden auto-configuration flow.
+- **ENG-FR282.** Full Validation всегда относится к конкретной immutable revision change set; изменение draft делает предыдущую validation недостаточной для Publish.
+- **ENG-FR283.** Validation многоуровневая: field/entity/dependency/change-set/consistency-domain/system/readiness проверки выполняются с подходящей стоимостью и cadence.
+- **ENG-FR284.** Core, packages, services и organization policies могут предоставлять validators через structured contract с provenance.
+- **ENG-FR285.** Configuration-invalid, environment-not-ready и validation-incomplete являются различными состояниями.
+- **ENG-FR286.** Runtime/time-sensitive validation evidence имеет checked-at/freshness semantics и перепроверяется согласно policy.
+- **ENG-FR287.** Validation Issue имеет structured severity, blocking semantics, affected scope, validator provenance, explanation и remediation/navigation.
+- **ENG-FR288.** Warnings могут требовать acknowledgment/justification; acknowledgment привязан к revision и не переживает material change автоматически.
+- **ENG-FR289.** Governed waivers имеют explicit scope, authority, reason и expiry и не скрывают наличие accepted issue.
+- **ENG-FR290.** Недоступность mandatory validator делает validation incomplete и блокирует publication затронутого scope.
+- **ENG-FR291.** Cross-service change set получает единый aggregated validation result, включая dependencies между service-owned configuration.
+- **ENG-FR292.** Validation охватывает security/trust/secrets/listeners, resource/capacity, licensing, package/version dependencies и semantic references.
+- **ENG-FR293.** Validation issues агрегируются по common root cause и поддерживают direct navigation/drill-down.
+- **ENG-FR294.** Local/entity validation не заменяет mandatory full validation publication scope.
+- **ENG-FR295.** Изменение active baseline вызывает semantic rebase/conflict processing; hidden last-write-wins недопустим.
+- **ENG-FR296.** Impact Analysis является отдельной revision-bound stage и отвечает за последствия корректного изменения, а не его schema correctness.
+- **ENG-FR297.** Impact охватывает direct/transitive dependencies, operational scopes, deployment targets, security, performance, history/migrations и service consumers.
+- **ENG-FR298.** Operational disruption классифицируется явно: reconnect/restart/unavailability/authority handover и другие relevant effects не скрываются.
+- **ENG-FR299.** Impact uncertainty является first-class result и может усиливать risk/review/approval policy.
+- **ENG-FR300.** Large-scale impact показывается как summary/patterns с drill-down, а не обязательный одновременный diff тысяч entities.
+- **ENG-FR301.** Review использует semantic diff; raw representation остаётся advanced diagnostic view.
+- **ENG-FR302.** Change set получает explainable risk classification на основе scope, control impact, security, disruption, scale, irreversibility и uncertainty.
+- **ENG-FR303.** Potentially irreversible changes явно классифицируются и получают усиленные approval/recovery requirements.
+- **ENG-FR304.** Review и Approval являются различными governance stages; low-risk policy может пропускать одну или обе human stages.
+- **ENG-FR305.** Review относится к точной revision и поддерживает scoped reviewers, comments, change requests и coverage tracking.
+- **ENG-FR306.** Review rights независимы от edit rights; reviewer не получает скрытого права менять draft.
+- **ENG-FR307.** Approval requirements вычисляются по active governance policy и concrete impact/risk revision.
+- **ENG-FR308.** Approval фиксирует revision, policy version, approver/delegation, time, decision и required justification.
+- **ENG-FR309.** Material revision change инвалидирует review/approval evidence, если platform policy явно не классифицирует изменение как non-semantic.
+- **ENG-FR310.** Поддерживаются sequential/parallel/quorum approval policies без превращения platform в generic BPM system.
+- **ENG-FR311.** Separation-of-duties, delegation, approval expiry и reauthentication/MFA применяются согласно policy.
+- **ENG-FR312.** Approver видит warnings, waivers, uncertainty и impact evidence и не получает скрыто «зелёный» summary.
+- **ENG-FR313.** Publish readiness является derived state из autosave/conflicts/validation/impact/review/approval/rights/policy evidence.
+- **ENG-FR314.** Edit, Review, Approve и Publish являются независимыми permission classes.
+- **ENG-FR315.** Publish создаёт immutable published configuration version со ссылками на source revision и governance provenance.
+- **ENG-FR316.** Publish означает новую official desired configuration truth и не означает автоматически Deploy или Activate.
+- **ENG-FR317.** Публикуется только exact validated/approved revision; semantic rebase создаёт новую revision и требует governance refresh.
+- **ENG-FR318.** Publication использует explicit consistency domains; внутри одного domain desired configuration меняется атомарно.
+- **ENG-FR319.** Independent consistency domains одного change set могут публиковаться частично только при доказанной dependency isolation и явном partial-publication workflow.
+- **ENG-FR320.** Publication plan показывает scopes, dependencies, versions, affected deployment targets, disruption/irreversibility и governance readiness.
+- **ENG-FR321.** Scheduled Publish повторно проверяет baseline, validation freshness, approvals, rights и policy в момент исполнения.
+- **ENG-FR322.** Publication имеет собственную persistent lifecycle и не принадлежит browser session.
+- **ENG-FR323.** Publication infrastructure failure не превращается в configuration validation error; revision сохраняется для safe retry/recovery.
+- **ENG-FR324.** Uncertain publication требует reconciliation authoritative published state до повторной попытки.
+- **ENG-FR325.** Publish создаёт immutable audit/governance record с validation/impact/review/approval evidence.
+- **ENG-FR326.** Полностью опубликованный change set становится immutable Published/Closed record; дальнейшие изменения выполняются новым change set.
+- **ENG-FR327.** Abandoned change sets сохраняют provenance согласно retention; продолжение делается новым draft lineage.
+- **ENG-FR328.** Rollback реализуется как новая corrective publication, а не переписывание старой configuration/history.
+- **ENG-FR329.** Rollback feasibility анализируется заранее; irreversible/reverse-migration limitations не скрываются.
+- **ENG-FR330.** Package deployment, secret-value operations и protective administrative overrides являются отдельными lifecycle classes, хотя configuration может ссылаться на них как prerequisites/state.
+- **ENG-FR331.** Publish desired actuator placement не передаёт actual execution authority; authority belongs to subsequent Deploy/Activate/runtime lifecycle.
+- **ENG-FR332.** Full может Publish desired configuration для offline Edge, сохраняя явное различие desired и Edge active version.
+- **ENG-FR333.** Published-version registry обеспечивает lineage, semantic diffs, source change provenance и corrective/rollback relations.
+- **ENG-FR334.** Publish description/notifications/maintenance-window requirements определяются risk/scope policy, а не универсальной обязательной рассылкой.
+- **ENG-FR335.** Emergency Publish остаётся тем же governance model с ускоренной заранее определённой policy и не обходит hard validation invariants/audit.
+- **ENG-FR336.** Concurrent publications разрешены для independent scopes и сериализуются/блокируются для конфликтующих consistency domains.
+- **ENG-FR337.** Generated/template/recovery change sets используют тот же governance lifecycle и не получают origin-based bypass.
+- **ENG-FR338.** Change-set lifecycle states являются evidence-derived workflow states, а не вручную редактируемыми флагами.
+- **ENG-FR339.** Published configuration образует authoritative lineage; recovery divergence обрабатывается отдельным reconciliation process.
+- **ENG-FR340.** Changes IAM, listener/API, security и automated-control policy получают специализированный validation/impact analysis.
+- **ENG-FR341.** History/data migrations, связанные с publication, остаются видимыми отдельными operations/readiness states и не маскируются мгновенным Publish Complete.
+- **ENG-FR342.** Удаление package semantic contribution блокируется, если historical configuration/data потеряют интерпретируемость.
+- **ENG-FR343.** Для каждой publication можно восстановить объяснение допустимости: validation, impact, warnings/waivers, reviews, approvals и policy versions.
+- **ENG-FR344.** Governance policies сами versioned; изменение policy до Publish вызывает readiness recalculation.
+- **ENG-FR345.** Изменение governance/security policy оценивается по currently active policy, что предотвращает self-authorized weakening в одной revision.
+- **ENG-FR346.** Compact simplified Apply является UX-композицией того же validate→impact→approval-policy→publish lifecycle, а не альтернативной configuration model.
+- **ENG-FR347.** Public API/CLI и UI используют одинаковый governance contract и не предоставляют hidden force/upsert bypass active configuration.
+- **ENG-FR348.** Publish failure/result UI показывает stage, cause, new published versions, affected domains и дальнейшие deployment/activation states.
+- **ENG-FR349.** Immediately after Publish actual runtime может оставаться на предыдущей version; transition pending отличается от actual drift.
+- **ENG-FR350.** Publication-significant governance evidence имеет retention/integrity requirements; transient lightweight validation history может храниться по более короткой policy.
+- **ENG-FR351.** Dry-run/readiness/policy simulation не изменяют configuration и не гарантируют будущую readiness после изменения context.
+- **ENG-FR352.** Engineering revision history и security/audit trail являются разными слоями с различными целями.
+- **ENG-FR353.** Draft change sets можно merge/cherry-pick/rebase только через semantic conflict/dependency analysis; старые approvals не переносятся автоматически.
+- **ENG-FR354.** Engineering показывает competing/pending change sets в пересекающихся scopes и не допускает hidden last-writer-wins publication.
+- **ENG-FR355.** Любой blocked Publish имеет explainable reason и navigable path к unresolved evidence.
+- **ENG-FR356.** Change set предоставляет human-readable governance timeline отдельно от detailed edit revision history.
+- **ENG-FR357.** Окончательная configuration lifecycle semantics: Draft → Validation → Impact → optional Review → policy Approval → Publish → Published Desired; Deploy и Activate остаются следующими отдельными стадиями.
 
-## 14. Functional model после `ENG-Q1527`
+## 15. Functional model после `ENG-Q1953`
 
-### 14.1 Discovery и authoritative observation
+### 15.1 Governance evidence chain
 
-Discovery — engineering capability поиска candidates; сам по себе он не создаёт active configuration. Authoritative runtime observation является отдельной published source semantics и может создавать Observed Objects/Parameters/relations без individual publication.
+Managed configuration проходит `Draft → Validation → Impact → optional Review → policy Approval → Publish`. Каждая governance stage относится к exact revision/evidence; material change не наследует validation/review/approval автоматически.
 
-### 14.2 Identity и ownership
+### 15.2 Validation и Impact
 
-Observed identity опирается на declared `source namespace + external identity + incarnation/reuse semantics`. Mutable attributes вроде IP/name не считаются достаточной identity. Presence, source availability и identity uncertainty различаются. Один core object может одновременно иметь source-owned facts и Dispatcher-managed desired configuration.
+Validation отвечает за correctness/readiness конкретной revision и различает configuration error, unavailable mandatory validator и environment-not-ready. Impact отдельно описывает direct/transitive consequences, runtime disruption, deployment/security/resource/history effects, uncertainty и overall risk.
 
-### 14.3 Promotion и identity correction
+### 15.3 Review и Approval
 
-Promotion/Manage выполняется через change set и сохраняет core identity при semantic continuity. Merge, Split и Rebind являются governed identity-correction operations с impact analysis и immutable provenance; replacement real physical unit остаётся отдельной lifecycle semantics.
+Review — technical/domain assessment; Approval — formal permission by active policy. Scoped reviews, separation of duties, delegation, expiry, MFA, sequential/parallel/quorum approvals и waivers остаются explicit evidence, привязанным к revision и policy version.
 
-### 14.4 Import boundary
+### 15.4 Publish и consistency
 
-Import — subject-local operation создания **новых** draft entities. Он не является Publish, Update, Delete, Upsert или Sync; collisions становятся explicit validation issues. Typed subject schemas, strict parsing, explicit units/references, preview, provenance и ordinary full validation/impact lifecycle обязательны.
+Publish создаёт immutable official **Published Desired** version и не означает Deploy или Activate. Publication действует по explicit consistency domains, имеет persistent lifecycle, scoped concurrency/serialization, failure/uncertainty reconciliation и immutable governance/audit provenance.
 
-### 14.5 Four-mechanism invariant
+### 15.5 Corrective lineage
 
-`Discovery`, `Observed Object`, `Promotion/Manage` и `Import` являются четырьмя различными mechanisms. Simplified Compact UX может скрывать сложность, но не объединяет их в hidden auto-configuration flow.
+Rollback — новая corrective publication, не переписывание старого состояния. Published versions образуют authoritative lineage; recovery divergence требует отдельного reconciliation. Package deployment, secret-value operation и protective administrative override остаются отдельными lifecycle classes.
 
-## 15. Checkpoint traceability
+## 16. Checkpoint traceability
 
 | Checkpoint | Диапазон | Содержание | Git |
 |---|---|---|---|
@@ -2034,10 +2539,9 @@ Import — subject-local operation создания **новых** draft entitie
 | `ENG-CP02` | добавлены `ENG-Q111–ENG-Q250`, `ENG-FR026–ENG-FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `fa38f437a90f98cdb4091a25187eec67f2213e6a` |
 | `ENG-CP03` | добавлены `ENG-Q251–ENG-Q790`, `ENG-FR059–ENG-FR150` | Connections / execution placement + complete Parameter/value pipeline | `45756985f305ac0e952319d2b399262726beb964` |
 | `ENG-CP04` | добавлены `ENG-Q791–ENG-Q1167`, `ENG-FR151–ENG-FR217` | Complete Semantic Command Model | `2ae985a8e99fb329e5860bd528007271966de3f4` |
-| `ENG-CP05` | добавлены `ENG-Q1168–ENG-Q1527`, `ENG-FR218–ENG-FR281` | Discovery / Observed / Promotion / Import | `READY TO COMMIT` |
+| `ENG-CP05` | добавлены `ENG-Q1168–ENG-Q1527`, `ENG-FR218–ENG-FR281` | Discovery / Observed / Promotion / Import | `e47b3a2003bda70385903aaa26d126d7089542b3` |
+| `ENG-CP06` | добавлены `ENG-Q1528–ENG-Q1953`, `ENG-FR282–ENG-FR357` | Configuration Governance Lifecycle: Validation → Impact → Review/Approval → Publish | `READY TO COMMIT` |
 
-## 16. Точка продолжения
+## 17. Точка продолжения
 
-Продолжить с `ENG-Q1528` и закрыть единым смысловым блоком **Configuration Governance Lifecycle**: full Validation → Impact Analysis → Review/Approval → Publish, включая exact-state validation, issue lifecycle, consistency domains, dependency/resource/security impact, review evidence, approval policies, stale approvals, publication atomicity/failures, corrective publication и immutable publication lineage.
-
-После завершения governance выполнить `ENG-CP06`. Это рекомендуемая граница завершения текущего чата; следующий чат начать с Deploy / Activate / Edge и затем завершения Engineering.
+После commit/push `ENG-CP06` завершить текущий чат. Новый чат начать с `ENG-Q1954` — **Deploy / Activate / Edge**: desired/published version → delivery → prepare/readiness → activation, partial/offline Edge, retries/reconciliation, per-node actual state, safe authority handover и degraded operation. Затем закрыть Versions / Recovery / Engineering diagnostics / Permissions / Compact setup и полный Engineering coverage review.

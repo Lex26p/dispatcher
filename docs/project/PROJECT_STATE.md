@@ -3,7 +3,7 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA перед этим пакетом:** `2ae985a8e99fb329e5860bd528007271966de3f4`.
+**Последний подтверждённый SHA перед этим пакетом:** `e47b3a2003bda70385903aaa26d126d7089542b3`.
 
 ## 1. Завершённый Product Concept
 
@@ -26,21 +26,18 @@ Functional Specification определяет наблюдаемое повед�
 
 **Статус:** `IN PROGRESS`.
 
-Принято и подготовлено к `ENG-CP05`:
+Принято и подготовлено к `ENG-CP06`:
 
-- `ENG-Q001–ENG-Q1527` без намеренных пропусков;
-- `ENG-FR001–ENG-FR281`;
+- `ENG-Q001–ENG-Q1953` без намеренных пропусков;
+- `ENG-FR001–ENG-FR357`;
 - Engineering workspace/change-set/object foundation;
 - Types / Device Profiles / Object Templates и lifecycle/migrations;
 - Connections / execution placement;
 - complete Parameter/value/source/history/substitution model;
 - complete Semantic Command Model;
-- Discovery capabilities/candidates/matching/proposals;
-- authoritative Observed Object source identity/incarnation/presence semantics;
-- source-vs-managed ownership, Promotion/Manage и Commands on observed entities;
-- governed Merge/Split/Rebind identity correction;
-- Edge/multiple-source/continuous discovery behaviour;
-- strict Import→Draft semantics: no update/delete/upsert/sync, typed schemas, strict parsing, collisions, dependencies, preview/provenance, large import and Compact wrapper.
+- Discovery / authoritative Observed / Promotion / governed identity correction;
+- strict Import→Draft semantics;
+- complete Configuration Governance Lifecycle: revision-bound Validation, Impact, Review/Approval policies, Publish consistency/atomicity/failures/corrective lineage.
 
 Checkpoint history:
 
@@ -48,15 +45,16 @@ Checkpoint history:
 - `ENG-CP02` — `fa38f437a90f98cdb4091a25187eec67f2213e6a`;
 - `ENG-CP03` — `45756985f305ac0e952319d2b399262726beb964`;
 - `ENG-CP04` — `2ae985a8e99fb329e5860bd528007271966de3f4`;
-- `ENG-CP05` добавляет `ENG-Q1168–ENG-Q1527`, `ENG-FR218–ENG-FR281` и ожидает commit/push.
+- `ENG-CP05` — `e47b3a2003bda70385903aaa26d126d7089542b3`;
+- `ENG-CP06` добавляет `ENG-Q1528–ENG-Q1953`, `ENG-FR282–ENG-FR357` и ожидает commit/push.
 
 ## 4. Следующая точка продолжения
 
-После подтверждения SHA `ENG-CP05` продолжить с:
+После подтверждения SHA `ENG-CP06` **завершить текущий чат**. Новый чат начать с:
 
-> `ENG-Q1528...` — Configuration Governance Lifecycle: full Validation → Impact Analysis → Review/Approval → Publish.
+> `ENG-Q1954...` — Deploy / Activate / Edge: Published Desired → delivery → prepare/readiness → activation, offline/partial Edge, per-node actual state, retry/reconciliation и authority-safe activation.
 
-После завершения этого lifecycle и `ENG-CP06` рекомендуется завершить текущий чат. Новый чат начать с Deploy / Activate / Edge и оставшихся Engineering completion blocks по `ROADMAP.md`.
+После этого завершить Versions / Recovery / Engineering diagnostics / Permissions / Compact setup и выполнить полный Engineering coverage review по `ROADMAP.md`.
 
 ## 5. Checkpoint discipline
 

@@ -18,7 +18,7 @@
 |---|---|---|
 | Общая продуктовая концепция | `DONE` | `PRD-Q001–PRD-Q803` |
 | Functional foundation | `DONE` | структура functional docs, roadmap, reference scenarios |
-| Engineering / Configuration | `IN PROGRESS` | `ENG-Q001–ENG-Q1527`, `ENG-FR001–ENG-FR281`; `ENG-CP05` подготовлен |
+| Engineering / Configuration | `IN PROGRESS` | `ENG-Q001–ENG-Q1953`, `ENG-FR001–ENG-FR357`; `ENG-CP06` подготовлен |
 | Operations / Dispatcher Workspace | `NOT STARTED` | вторая центральная functional specification |
 | Web Platform | `NOT STARTED` | общий поведенческий контракт Web UI |
 | Architecture Readiness Review #1 | `NOT STARTED` | проверка центрального сквозного контура |
@@ -57,20 +57,22 @@
 26. Discovery capabilities, candidates, matching/proposals и authoritative observed-object identity/presence.
 27. Promotion/Manage ownership, identity merge/split/rebind, Edge/multi-source discovery semantics.
 28. Strict Import→Draft semantics, schemas/parsing/collisions/dependencies/preview/provenance/large imports.
+29. Full Validation: revision-bound evidence, validators/issues/waivers, security/resource/dependency checks, baseline rebase semantics.
+30. Impact Analysis: semantic diff, direct/transitive consumers, disruption/resources/security/history, uncertainty и risk.
+31. Review/Approval: scoped review evidence, policy-driven approvals, SoD/delegation/expiry/MFA, stale-evidence rules.
+32. Publish: consistency domains, publication plan/lifecycle/atomicity, scheduled/emergency publication, failures/reconciliation, corrective lineage.
 
-**Принято:** `ENG-Q001–ENG-Q1527`, `ENG-FR001–ENG-FR281`.
+**Принято:** `ENG-Q001–ENG-Q1953`, `ENG-FR001–ENG-FR357`.
 
 ### Следующий блок
 
-`ENG-Q1528...` — **Configuration Governance Lifecycle**: full Validation → Impact Analysis → Review/Approval → Publish.
+`ENG-Q1954...` — **Deploy / Activate / Edge**: Published Desired → delivery → prepare/readiness → activation, offline/partial Edge, per-node actual state, retries/reconciliation и authority-safe activation.
 
-После governance checkpoint рекомендуется завершить текущий чат. Следующий чат начать с Deploy/Activate/Edge, затем versions/recovery, Engineering diagnostics/permissions, Compact setup и final coverage review.
+`ENG-CP06` является согласованной границей завершения текущего чата. После его commit/push следующий чат начать именно с `ENG-Q1954`.
 
 ### Remaining крупными блоками
 
 - углубление Relationships там, где потребуется редактор/scale behaviour;
-- Validation / Impact — полная модель;
-- Approval / Publish;
 - Deploy / Activate / Edge desired-vs-active;
 - Versions / corrective publication / recovery divergence;
 - Engineering diagnostics / permissions;
@@ -134,11 +136,12 @@ Checkpoint создаётся при выполнении любого усло�
 | `ENG-CP02` | `Q111–Q250`, `FR026–FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `COMMITTED` — `fa38f437a90f98cdb4091a25187eec67f2213e6a` |
 | `ENG-CP03` | `Q251–Q790`, `FR059–FR150` | Connections / execution placement + complete Parameter/value pipeline | `COMMITTED` — `45756985f305ac0e952319d2b399262726beb964` |
 | `ENG-CP04` | `Q791–Q1167`, `FR151–FR217` | Complete Semantic Command Model | `COMMITTED` — `2ae985a8e99fb329e5860bd528007271966de3f4` |
-| `ENG-CP05` | `Q1168–Q1527`, `FR218–FR281` | Discovery / Observed / Promotion / Import | `READY TO COMMIT` |
-| `ENG-CP06+` | фактический следующий завершённый block или threshold CP-1 | диапазон заранее не фиксируется | `PLANNED` |
+| `ENG-CP05` | `Q1168–Q1527`, `FR218–FR281` | Discovery / Observed / Promotion / Import | `COMMITTED` — `e47b3a2003bda70385903aaa26d126d7089542b3` |
+| `ENG-CP06` | `Q1528–Q1953`, `FR282–FR357` | Configuration Governance Lifecycle: Validation → Impact → Review/Approval → Publish | `READY TO COMMIT` |
+| `ENG-CP07+` | фактический следующий завершённый block или threshold CP-1 | диапазон заранее не фиксируется | `PLANNED` |
 | `ENG-FINAL` | полный Engineering coverage review | все remaining закрыты/явно делегированы dependent specs | `PLANNED` |
 
-`ENG-CP03`, `ENG-CP04` и `ENG-CP05` сознательно крупнее обычного ориентира: каждый фиксирует целостный semantic block. После commit `ENG-CP05` записать SHA при следующем checkpoint/update.
+`ENG-CP03`–`ENG-CP06` сознательно крупнее обычного ориентира: каждый фиксирует целостный semantic block. После commit `ENG-CP06` записать его SHA в начале следующего чата/checkpoint.
 
 ## 6. FS-20 — Operations / Dispatcher Workspace
 
