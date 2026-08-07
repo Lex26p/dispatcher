@@ -3,7 +3,7 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA перед этим пакетом:** `45756985f305ac0e952319d2b399262726beb964`.
+**Последний подтверждённый SHA перед этим пакетом:** `2ae985a8e99fb329e5860bd528007271966de3f4`.
 
 ## 1. Завершённый Product Concept
 
@@ -26,33 +26,37 @@ Functional Specification определяет наблюдаемое повед�
 
 **Статус:** `IN PROGRESS`.
 
-Принято и подготовлено к `ENG-CP04`:
+Принято и подготовлено к `ENG-CP05`:
 
-- `ENG-Q001–ENG-Q1167` без намеренных пропусков;
-- `ENG-FR001–ENG-FR217`;
+- `ENG-Q001–ENG-Q1527` без намеренных пропусков;
+- `ENG-FR001–ENG-FR281`;
 - Engineering workspace/change-set/object foundation;
 - Types / Device Profiles / Object Templates и lifecycle/migrations;
-- Connections / Adapters / Endpoints / Credentials / execution placement;
-- complete Parameter/value/source/quality/freshness/history/substitution model;
-- complete Semantic Command Model: identity, typed arguments, risk, preconditions/interlocks, rights, confirmations, approvals, technical binding;
-- invocation lifecycle, evidence-based success, timeout/uncertainty, retries/idempotency, concurrency/cancellation/deferred execution;
-- Full/Edge authority, offline execution, Rules/Scenarios/API/UI/service origins, diagnostics/simulation, bulk/scheduled/emergency/break-glass, versioning/impact;
-- no-bypass invariant for any state-changing action of a modeled managed resource.
+- Connections / execution placement;
+- complete Parameter/value/source/history/substitution model;
+- complete Semantic Command Model;
+- Discovery capabilities/candidates/matching/proposals;
+- authoritative Observed Object source identity/incarnation/presence semantics;
+- source-vs-managed ownership, Promotion/Manage и Commands on observed entities;
+- governed Merge/Split/Rebind identity correction;
+- Edge/multiple-source/continuous discovery behaviour;
+- strict Import→Draft semantics: no update/delete/upsert/sync, typed schemas, strict parsing, collisions, dependencies, preview/provenance, large import and Compact wrapper.
 
 Checkpoint history:
 
 - `ENG-CP01` — `688392edb17ddce6e4d3874ff54344aacc2033b0`;
 - `ENG-CP02` — `fa38f437a90f98cdb4091a25187eec67f2213e6a`;
 - `ENG-CP03` — `45756985f305ac0e952319d2b399262726beb964`;
-- `ENG-CP04` добавляет `ENG-Q791–ENG-Q1167` и `ENG-FR151–ENG-FR217` и ожидает commit/push.
+- `ENG-CP04` — `2ae985a8e99fb329e5860bd528007271966de3f4`;
+- `ENG-CP05` добавляет `ENG-Q1168–ENG-Q1527`, `ENG-FR218–ENG-FR281` и ожидает commit/push.
 
 ## 4. Следующая точка продолжения
 
-После подтверждения SHA `ENG-CP04` продолжить с:
+После подтверждения SHA `ENG-CP05` продолжить с:
 
-> `ENG-Q1168...` — Discovery proposal / Observed / Promotion / Import: source identity/incarnation, proposal review/matching, correction/rebind/split, promotion ownership, bulk discovery handling и strict import-to-draft semantics.
+> `ENG-Q1528...` — Configuration Governance Lifecycle: full Validation → Impact Analysis → Review/Approval → Publish.
 
-Далее закрыть full Validation / Impact / Approval / Publish / Deploy / Activate / Edge и остальные Engineering blocks по `ROADMAP.md`.
+После завершения этого lifecycle и `ENG-CP06` рекомендуется завершить текущий чат. Новый чат начать с Deploy / Activate / Edge и оставшихся Engineering completion blocks по `ROADMAP.md`.
 
 ## 5. Checkpoint discipline
 

@@ -1,10 +1,10 @@
 # Engineering & Configuration — Functional Specification
 
 **ID namespace:** `ENG-*`  
-**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q1167` и `ENG-FR001–ENG-FR217`; checkpoint `ENG-CP04` подготовлен.  
+**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q1527` и `ENG-FR001–ENG-FR281`; checkpoint `ENG-CP05` подготовлен.  
 **Основание Product Concept:** `PRD-Q001–PRD-Q803`.  
-**Последний подтверждённый Git SHA перед `ENG-CP04`:** `45756985f305ac0e952319d2b399262726beb964`.  
-**Следующая точка:** `ENG-Q1168` — Discovery proposal / Observed / Promotion / Import: source identity, proposal review, merge/rebind, bulk acceptance и strict draft import semantics.
+**Последний подтверждённый Git SHA перед `ENG-CP05`:** `2ae985a8e99fb329e5860bd528007271966de3f4`.  
+**Следующая точка:** `ENG-Q1528` — Configuration Governance Lifecycle: full Validation → Impact Analysis → Review/Approval → Publish.
 
 ## 1. Назначение
 
@@ -42,8 +42,8 @@
 | Connections / Adapters / Endpoints / Credentials / execution placement | `DONE FUNCTIONAL BLOCK` | `ENG-Q251–ENG-Q340` |
 | Parameters / Values / Sources / Quality / Historization / Substitution | `DONE FUNCTIONAL BLOCK` | `ENG-Q341–ENG-Q790` |
 | Semantic Commands | `DONE FUNCTIONAL BLOCK` | `ENG-Q791–ENG-Q1167` |
-| Discovery proposal / Observed / Promotion / Import | `NEXT` | с `ENG-Q1168`; базовые foundations уже приняты |
-| Validation / Impact / Approval / Publish | `OPEN DETAIL` | foundation принят |
+| Discovery proposal / Observed / Promotion / Import | `DONE FUNCTIONAL BLOCK` | `ENG-Q1168–ENG-Q1527` |
+| Validation / Impact / Approval / Publish | `NEXT` | с `ENG-Q1528`; foundation принят |
 | Deploy / Activate / Edge | `OPEN` | — |
 | Versions / Recovery / Diagnostics / Permissions / Compact setup | `OPEN` | — |
 
@@ -1334,7 +1334,393 @@
 - **ENG-Q1166.** Command Model не применяется к операциям, которые действительно не являются управлением modeled resource, например read/discovery или разрешённая non-actuator diagnostic interaction согласно capability contract.
 - **ENG-Q1167.** Нельзя обойти Command Model, переименовав write в integration action, service operation или другое техническое название.
 
-## 12. Принятые Functional Requirements — `ENG-FR001–ENG-FR217`
+## 12. Decision Register — `ENG-Q1168–ENG-Q1527`
+
+### 12.1 Discovery capability, execution и scope
+
+- **ENG-Q1168.** Discovery не изменяет active configuration самостоятельно; он обнаруживает facts/candidates и формирует proposals.
+- **ENG-Q1169.** Discovery capability предоставляется Adapter/package.
+- **ENG-Q1170.** Не каждый Adapter обязан поддерживать discovery.
+- **ENG-Q1171.** Adapter объявляет поддерживаемый discovery method/class: scan, browse, inventory, I/O enumeration, API inventory, passive observation и т. п.
+- **ENG-Q1172.** Discovery capability объявляет потенциальное воздействие на внешнюю систему.
+- **ENG-Q1173.** Active scan и passive discovery являются разными semantics.
+- **ENG-Q1174.** Potentially intrusive discovery может требовать дополнительных rights/policy.
+- **ENG-Q1175.** Organization policy может полностью запретить discovery.
+- **ENG-Q1176.** Discovery Run является engineering/diagnostic operation, а не managed configuration.
+- **ENG-Q1177.** Permanent discovery policy/schedule является managed configuration.
+- **ENG-Q1178.** Каждый Discovery Run имеет самостоятельную identity.
+- **ENG-Q1179.** Discovery Run сохраняет initiator/origin.
+- **ENG-Q1180.** Discovery Run сохраняет Adapter/Connection/executor provenance.
+- **ENG-Q1181.** Discovery Run сохраняет discovery scope.
+- **ENG-Q1182.** Discovery Run может быть long-running.
+- **ENG-Q1183.** Browser session не владеет long-running discovery lifecycle.
+- **ENG-Q1184.** Discovery может показывать progress только если Adapter способен его доказать.
+- **ENG-Q1185.** Нельзя придумывать progress percentage без достоверных данных Adapter.
+- **ENG-Q1186.** Discovery scope ограничивается capability и не обязан сканировать всю доступную сеть.
+- **ENG-Q1187.** Discovery scope может задаваться Connection.
+- **ENG-Q1188.** Discovery scope может включать Endpoint/range/address space.
+- **ENG-Q1189.** Discovery scope может включать Location/node/executor.
+- **ENG-Q1190.** Discovery scope может включать protocol-specific filters.
+- **ENG-Q1191.** Organization policy может ограничивать maximum discovery scope.
+
+### 12.2 Candidates, matching и proposal → draft
+
+- **ENG-Q1192.** Discovery candidate не становится managed object автоматически.
+- **ENG-Q1193.** Candidate получает discovery identity настолько устойчивую, насколько source способен её предоставить.
+- **ENG-Q1194.** Candidate не является active production object.
+- **ENG-Q1195.** Candidate может показывать live probe information, явно обозначенную как discovery observation.
+- **ENG-Q1196.** Candidate обязательно показывает discovery source/provenance.
+- **ENG-Q1197.** Candidate показывает время discovery.
+- **ENG-Q1198.** Candidate показывает last seen.
+- **ENG-Q1199.** Candidate может показывать confidence matching к Profile/Type вместе с evidence.
+- **ENG-Q1200.** Discovery metadata может включать vendor/model.
+- **ENG-Q1201.** Discovery metadata может включать firmware/software version.
+- **ENG-Q1202.** Discovery metadata может включать serial number.
+- **ENG-Q1203.** Discovery metadata может включать network/protocol address.
+- **ENG-Q1204.** Discovery metadata может включать device capabilities.
+- **ENG-Q1205.** Discovery metadata может включать source-specific identifiers.
+- **ENG-Q1206.** Discovery metadata не становится Dispatcher desired configuration автоматически.
+- **ENG-Q1207.** Discovery пытается сопоставлять candidate с Device Profiles.
+- **ENG-Q1208.** Matching может использовать vendor/model/firmware/signature.
+- **ENG-Q1209.** Matching может использовать package-provided rules.
+- **ENG-Q1210.** Matching result содержит reason/explanation.
+- **ENG-Q1211.** Одного числового confidence без объяснения недостаточно.
+- **ENG-Q1212.** Candidate может соответствовать нескольким Profiles.
+- **ENG-Q1213.** Первый найденный Profile не выбирается автоматически, кроме deterministic high-confidence policy.
+- **ENG-Q1214.** Organization может запретить automatic matching.
+- **ENG-Q1215.** Discovery ищет возможное соответствие existing managed objects.
+- **ENG-Q1216.** Display name не является достаточным доказательством object identity.
+- **ENG-Q1217.** IP address не является достаточным доказательством object identity.
+- **ENG-Q1218.** Serial number является сильным evidence только в контексте namespace/vendor identity semantics.
+- **ENG-Q1219.** UI различает Possible existing match и New candidate.
+- **ENG-Q1220.** Ambiguous matching запрещает automatic irreversible merge.
+- **ENG-Q1221.** Candidate states включают New, Possible match, Known/linked, Ignored, Proposed for configuration, Conflict/Ambiguous, No longer seen.
+- **ENG-Q1222.** Ignored является disposition/policy state, а не гарантированным физическим удалением candidate навсегда.
+- **ENG-Q1223.** Поддерживаются ignore rules, а не только ignore одного candidate.
+- **ENG-Q1224.** Ignore rules могут исключать vendor/model/address range и иные declared scopes.
+- **ENG-Q1225.** Ignore rule является managed configuration.
+- **ENG-Q1226.** Add/Configure discovery candidate создаёт entity в current change set и не публикует её напрямую.
+- **ENG-Q1227.** При отсутствии active change set Engineering предлагает выбрать или создать change set.
+- **ENG-Q1228.** Candidate→draft сохраняет discovery provenance.
+- **ENG-Q1229.** Discovery metadata может prefill draft fields.
+- **ENG-Q1230.** Prefilled fields показывают discovery provenance.
+- **ENG-Q1231.** Engineer может изменять предложенные values до Publish, если ownership/schema допускают.
+- **ENG-Q1232.** Source-owned facts остаются source-owned и не превращаются в editable configuration из-за prefill.
+- **ENG-Q1233.** Поддерживается mass selection candidates и создание draft objects.
+- **ENG-Q1234.** Mass candidate adoption требует preview.
+- **ENG-Q1235.** Preview показывает Profile/Type/Template matching.
+- **ENG-Q1236.** Preview показывает naming/code generation.
+- **ENG-Q1237.** Preview показывает proposed Locations.
+- **ENG-Q1238.** Preview показывает addresses/connections.
+- **ENG-Q1239.** Preview показывает conflicts/collisions.
+- **ENG-Q1240.** Mass discovery adoption не выполняет Publish автоматически.
+
+### 12.3 Authoritative observation, source identity, presence и ownership
+
+- **ENG-Q1241.** Authoritative inventory/runtime source может создавать Observed Object без configuration proposal.
+- **ENG-Q1242.** Observed Object fact of existence не требует individual Publish.
+- **ENG-Q1243.** Source contract, разрешающий authoritative observation, должен быть заранее опубликован.
+- **ENG-Q1244.** Engineer публикует source rule/capability, а не каждый dynamic instance.
+- **ENG-Q1245.** Runtime source не может объявить себя authoritative без published configuration contract.
+- **ENG-Q1246.** Observed Object получает Dispatcher identity.
+- **ENG-Q1247.** Observed identity сохраняется между reconnect/restart при stable source identity.
+- **ENG-Q1248.** Source identity включает namespace + external identity как минимум.
+- **ENG-Q1249.** При reusable source IDs используется incarnation/generation semantics.
+- **ENG-Q1250.** Namespace является частью machine identity semantics.
+- **ENG-Q1251.** Одинаковые raw external IDs от разных sources не объединяются автоматически.
+- **ENG-Q1252.** Adapter/source объявляет uniqueness guarantees external identity.
+- **ENG-Q1253.** Adapter/source объявляет lifetime/reuse semantics identifiers.
+- **ENG-Q1254.** Source contract может объявлять incarnation identifier.
+- **ENG-Q1255.** При слабой identity guarantee Dispatcher показывает identity confidence/limitations.
+- **ENG-Q1256.** Ephemeral network address не считается вечной identity.
+- **ENG-Q1257.** Кратковременное исчезновение Observed Object не удаляет object.
+- **ENG-Q1258.** Исчезновение меняет presence state.
+- **ENG-Q1259.** Reappearance с trustworthy same source identity использует прежнюю Dispatcher identity.
+- **ENG-Q1260.** Reused source ID с новой incarnation создаёт новую identity.
+- **ENG-Q1261.** При неизвестной incarnation и возможном reuse ambiguous identity не merge автоматически.
+- **ENG-Q1262.** Presence model различает Present, Missing/Not seen, Source unavailable, Identity uncertain.
+- **ENG-Q1263.** Source unavailable не означает автоматически disappearance каждого object.
+- **ENG-Q1264.** Presence freshness policy может зависеть от source.
+- **ENG-Q1265.** Observed object показывает last seen.
+- **ENG-Q1266.** Observed object показывает first seen.
+- **ENG-Q1267.** Observed Object может получать dynamic Parameters без individual Publish по published source contract.
+- **ENG-Q1268.** Dynamic Parameter identity следует source namespace/external identity semantics.
+- **ENG-Q1269.** Disappearance dynamic Parameter не уничтожает history.
+- **ENG-Q1270.** Reappeared Parameter с trustworthy identity использует прежнюю identity.
+- **ENG-Q1271.** Source Parameter schema/type change диагностируется явно.
+- **ENG-Q1272.** Нельзя молча менять несовместимую semantic Parameter type под одной identity.
+- **ENG-Q1273.** Authoritative source может публиковать relations между observed objects, если contract это поддерживает.
+- **ENG-Q1274.** Observed relations имеют source ownership.
+- **ENG-Q1275.** Dispatcher user relation может существовать параллельно source relation при различимой ownership/type semantics.
+- **ENG-Q1276.** Исчезновение source relation не удаляет независимую user relation.
+- **ENG-Q1277.** Observed и Managed не являются взаимоисключающими core object classes; одна identity может совмещать оба ownership layer.
+- **ENG-Q1278.** Promotion сохраняет core object identity.
+- **ENG-Q1279.** После promotion source observation может продолжаться.
+- **ENG-Q1280.** UI показывает ownership конкретных properties/parameters/relations.
+- **ENG-Q1281.** Property ownership categories минимум: Source fact, Dispatcher desired/configured, User annotation, Derived.
+- **ENG-Q1282.** Один property не имеет двух скрытых authoritative writers.
+- **ENG-Q1283.** При source actual + Dispatcher desired UI показывает Desired vs Actual.
+- **ENG-Q1284.** Drift существует только при declared desired/actual semantics.
+- **ENG-Q1285.** Изменение source-owned metadata само по себе не является configuration drift.
+
+### 12.4 Promotion, identity corrections, scale, Edge и multiple sources
+
+- **ENG-Q1286.** Существует явная operation Manage/Promote to managed.
+- **ENG-Q1287.** Promotion проходит через change set.
+- **ENG-Q1288.** Promotion может назначать Object Type.
+- **ENG-Q1289.** Promotion может назначать Device Profile.
+- **ENG-Q1290.** Promotion может adopt Object Template при совместимости.
+- **ENG-Q1291.** Promotion может назначать Location.
+- **ENG-Q1292.** Promotion может назначать engineering code.
+- **ENG-Q1293.** Promotion preview показывает, что останется source-owned.
+- **ENG-Q1294.** Promotion preview показывает, что станет Dispatcher-managed.
+- **ENG-Q1295.** Promotion preview показывает новые config fields/parameters/commands.
+- **ENG-Q1296.** Promotion preview показывает conflicts.
+- **ENG-Q1297.** Managed ownership может охватывать только выбранные разрешённые аспекты Observed Object.
+- **ENG-Q1298.** Partial managed ownership должна быть explainable пользователю.
+- **ENG-Q1299.** Observed Object может иметь Semantic Commands до promotion только через prepublished source/profile command contract.
+- **ENG-Q1300.** Raw write capability недостаточна для controllability observed object.
+- **ENG-Q1301.** Promotion не включает все technical writes автоматически.
+- **ENG-Q1302.** Система допускает correction случая, когда два Dispatcher objects оказались одним real object.
+- **ENG-Q1303.** Для этого существует governed Merge/Identity correction operation.
+- **ENG-Q1304.** Identity correction не сводится к ручному delete одного object и переносу данных.
+- **ENG-Q1305.** Merge требует impact preview.
+- **ENG-Q1306.** Merge анализирует history.
+- **ENG-Q1307.** Merge анализирует relations.
+- **ENG-Q1308.** Merge анализирует Commands/audit.
+- **ENG-Q1309.** Merge анализирует Alarms/Incidents.
+- **ENG-Q1310.** Merge анализирует TOiR/service extensions.
+- **ENG-Q1311.** Merge не переписывает original historical provenance так, будто всегда существовала одна identity.
+- **ENG-Q1312.** Identity correction сохраняется как отдельный traceable fact.
+- **ENG-Q1313.** Система допускает correction случая, когда одна observed identity фактически объединяла разные real objects.
+- **ENG-Q1314.** Для этого существует governed Split operation.
+- **ENG-Q1315.** Split позволяет распределить future bindings и historical intervals/evidence с provenance.
+- **ENG-Q1316.** Split не переписывает механически всю старую историю, если различие тогда не было известно.
+- **ENG-Q1317.** Существует governed rebind source identity к existing managed object.
+- **ENG-Q1318.** Rebind применяется, например, при смене source namespace/adapter при неизменном real object.
+- **ENG-Q1319.** Rebind требует compatibility/impact preview.
+- **ENG-Q1320.** Rebind сохраняет core identity при semantic continuity.
+- **ENG-Q1321.** Old source binding/provenance сохраняется исторически.
+- **ENG-Q1322.** Replacement real physical unit не маскируется обычным source rebind.
+- **ENG-Q1323.** Physical replacement использует replacement/install lifecycle semantics.
+- **ENG-Q1324.** Rebind применяется при смене technical identification/source, но не real object.
+- **ENG-Q1325.** Product contract не требует бесконечного raw log каждого discovery probe.
+- **ENG-Q1326.** Significant discovery runs/results/dispositions имеют traceability.
+- **ENG-Q1327.** Repeated identical observations могут coalesce при сохранении first/last seen и meaningful transitions.
+- **ENG-Q1328.** Discovery рассчитан на десятки тысяч candidates.
+- **ENG-Q1329.** UI не требует modal на каждый найденный device.
+- **ENG-Q1330.** Discovery registry поддерживает filtering/grouping/bulk disposition.
+- **ENG-Q1331.** Discovery issues поддерживают aggregation common conflicts/root causes.
+- **ENG-Q1332.** Discovery storm не должен перегружать UI/notification system.
+- **ENG-Q1333.** Поддерживается continuous/scheduled discovery.
+- **ENG-Q1334.** Continuous discovery candidate не публикуется автоматически.
+- **ENG-Q1335.** Continuous authoritative observation может создавать Observed Object по published source contract.
+- **ENG-Q1336.** Candidate discovery и authoritative observation остаются разными semantics даже внутри одного Adapter.
+- **ENG-Q1337.** Edge может выполнять discovery локально по published capability/policy.
+- **ENG-Q1338.** Offline Edge может продолжать authoritative observation.
+- **ENG-Q1339.** Observed identities, созданные offline Edge, синхронизируются с Full без пересоздания.
+- **ENG-Q1340.** Full не назначает другую identity тому же Edge-observed object при корректном identity contract.
+- **ENG-Q1341.** Discovery candidates/results, найденные offline Edge, синхронизируются после reconnect.
+- **ENG-Q1342.** Один physical object может наблюдаться несколькими independent sources.
+- **ENG-Q1343.** Multiple source observations не объединяются автоматически без identity evidence.
+- **ENG-Q1344.** После подтверждения несколько source identities могут быть связаны с одной managed object identity.
+- **ENG-Q1345.** Provenance каждого source fact остаётся различимым.
+- **ENG-Q1346.** Несколько authoritative sources могут сообщать conflicting facts.
+- **ENG-Q1347.** Conflicting authoritative facts не разрешаются hidden last-write-wins.
+- **ENG-Q1348.** Ownership/priority policy определяет effective interpretation source conflicts.
+- **ENG-Q1349.** Source conflict остаётся диагностируемым.
+
+### 12.5 Permissions/security и strict Import foundation
+
+- **ENG-Q1350.** Право запускать discovery отдельно от config edit rights.
+- **ENG-Q1351.** Право видеть raw discovery details может быть отдельным.
+- **ENG-Q1352.** Право Promote/Manage является отдельным.
+- **ENG-Q1353.** Merge/Split/Rebind требуют усиленных rights.
+- **ENG-Q1354.** Passive observation может иметь менее строгую policy, чем intrusive active scan.
+- **ENG-Q1355.** Discovery не использует unknown/default credentials автоматически.
+- **ENG-Q1356.** Discovery не принимает unknown TLS certificate как trusted автоматически.
+- **ENG-Q1357.** Discovery security exception должна быть explicit и scoped.
+- **ENG-Q1358.** Found credentials/secrets не отображаются обычным candidate property.
+- **ENG-Q1359.** Import принадлежит subject editor/service, а не отдельному global Import service.
+- **ENG-Q1360.** Import не изменяет active configuration.
+- **ENG-Q1361.** Import загружает new entities в current change set.
+- **ENG-Q1362.** Import может convenience-flow создать/выбрать change set до загрузки.
+- **ENG-Q1363.** Import сам по себе не является Publish.
+- **ENG-Q1364.** Base Import semantics не обновляет existing objects по ID.
+- **ENG-Q1365.** Import не удаляет existing objects, отсутствующие в файле.
+- **ENG-Q1366.** Import не выполняет reconciliation/synchronization.
+- **ENG-Q1367.** Universal silent Upsert checkbox не допускается.
+- **ENG-Q1368.** Collision с existing identity/code создаёт validation/import collision, а не update.
+- **ENG-Q1369.** Dispatcher не угадывает намерение update при collision.
+- **ENG-Q1370.** Совпадающий display name допустим для новой entity, если naming policy это разрешает.
+- **ENG-Q1371.** Collision определяется semantic uniqueness rules, а не простым label equality.
+- **ENG-Q1372.** Пользователь не задаёт internal Dispatcher identity для ordinary new import entity.
+- **ENG-Q1373.** Dispatcher назначает internal identities imported new entities самостоятельно.
+- **ENG-Q1374.** External engineering code/tag может импортироваться по subject schema.
+- **ENG-Q1375.** Source identity импортируется только через явно разрешённый managed source binding contract; нельзя подделать source-owned identity обычной колонкой.
+- **ENG-Q1376.** Core platform имеет общую text-based import syntax family с subject-specific schema.
+- **ENG-Q1377.** Import поддерживает file upload.
+- **ENG-Q1378.** Import поддерживает text/clipboard paste.
+- **ENG-Q1379.** XLSX binary не является обязательным core import format; specialized convenience formats допустимы.
+- **ENG-Q1380.** Import syntax/schema имеет version identifier.
+- **ENG-Q1381.** Subjects объявляют собственные typed import schemas поверх common import mechanism.
+- **ENG-Q1382.** Subject schema объявляет allowed fields.
+- **ENG-Q1383.** Subject schema объявляет required fields.
+- **ENG-Q1384.** Subject schema объявляет field types.
+- **ENG-Q1385.** Subject schema объявляет unit semantics.
+- **ENG-Q1386.** Subject schema объявляет references.
+- **ENG-Q1387.** Subject schema объявляет enum values.
+- **ENG-Q1388.** Subject schema объявляет version compatibility.
+- **ENG-Q1389.** Unknown import column является error и не игнорируется скрытно.
+- **ENG-Q1390.** Unknown enum value является semantic validation error.
+- **ENG-Q1391.** Invalid integer text не угадывается/обрезается до valid number.
+- **ENG-Q1392.** Boolean textual aliases принимаются только если schema явно их объявляет.
+- **ENG-Q1393.** Text преобразуется только в declared type по однозначным rules.
+- **ENG-Q1394.** Physical numeric import не угадывает required unit из personal display preferences.
+- **ENG-Q1395.** Import schema может фиксировать unit конкретной column.
+- **ENG-Q1396.** Import schema может принимать explicit compatible unit.
+- **ENG-Q1397.** Incompatible unit является Error.
+- **ENG-Q1398.** Syntax-invalid file не импортируется частично.
+- **ENG-Q1399.** Malformed quoting/structure/schema framing вызывает whole-file failure.
+
+### 12.6 Semantic errors, dependencies, preview, provenance и large import
+
+- **ENG-Q1400.** Syntax-valid, semantic-invalid rows могут стать invalid draft entities, если subject model допускает безопасное представление.
+- **ENG-Q1401.** Semantic-invalid draft entities не могут Publish до исправления.
+- **ENG-Q1402.** Import summary показывает counts valid/invalid entities.
+- **ENG-Q1403.** Import error указывает row/field/entity.
+- **ENG-Q1404.** Import не устанавливает missing Device Profile/package автоматически.
+- **ENG-Q1405.** Missing type/profile/template является ordinary draft validation issue.
+- **ENG-Q1406.** Import может предложить navigation/dependency resolution без hidden installation.
+- **ENG-Q1407.** Entities одной import operation могут ссылаться друг на друга.
+- **ENG-Q1408.** Для intra-file references поддерживаются file-local identifiers/keys.
+- **ENG-Q1409.** File-local identifiers не становятся permanent Dispatcher IDs автоматически.
+- **ENG-Q1410.** Cyclic references допустимы, если subject model их допускает.
+- **ENG-Q1411.** Invalid relationship cycle определяется subject validation, а не parser.
+- **ENG-Q1412.** Typed structured field value атомарно valid/invalid и не принимается частично.
+- **ENG-Q1413.** Draft entity может содержать valid и invalid fields с явными issues.
+- **ENG-Q1414.** Существенный Import имеет preview до добавления entities в draft.
+- **ENG-Q1415.** Import preview показывает counts по entity types.
+- **ENG-Q1416.** Import preview показывает Locations/scopes где применимо.
+- **ENG-Q1417.** Import preview показывает Type/Profile/Template dependencies.
+- **ENG-Q1418.** Import preview показывает collisions.
+- **ENG-Q1419.** Import preview показывает errors/warnings.
+- **ENG-Q1420.** Small paste UX может быть сокращён, сохраняя preview/validation semantics.
+- **ENG-Q1421.** Imported draft entity сохраняет provenance Import operation.
+- **ENG-Q1422.** Original source file не обязан храниться forever для каждой entity; operation provenance обязателен, artifact retention policy-controlled.
+- **ENG-Q1423.** Import operation сохраняет actor/time/subject/schema/file metadata.
+- **ENG-Q1424.** Sensitive import artifacts подчиняются retention/access policy.
+- **ENG-Q1425.** Import можно undo до Publish через ordinary change-set revisions/checkpoints.
+- **ENG-Q1426.** Import не создаёт отдельную parallel undo system.
+- **ENG-Q1427.** Повторный import того же файла не обновляет ранее созданные entities автоматически.
+- **ENG-Q1428.** Repeated import обрабатывается как ordinary new import с collisions/new entities по schema.
+- **ENG-Q1429.** Настоящая repeatable synchronization реализуется отдельным integration mechanism.
+- **ENG-Q1430.** Mass update existing configuration через файл не называется ordinary Import; используется governed bulk edit/migration.
+- **ENG-Q1431.** Это предотвращает hidden bypass impact analysis existing identities.
+- **ENG-Q1432.** Import artifact не является authoritative evidence physical device existence.
+- **ENG-Q1433.** Imported device config может существовать без runtime device.
+- **ENG-Q1434.** Discovery candidate не является imported configuration.
+- **ENG-Q1435.** UX может преобразовать reviewed discovery candidates в draft generation, сохраняя proposal→draft semantics.
+- **ENG-Q1436.** Subject export использует понятную схему для анализа/обмена.
+- **ENG-Q1437.** Не гарантируется re-import любого export поверх existing install, поскольку Import не update/upsert.
+- **ENG-Q1438.** Export может служить basis создания new entities после корректировки identity/code data.
+- **ENG-Q1439.** Package может добавлять subject-specific import format/parser.
+- **ENG-Q1440.** Specialized importer не обходит common draft/change-set lifecycle.
+- **ENG-Q1441.** Specialized importer может предоставлять richer mapping wizard.
+- **ENG-Q1442.** Итог specialized import всегда ordinary draft entities с normal validation/impact/publish.
+- **ENG-Q1443.** Import может иметь optional explicit mapping wizard для external CSV headers.
+- **ENG-Q1444.** Column mapping explicit и не использует silent fuzzy guessing.
+- **ENG-Q1445.** Mapping profile можно сохранять для повторного использования.
+- **ENG-Q1446.** Mapping profile сам по себе не является synchronization job.
+- **ENG-Q1447.** Import рассчитан на тысячи/десятки тысяч entities.
+- **ENG-Q1448.** Large import UI не обязан визуализировать весь файл одной giant table.
+- **ENG-Q1449.** Large import поддерживает aggregate summary, error filtering и drill-down.
+- **ENG-Q1450.** Import processing может быть server-side/long-running независимо от browser session.
+- **ENG-Q1451.** Завершение import parsing не означает Publish.
+- **ENG-Q1452.** После preview можно выбрать subset valid rows, если references/dependencies остаются целостными.
+- **ENG-Q1453.** Partial import selection повторно проверяет dependencies.
+- **ENG-Q1454.** Duplicate logical keys внутри import file являются Error, когда schema требует uniqueness.
+- **ENG-Q1455.** Parser не использует silent last-row-wins для duplicate keys.
+- **ENG-Q1456.** Empty value и omitted field могут иметь разные semantics по subject schema.
+- **ENG-Q1457.** Subject schema явно определяет null/empty semantics.
+
+### 12.7 Secrets, validation, bulk promotion, change detection и Compact UX
+
+- **ENG-Q1458.** Omitted optional field new entity получает default/inherited semantics по subject contract.
+- **ENG-Q1459.** Secret values не импортируются ordinary plaintext configuration fields.
+- **ENG-Q1460.** Secret references могут импортироваться по разрешённому subject schema.
+- **ENG-Q1461.** Missing secret reference является validation issue.
+- **ENG-Q1462.** Imported object config может получать Command Definitions через Type/Profile/Template contract.
+- **ENG-Q1463.** Import не выполняет Semantic Commands.
+- **ENG-Q1464.** Configuration value вроде Start=true не может случайно инициировать equipment action.
+- **ENG-Q1465.** Observed inventory можно экспортировать для offline engineering preparation.
+- **ENG-Q1466.** При создании managed draft source identities сопоставляются явно.
+- **ENG-Q1467.** Row order/file position не используется как identity evidence.
+- **ENG-Q1468.** Parser/schema validation выполняется при upload/parse.
+- **ENG-Q1469.** Full Engineering validation выполняется после добавления import result в change set.
+- **ENG-Q1470.** Import preview не заменяет full validation.
+- **ENG-Q1471.** Import preview не заменяет full impact analysis.
+- **ENG-Q1472.** High discovery confidence не заменяет Engineering validation.
+- **ENG-Q1473.** Успешный discovery probe не доказывает корректность future configuration.
+- **ENG-Q1474.** Promotion блокируется при incompatible Template/Profile conflict до resolution.
+- **ENG-Q1475.** Source-owned actual vs user desired conflict отображается согласно declared ownership semantics.
+- **ENG-Q1476.** Нельзя silently копировать source fact в desired value для сокрытия conflict.
+- **ENG-Q1477.** Поддерживается bulk promotion тысяч observed objects.
+- **ENG-Q1478.** Bulk promotion поддерживает rules/filters Type/Profile/Template/Location assignment.
+- **ENG-Q1479.** Bulk promotion preview отдельно показывает exceptional objects.
+- **ENG-Q1480.** Partial bulk promotion допустима при separable scopes и explicit partial result.
+- **ENG-Q1481.** Candidate можно отметить Reviewed без object creation.
+- **ENG-Q1482.** Reviewed/disposition metadata сохраняет actor/time.
+- **ENG-Q1483.** Materially changed discovery evidence может вернуть ignored/reviewed candidate в attention state по policy.
+- **ENG-Q1484.** Discovery может выявить firmware/model/address changes known source identity.
+- **ENG-Q1485.** Такие изменения не всегда drift; drift зависит от ownership/desired state.
+- **ENG-Q1486.** Compatibility risk при source changes диагностируется.
+- **ENG-Q1487.** Firmware change может вызвать profile compatibility warning.
+- **ENG-Q1488.** Same network address + different trustworthy serial/incarnation рассматривается как possible replacement/new entity.
+- **ENG-Q1489.** Old object identity не переназначается новому device автоматически только из-за same address.
+- **ENG-Q1490.** Engineering предоставляет guided replacement/rebind decision.
+- **ENG-Q1491.** Если functional position уже существует, discovered new physical unit может быть предложен как install/replacement.
+- **ENG-Q1492.** Install/replacement choice остаётся explicit и impact-aware.
+- **ENG-Q1493.** Каждый new discovery candidate не создаёт notification всем инженерам по умолчанию.
+- **ENG-Q1494.** Notification policy может агрегировать meaningful discovery changes.
+- **ENG-Q1495.** Security-relevant unknown device может иметь higher attention policy.
+- **ENG-Q1496.** Unknown discovery candidate не является Alarm автоматически; event/alarm определяется configured policy.
+- **ENG-Q1497.** Disappearance observed operational object может создавать Alarm по operational policy.
+- **ENG-Q1498.** Presence state и Alarm entity остаются разными concepts.
+- **ENG-Q1499.** Compact может предоставлять simple Find devices UX.
+- **ENG-Q1500.** Compact Find devices сохраняет underlying candidate/proposal/change-set semantics.
+- **ENG-Q1501.** Curated trusted device может добавляться почти одним action при полностью valid defaults.
+- **ENG-Q1502.** Simplified Compact discovery не создаёт alternative configuration model.
+- **ENG-Q1503.** Compact import UX может скрывать schema/version details от обычного пользователя.
+- **ENG-Q1504.** Compact import не допускает silent overwrite.
+
+### 12.8 Explainability, historical identity и final mechanism boundaries
+
+- **ENG-Q1505.** Observed/discovered entity имеет explainability view для identity reasoning в complex/ambiguous cases.
+- **ENG-Q1506.** Explainability показывает source namespace.
+- **ENG-Q1507.** Explainability показывает external ID/incarnation.
+- **ENG-Q1508.** Explainability показывает matching evidence.
+- **ENG-Q1509.** Explainability показывает merge/rebind history.
+- **ENG-Q1510.** Explainability показывает ownership layers.
+- **ENG-Q1511.** Objects нельзя hidden-merge по имени/IP/location/model/similar parameters без sufficient identity evidence.
+- **ENG-Q1512.** Fuzzy/ML matching может предлагать match, но не выполнять irreversible merge самостоятельно.
+- **ENG-Q1513.** После merge/split/rebind historical references остаются интерпретируемыми.
+- **ENG-Q1514.** Historical UI может показывать current corrected identity presentation, сохраняя доступ к original provenance.
+- **ENG-Q1515.** Audit facts не переписываются так, будто identity correction была известна ранее.
+- **ENG-Q1516.** Uninstall Adapter/source package не удаляет observed identities/history.
+- **ENG-Q1517.** После source removal objects становятся unavailable/source-retired, а semantic descriptors сохраняют history interpretability.
+- **ENG-Q1518.** Позднее другой source может быть governed-associated/rebound к той же real object identity.
+- **ENG-Q1519.** Discovery и Import являются разными mechanisms.
+- **ENG-Q1520.** Discovery не является Publish.
+- **ENG-Q1521.** Observed Object не является Draft object.
+- **ENG-Q1522.** Promotion сохраняет identity при semantic continuity.
+- **ENG-Q1523.** Import не является Update.
+- **ENG-Q1524.** Import не является Delete.
+- **ENG-Q1525.** Import не является Sync.
+- **ENG-Q1526.** Import не устанавливает dependencies скрытно.
+- **ENG-Q1527.** Import остаётся внутри governed configuration lifecycle.
+
+## 13. Принятые Functional Requirements — `ENG-FR001–ENG-FR281`
 
 - **ENG-FR001.** Engineering является специализированным workspace внутри общего Web Shell Dispatcher, а не отдельным приложением.
 - **ENG-FR002.** Engineering работает с общей объектной и конфигурационной моделью Dispatcher; специализированные сервисы не получают параллельный механизм сохранения managed configuration.
@@ -1553,49 +1939,105 @@
 - **ENG-FR215.** Human-error prevention для command controls является functional requirement: dangerous actions, targets и bulk scope должны быть однозначно различимы не только цветом.
 - **ENG-FR216.** UI может оптимистично показать создание Requested Invocation, но не должен показывать Succeeded до authoritative evidence.
 - **ENG-FR217.** Любое намерение изменить state modeled managed resource проходит Command Model независимо от инициатора или используемого внешнего protocol.
+- **ENG-FR218.** Discovery является Engineering capability поиска/идентификации candidates и не изменяет active configuration самостоятельно.
+- **ENG-FR219.** Discovery capability объявляется Adapter/package вместе со scope, методом, потенциальным воздействием и required permissions.
+- **ENG-FR220.** Discovery Run имеет самостоятельную operation identity, origin, scope, executor и diagnostic provenance, но не является managed configuration.
+- **ENG-FR221.** Permanent discovery schedules/policies являются managed configuration.
+- **ENG-FR222.** Discovery candidate не является active managed object и сохраняет provenance обнаружения, timestamps и matching evidence.
+- **ENG-FR223.** Profile/type matching является explainable recommendation и не выполняет irreversible identity merge на основании fuzzy confidence.
+- **ENG-FR224.** Discovery сопоставляет candidates с существующими managed/observed objects, но display name, IP и mutable attributes не считаются достаточной identity сами по себе.
+- **ENG-FR225.** Candidate→configuration всегда создаёт ordinary draft entities current change set и не обходит validation/impact/publish.
+- **ENG-FR226.** Batch adoption discovery candidates поддерживает preview, profile/type/template assignment, naming, location, connection mapping и collision detection.
+- **ENG-FR227.** Authoritative runtime observation разрешена только через заранее опубликованный source contract и может создавать Observed Objects без individual publication.
+- **ENG-FR228.** Observed Object получает stable Dispatcher identity на основе declared source namespace/external identity/incarnation semantics.
+- **ENG-FR229.** Source identity contract описывает uniqueness, lifetime и identifier-reuse guarantees.
+- **ENG-FR230.** Disappearance observed entity изменяет presence state и не уничтожает identity/history.
+- **ENG-FR231.** Present, Missing, Source unavailable и Identity uncertain являются различимыми состояниями.
+- **ENG-FR232.** Observed Parameters и relations могут появляться динамически по published source contract и сохраняют stable identities/provenance.
+- **ENG-FR233.** Observed и Managed не являются взаимоисключающими core identities: один object может совмещать source facts и Dispatcher-owned desired configuration.
+- **ENG-FR234.** Ownership каждого значимого property/parameter/relation определима как source-owned, Dispatcher-managed, annotation или derived.
+- **ENG-FR235.** Drift существует только для явно объявленной desired-vs-actual semantics и не выводится из любого изменения source fact.
+- **ENG-FR236.** Promotion/Manage сохраняет core object identity и переводит выбранные аспекты под governed Dispatcher configuration через change set.
+- **ENG-FR237.** Promotion preview показывает ownership transition, added semantic capabilities, dependencies и conflicts.
+- **ENG-FR238.** Наличие technical write capability observed source не создаёт Semantic Commands автоматически.
+- **ENG-FR239.** Identity merge/split/rebind являются отдельными governed correction operations с impact analysis и immutable provenance.
+- **ENG-FR240.** Identity correction не переписывает прошлое так, будто исправленная модель была известна в момент исходных событий.
+- **ENG-FR241.** Rebind сохраняет core identity только при semantic continuity; replacement physical unit использует отдельную lifecycle semantics.
+- **ENG-FR242.** Discovery UI рассчитан на большие candidate sets и поддерживает filtering, grouping, bulk disposition и root-cause aggregation.
+- **ENG-FR243.** Continuous discovery не превращает candidates в active configuration автоматически; authoritative observed creation остаётся отдельной source semantics.
+- **ENG-FR244.** Edge способен выполнять published discovery/observation policies offline и синхронизировать stable observed identities с Full.
+- **ENG-FR245.** Multiple source observations могут быть связаны с одной object identity только после sufficient identity evidence; provenance каждого source сохраняется.
+- **ENG-FR246.** Конфликт authoritative sources не разрешается hidden last-write-wins.
+- **ENG-FR247.** Discovery, promotion и identity-correction rights являются independent permissions; intrusive discovery может требовать усиленной policy.
+- **ENG-FR248.** Discovery не принимает unknown credentials/certificates/trust exceptions скрытно.
+- **ENG-FR249.** Import является subject-local Engineering operation, создающей new draft entities в current change set.
+- **ENG-FR250.** Import никогда сам по себе не означает Publish, Update, Delete, Upsert или Synchronization.
+- **ENG-FR251.** Collision с existing configuration создаёт validation/import issue и не превращается в silent overwrite.
+- **ENG-FR252.** Internal Dispatcher identity новых imported entities назначается платформой и не является ordinary user import field.
+- **ENG-FR253.** Core import использует versioned typed subject schemas; packages могут добавлять specialized formats без обхода common configuration lifecycle.
+- **ENG-FR254.** Unknown columns, incompatible types и ambiguous coercions не игнорируются скрытно.
+- **ENG-FR255.** Syntax-invalid input отменяет whole-file parsing, тогда как semantic-invalid entities могут быть represented as invalid draft state там, где subject contract это допускает.
+- **ENG-FR256.** Import не устанавливает missing packages/types/profiles/templates автоматически; dependencies становятся ordinary validation issues.
+- **ENG-FR257.** Imported entities одной operation могут ссылаться друг на друга через temporary/file-local keys без навязывания permanent internal IDs.
+- **ENG-FR258.** Import preview показывает entity counts, dependencies, collisions, issues и affected structural scopes до добавления substantial set в draft.
+- **ENG-FR259.** Import сохраняет operation provenance; retention source artifact определяется security/retention policy.
+- **ENG-FR260.** Undo результата Import использует ordinary change-set revisions/checkpoints и не создаёт отдельную transaction model.
+- **ENG-FR261.** Повторный Import того же source не является synchronization и не обновляет ранее созданные entities автоматически.
+- **ENG-FR262.** Mass change existing identities выполняется specialized bulk-edit/migration mechanism, а не Import overwrite.
+- **ENG-FR263.** Import file не является authoritative evidence physical equipment existence.
+- **ENG-FR264.** Specialized import wizard может выполнять explicit external-column mapping, но итог всегда ordinary draft configuration.
+- **ENG-FR265.** Large import поддерживает server-side/long-running processing, aggregate issue views и partial selection с dependency revalidation.
+- **ENG-FR266.** Empty, omitted и null values интерпретируются только согласно subject schema.
+- **ENG-FR267.** Secret values не импортируются ordinary plaintext config fields; разрешённые secret references допустимы.
+- **ENG-FR268.** Import configuration не способен инициировать Semantic Commands или иные operational side effects.
+- **ENG-FR269.** Import preview не заменяет full Engineering validation и impact analysis.
+- **ENG-FR270.** Discovery confidence не заменяет configuration validation.
+- **ENG-FR271.** Bulk promotion observed entities поддерживает deterministic assignment rules, exceptions и partial scope с explicit preview.
+- **ENG-FR272.** Discovery disposition и materially changed rediscovery имеют audit/engineering traceability без обязательного хранения каждого raw probe.
+- **ENG-FR273.** Firmware/model/address changes known source identity анализируются на compatibility, но считаются drift только при declared desired semantics.
+- **ENG-FR274.** Same address + different trustworthy physical identity не вызывает silent reuse old Dispatcher identity.
+- **ENG-FR275.** Discovery может предложить install/replacement found physical unit в existing functional position без automatic acceptance.
+- **ENG-FR276.** Discovery notifications/events/alarms регулируются policy и не создаются по одному на каждый candidate по умолчанию.
+- **ENG-FR277.** Compact Find devices и simplified import являются UX wrappers над теми же candidate/draft/validation semantics.
+- **ENG-FR278.** Engineering предоставляет explainability source identity/matching/ownership/correction history для complex observed entities.
+- **ENG-FR279.** Fuzzy/ML matching может предлагать correspondence, но не выполняет irreversible identity changes самостоятельно.
+- **ENG-FR280.** Source/package removal не делает historical observed data семантически нечитаемыми.
+- **ENG-FR281.** Discovery, Observed Object, Promotion и Import являются четырьмя различными functional mechanisms и не сливаются в hidden auto-configuration flow.
 
-## 13. Functional model после `ENG-Q1167`
+## 14. Functional model после `ENG-Q1527`
 
-### 13.1 Connection / execution path
+### 14.1 Discovery и authoritative observation
 
-- **Adapter** — installed software contribution/capability; **Connection** — managed configuration; **Endpoint** — typed addressable resource side when it has independent semantics.
-- Connection configuration, software deployment, activation и runtime health остаются разными states.
-- Desired execution placement не равно фактическому executor/authority. Для actuator-capable contour действует один authoritative executor, а handover имеет явный lifecycle и recovery semantics.
-- Secrets/certificates подключаются references, а diagnostic connection test не публикует draft configuration.
+Discovery — engineering capability поиска candidates; сам по себе он не создаёт active configuration. Authoritative runtime observation является отдельной published source semantics и может создавать Observed Objects/Parameters/relations без individual publication.
 
-### 13.2 Parameter semantic pipeline
+### 14.2 Identity и ownership
 
-Parameter имеет stable identity и отдельные layers definition/source/runtime. Effective value концептуально может проходить цепочку:
+Observed identity опирается на declared `source namespace + external identity + incarnation/reuse semantics`. Mutable attributes вроде IP/name не считаются достаточной identity. Presence, source availability и identity uncertainty различаются. Один core object может одновременно иметь source-owned facts и Dispatcher-managed desired configuration.
 
-`source fact/raw → decode → normalization/calibration → source-specific semantic value → active-source selection → operational exception/substitution → effective semantic value → consumers`.
+### 14.3 Promotion и identity correction
 
-Не каждый Parameter обязан использовать каждый layer, но применённые transformations остаются typed, versioned и explainable.
+Promotion/Manage выполняется через change set и сохраняет core identity при semantic continuity. Merge, Split и Rebind являются governed identity-correction operations с impact analysis и immutable provenance; replacement real physical unit остаётся отдельной lifecycle semantics.
 
-### 13.3 Data trust and history continuity
+### 14.4 Import boundary
 
-Value quality, time quality, freshness, connection state и provenance не сливаются в один флаг. Last-known value сохраняется, но не выдаётся за fresh sample. Late data, backfill, interpolation и historical correction имеют разные semantics. Parameter/source identities, semantic versions и configuration lineage позволяют интерпретировать history после profile changes, Edge offline, source failover, corrections и package uninstall.
+Import — subject-local operation создания **новых** draft entities. Он не является Publish, Update, Delete, Upsert или Sync; collisions становятся explicit validation issues. Typed subject schemas, strict parsing, explicit units/references, preview, provenance и ordinary full validation/impact lifecycle обязательны.
 
-### 13.4 Semantic Command invariant
+### 14.5 Four-mechanism invariant
 
-Любое намерение изменить state modeled managed resource проходит **Semantic Command Model** независимо от инициатора: UI, Rule, Scenario, API, integration, mobile или specialized service. Technical protocol write/vendor call является implementation detail и не предоставляет bypass. Raw actuator write возможен только как internal executor authorized Semantic Command либо как отдельная усиленная Raw Diagnostic Command.
+`Discovery`, `Observed Object`, `Promotion/Manage` и `Import` являются четырьмя различными mechanisms. Simplified Compact UX может скрывать сложность, но не объединяет их в hidden auto-configuration flow.
 
-### 13.5 Command lifecycle and evidence
-
-Command Definition и Command Invocation разделены. Invocation сохраняет versioned semantic contract, arguments, initiator/origin, evaluated policy evidence, selected executor/implementation, individual attempts и lifecycle. `Requested`, `Accepted`, `Dispatched`, `Succeeded`, `Failed` и `Uncertain` не подменяют друг друга; success определяется declared evidence criterion, а timeout при неизвестном physical outcome может завершаться `Uncertain`.
-
-### 13.6 Safety, authority and automation
-
-Risk, preconditions/interlocks, confirmation, reauthentication/MFA, second-person approval, execution authority, retry/idempotency и concurrency являются явными policy layers. Automated initiators не получают human authority автоматически. Edge offline выполняет только опубликованный local command contract, а desired placement не равно actuator authority.
-
-## 14. Checkpoint traceability
+## 15. Checkpoint traceability
 
 | Checkpoint | Диапазон | Содержание | Git |
 |---|---|---|---|
 | `ENG-CP01` | `ENG-Q001–ENG-Q110`, `ENG-FR001–ENG-FR025` | Engineering foundation + Objects & Structure | `688392edb17ddce6e4d3874ff54344aacc2033b0` |
 | `ENG-CP02` | добавлены `ENG-Q111–ENG-Q250`, `ENG-FR026–ENG-FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `fa38f437a90f98cdb4091a25187eec67f2213e6a` |
 | `ENG-CP03` | добавлены `ENG-Q251–ENG-Q790`, `ENG-FR059–ENG-FR150` | Connections / execution placement + complete Parameter/value pipeline | `45756985f305ac0e952319d2b399262726beb964` |
-| `ENG-CP04` | добавлены `ENG-Q791–ENG-Q1167`, `ENG-FR151–ENG-FR217` | Complete Semantic Command Model | `READY TO COMMIT` |
+| `ENG-CP04` | добавлены `ENG-Q791–ENG-Q1167`, `ENG-FR151–ENG-FR217` | Complete Semantic Command Model | `2ae985a8e99fb329e5860bd528007271966de3f4` |
+| `ENG-CP05` | добавлены `ENG-Q1168–ENG-Q1527`, `ENG-FR218–ENG-FR281` | Discovery / Observed / Promotion / Import | `READY TO COMMIT` |
 
-## 15. Точка продолжения
+## 16. Точка продолжения
 
-Продолжить с `ENG-Q1168` и закрыть **Discovery proposal / Observed / Promotion / Import**: authoritative source identity/incarnation, proposal review, matching/collisions, merge/rebind/split corrections, promotion ownership, bulk discovery handling, disappeared/reappeared entities и strict import-to-draft semantics. Затем перейти к full Validation / Impact / Approval / Publish / Deploy / Activate / Edge lifecycle. Git checkpoint выполнять автоматически по `../ROADMAP.md`.
+Продолжить с `ENG-Q1528` и закрыть единым смысловым блоком **Configuration Governance Lifecycle**: full Validation → Impact Analysis → Review/Approval → Publish, включая exact-state validation, issue lifecycle, consistency domains, dependency/resource/security impact, review evidence, approval policies, stale approvals, publication atomicity/failures, corrective publication и immutable publication lineage.
+
+После завершения governance выполнить `ENG-CP06`. Это рекомендуемая граница завершения текущего чата; следующий чат начать с Deploy / Activate / Edge и затем завершения Engineering.
