@@ -2,7 +2,7 @@
 
 Репозиторий проекта универсальной модульной SCADA-платформы «Диспетчер».
 
-В репозитории зафиксированы правила совместной работы, промежуточная общая продуктовая концепция редакции 3, расширенный реестр продуктовых решений через `PRD-Q527` и углублённая рабочая концепция дашбордов и мнемосхем. Дорожная карта, программная архитектура и исходный код ещё не создаются.
+В репозитории зафиксированы правила совместной работы, промежуточная общая продуктовая концепция редакции 4, расширенный реестр продуктовых решений через `PRD-Q676` и углублённая рабочая концепция дашбордов и мнемосхем. Дорожная карта, программная архитектура и исходный код ещё не создаются.
 
 ## С чего начинать работу
 
@@ -12,7 +12,8 @@
 4. [`docs/product/PRODUCT_DECISIONS.md`](docs/product/PRODUCT_DECISIONS.md) — точный реестр решений.
 5. [`docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md`](docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md) — текущая углублённая тема.
 6. [`docs/project/INTERACTION_PROTOCOL.md`](docs/project/INTERACTION_PROTOCOL.md) — порядок обсуждения и передачи изменений.
-7. [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md), [`OPEN_QUESTIONS.md`](docs/project/OPEN_QUESTIONS.md) и [`AI_WORK_NOTES.md`](docs/project/AI_WORK_NOTES.md) — служебная память проекта.
+7. [`docs/project/CONCEPT_AUDIT_RESOLUTION_2026-08-07.md`](docs/project/CONCEPT_AUDIT_RESOLUTION_2026-08-07.md) — карта решений первой независимой проверки.
+8. [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md), [`OPEN_QUESTIONS.md`](docs/project/OPEN_QUESTIONS.md) и [`AI_WORK_NOTES.md`](docs/project/AI_WORK_NOTES.md) — служебная память проекта.
 
 ## Источник истины
 
