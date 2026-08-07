@@ -3,7 +3,7 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA перед этим пакетом:** `688392edb17ddce6e4d3874ff54344aacc2033b0`.
+**Последний подтверждённый SHA перед этим пакетом:** `fa38f437a90f98cdb4091a25187eec67f2213e6a`.
 
 ## 1. Завершённый Product Concept
 
@@ -26,29 +26,33 @@ Functional Specification определяет наблюдаемое повед�
 
 **Статус:** `IN PROGRESS`.
 
-Принято и подготовлено к `ENG-CP02`:
+Принято и подготовлено к `ENG-CP03`:
 
-- `ENG-Q001–ENG-Q250` без намеренных пропусков;
-- `ENG-FR001–ENG-FR058`;
+- `ENG-Q001–ENG-Q790` без намеренных пропусков;
+- `ENG-FR001–ENG-FR150`;
 - Engineering workspace/change-set/object foundation;
-- Types / Device Profiles / Object Templates;
-- type/profile/template versioning и compatibility;
-- linked template instances, local overrides, selective propagation;
-- nested template dependency semantics;
-- detach/adopt/reattach;
-- profile replacement и type migration with provenance.
+- Types / Device Profiles / Object Templates и их lifecycle/migrations;
+- Connections / Adapters / Endpoints / Credentials / execution placement;
+- connection testing/runtime/deploy/authority separation;
+- полный Parameter semantic pipeline от source fact до effective value;
+- types/quantities/units, source bindings, acquisition, timestamps, provenance, quality/freshness;
+- normalization/calibration/limits, historization/late data/gaps/deadbands/retention;
+- multiple sources, manual substitution, calculated/aggregate/counter semantics;
+- Parameter bulk engineering, observed/runtime diagnostics, commissioning, permissions, scale, validation и impact.
 
-`ENG-CP01` уже соответствует commit `688392edb17ddce6e4d3874ff54344aacc2033b0`.
+Checkpoint history:
 
-`ENG-CP02` добавляет `ENG-Q111–ENG-Q250` и `ENG-FR026–ENG-FR058` и ожидает commit/push.
+- `ENG-CP01` — `688392edb17ddce6e4d3874ff54344aacc2033b0`;
+- `ENG-CP02` — `fa38f437a90f98cdb4091a25187eec67f2213e6a`;
+- `ENG-CP03` добавляет `ENG-Q251–ENG-Q790` и `ENG-FR059–ENG-FR150` и ожидает commit/push.
 
 ## 4. Следующая точка продолжения
 
-После подтверждения SHA `ENG-CP02` продолжить с:
+После подтверждения SHA `ENG-CP03` продолжить с:
 
-> `ENG-Q251...` — Connections / Adapters / Endpoints / Credentials / execution placement.
+> `ENG-Q791...` — Semantic Commands: definitions, arguments, risk, safety/preconditions, confirmations/approvals, execution lifecycle, feedback/success criteria, timeout/uncertainty, idempotency/retry, concurrency, Edge/offline policy и diagnostics.
 
-Затем перейти к Parameters и Semantic Commands.
+Далее закрыть оставшиеся Engineering-блоки по `ROADMAP.md`.
 
 ## 5. Checkpoint discipline
 
