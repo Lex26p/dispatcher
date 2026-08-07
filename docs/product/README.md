@@ -2,8 +2,8 @@
 
 ## Канонические
 
-- [`PRODUCT_CONCEPT.md`](PRODUCT_CONCEPT.md) — общая продуктовая концепция, редакция 6.
-- [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — действующие решения `PRD-Q001–PRD-Q784`.
+- [`PRODUCT_CONCEPT.md`](PRODUCT_CONCEPT.md) — общая продуктовая концепция, редакция 7.
+- [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — действующие решения `PRD-Q001–PRD-Q803`.
 - [`DASHBOARDS_AND_MIMICS_CONCEPT.md`](DASHBOARDS_AND_MIMICS_CONCEPT.md) — углублённая концепция дашбордов и мнемосхем.
 
 Общая горизонтальная концепция завершила три независимые проверки. Следующая продуктовая работа ведётся отдельными предметными концепциями; подробные темы перечислены в `../project/OPEN_QUESTIONS.md`.

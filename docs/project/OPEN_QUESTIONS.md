@@ -6,6 +6,8 @@
 
 | ID | Область | Что требуется подробно определить |
 |---|---|---|
+| `ENG-Q001` | Engineering / Configuration | Рабочие области инженера, registries/editors, objects/types/profiles/connections/parameters/commands/relations, discovery, copy, draft/change sets, validation, impact, publish и общий engineering UX от Compact до Full. |
+| `OPS-Q001` | Operations / Dispatcher workspace | Рабочее место диспетчера: объектный контекст, состояния, alarms, commands, incidents, trends, My Work, смена, navigation и переходы между специализированными сервисами. |
 | `AUT-Q001` | Automation | SCADA API для Rules, runtime lifecycle, libraries/modules, debugging, profiling, test/shadow execution, resource policies и developer workflow. |
 | `VMS-Q001` | VMS | Камеры/каналы/потоки, запись и storage topology, archive timeline, Edge, external VMS/NVR, PTZ, analytics, privacy, evidence/export, права и UX. |
 | `MAINT-Q001` | ТОиР | Defects/work orders, maintenance strategies, materials, labor, regulations/checklists, physical-unit replacement history, mobile work и ERP/EAM integration boundary. |
