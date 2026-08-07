@@ -18,7 +18,7 @@
 |---|---|---|
 | Общая продуктовая концепция | `DONE` | `PRD-Q001–PRD-Q803` |
 | Functional foundation | `DONE` | структура functional docs, roadmap, reference scenarios |
-| Engineering / Configuration | `IN PROGRESS` | `ENG-Q001–ENG-Q790`, `ENG-FR001–ENG-FR150`; `ENG-CP03` подготовлен |
+| Engineering / Configuration | `IN PROGRESS` | `ENG-Q001–ENG-Q1167`, `ENG-FR001–ENG-FR217`; `ENG-CP04` подготовлен |
 | Operations / Dispatcher Workspace | `NOT STARTED` | вторая центральная functional specification |
 | Web Platform | `NOT STARTED` | общий поведенческий контракт Web UI |
 | Architecture Readiness Review #1 | `NOT STARTED` | проверка центрального сквозного контура |
@@ -51,18 +51,20 @@
 20. Historization / late data / gaps / deadbands / retention / semantic history versions.
 21. Multiple sources / source selection / manual substitution / calculated/aggregate/counter semantics.
 22. Bulk Parameter Engineering, observed Parameters, commissioning/diagnostics, rights/scale/validation/impact.
+23. Complete Semantic Command Model: identity/arguments/risk/preconditions/rights/approvals/technical binding.
+24. Command lifecycle: success evidence, uncertainty, retry/idempotency, concurrency, deferred/offline Edge и authority.
+25. Commands from Rules/Scenarios/API/UI/services, diagnostics/simulation, bulk/scheduled/emergency/break-glass, versioning/impact.
 
-**Принято:** `ENG-Q001–ENG-Q790`, `ENG-FR001–ENG-FR150`.
+**Принято:** `ENG-Q001–ENG-Q1167`, `ENG-FR001–ENG-FR217`.
 
 ### Следующий блок
 
-`ENG-Q791...` — **Semantic Commands**: definitions, arguments, risk, safety/preconditions, execution lifecycle, feedback/results, uncertainty, concurrency, Edge/offline и diagnostics.
+`ENG-Q1168...` — **Discovery proposal / Observed / Promotion / Import**: source identity/incarnation, proposal review/matching, promotion ownership, merge/rebind/split corrections, bulk discovery handling и strict import-to-draft semantics.
 
-После него продолжаются Discovery/Import details, full Validation/Impact, Approval/Publish, Deploy/Activate/Edge, versions/recovery, Engineering diagnostics/permissions и Compact setup.
+После него продолжаются full Validation/Impact, Approval/Publish, Deploy/Activate/Edge, versions/recovery, Engineering diagnostics/permissions и Compact setup.
 
 ### Remaining крупными блоками
 
-- Semantic Commands;
 - углубление Relationships там, где потребуется редактор/scale behaviour;
 - Discovery proposal / Observed / Promotion details;
 - Import UX/schemas на уровне Engineering;
@@ -129,11 +131,12 @@ Checkpoint создаётся при выполнении любого усло�
 |---|---|---|---|
 | `ENG-CP01` | `Q001–Q110`, `FR001–FR025` | Engineering foundation + Objects & Structure | `COMMITTED` — `688392edb17ddce6e4d3874ff54344aacc2033b0` |
 | `ENG-CP02` | `Q111–Q250`, `FR026–FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `COMMITTED` — `fa38f437a90f98cdb4091a25187eec67f2213e6a` |
-| `ENG-CP03` | `Q251–Q790`, `FR059–FR150` | Connections / execution placement + complete Parameter/value pipeline | `READY TO COMMIT` |
-| `ENG-CP04+` | фактический следующий завершённый блок или threshold CP-1 | диапазон заранее не фиксируется | `PLANNED` |
+| `ENG-CP03` | `Q251–Q790`, `FR059–FR150` | Connections / execution placement + complete Parameter/value pipeline | `COMMITTED` — `45756985f305ac0e952319d2b399262726beb964` |
+| `ENG-CP04` | `Q791–Q1167`, `FR151–FR217` | Complete Semantic Command Model | `READY TO COMMIT` |
+| `ENG-CP05+` | фактический следующий завершённый block или threshold CP-1 | диапазон заранее не фиксируется | `PLANNED` |
 | `ENG-FINAL` | полный Engineering coverage review | все remaining закрыты/явно делегированы dependent specs | `PLANNED` |
 
-После commit `ENG-CP03` заменить его состояние на `COMMITTED` и записать фактический SHA при следующем checkpoint/update. `ENG-CP03` сознательно крупнее обычного ориентира, потому что Parameter model фиксировался одним связным semantic block.
+`ENG-CP03` сознательно крупнее обычного ориентира, потому что Parameter model фиксировался одним связным semantic block. После commit `ENG-CP04` записать его фактический SHA при следующем checkpoint/update.
 
 ## 6. FS-20 — Operations / Dispatcher Workspace
 

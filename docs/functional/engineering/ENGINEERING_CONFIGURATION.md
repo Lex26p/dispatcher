@@ -1,10 +1,10 @@
 # Engineering & Configuration — Functional Specification
 
 **ID namespace:** `ENG-*`  
-**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q790` и `ENG-FR001–ENG-FR150`; checkpoint `ENG-CP03` подготовлен.  
+**Статус:** `IN PROGRESS` — приняты `ENG-Q001–ENG-Q1167` и `ENG-FR001–ENG-FR217`; checkpoint `ENG-CP04` подготовлен.  
 **Основание Product Concept:** `PRD-Q001–PRD-Q803`.  
-**Последний подтверждённый Git SHA перед `ENG-CP03`:** `fa38f437a90f98cdb4091a25187eec67f2213e6a`.  
-**Следующая точка:** `ENG-Q791` — Semantic Commands: definitions, arguments, safety, execution, confirmation, results, uncertainty, concurrency и diagnostics.
+**Последний подтверждённый Git SHA перед `ENG-CP04`:** `45756985f305ac0e952319d2b399262726beb964`.  
+**Следующая точка:** `ENG-Q1168` — Discovery proposal / Observed / Promotion / Import: source identity, proposal review, merge/rebind, bulk acceptance и strict draft import semantics.
 
 ## 1. Назначение
 
@@ -41,8 +41,8 @@
 | Template/Profile lifecycle / propagation / overrides / migrations | `DONE FUNCTIONAL BLOCK` | `ENG-Q181–ENG-Q250` |
 | Connections / Adapters / Endpoints / Credentials / execution placement | `DONE FUNCTIONAL BLOCK` | `ENG-Q251–ENG-Q340` |
 | Parameters / Values / Sources / Quality / Historization / Substitution | `DONE FUNCTIONAL BLOCK` | `ENG-Q341–ENG-Q790` |
-| Semantic Commands | `NEXT` | с `ENG-Q791` |
-| Discovery proposal / Import | `OPEN` | базовые части уже приняты |
+| Semantic Commands | `DONE FUNCTIONAL BLOCK` | `ENG-Q791–ENG-Q1167` |
+| Discovery proposal / Observed / Promotion / Import | `NEXT` | с `ENG-Q1168`; базовые foundations уже приняты |
 | Validation / Impact / Approval / Publish | `OPEN DETAIL` | foundation принят |
 | Deploy / Activate / Edge | `OPEN` | — |
 | Versions / Recovery / Diagnostics / Permissions / Compact setup | `OPEN` | — |
@@ -922,7 +922,419 @@
 - **ENG-Q789.** Из Parameter можно перейти к source/Connection/Profile/Type/Template и другим relevant origins без потери Engineering context.
 - **ENG-Q790.** Из Connection/Profile можно перейти к affected Parameters/objects с фильтрацией/impact context.
 
-## 11. Принятые Functional Requirements — `ENG-FR001–ENG-FR150`
+## 11. Decision Register — `ENG-Q791–ENG-Q1167`
+
+### 11.1 Command identity, definitions и typed arguments
+
+- **ENG-Q791.** Command Definition имеет устойчивую identity.
+- **ENG-Q792.** Command принадлежит semantic managed-object contract, а не protocol/register mapping.
+- **ENG-Q793.** Command Definition и конкретная Command Invocation являются разными сущностями.
+- **ENG-Q794.** Command Definition является managed configuration.
+- **ENG-Q795.** Command Invocation является operational transaction/fact, а не managed configuration.
+- **ENG-Q796.** Managed object может иметь несколько Commands.
+- **ENG-Q797.** Managed object может не иметь Commands.
+- **ENG-Q798.** Command имеет display name и стабильный semantic key отдельно от internal identity.
+- **ENG-Q799.** Изменение display name не ломает Dashboard/Rule/API bindings.
+- **ENG-Q800.** Удалённая Command identity не переиспользуется автоматически.
+- **ENG-Q801.** Start/Setpoint/Reset и другие виды действий используют общий Command contract с typed semantics, а не отдельные фундаментальные сущности на каждый вид.
+- **ENG-Q802.** Command может не иметь arguments.
+- **ENG-Q803.** Command может иметь один argument.
+- **ENG-Q804.** Command может иметь несколько arguments.
+- **ENG-Q805.** Arguments имеют declared typed schema.
+- **ENG-Q806.** Arbitrary JSON не является штатной моделью Command arguments.
+- **ENG-Q807.** Numeric Command argument может иметь quantity/unit semantics.
+- **ENG-Q808.** Enum argument использует stable machine codes отдельно от display labels.
+- **ENG-Q809.** Command argument может ссылаться на managed object, если semantic contract этого требует.
+- **ENG-Q810.** Structured arguments допустимы только с declared schema.
+
+### 11.2 Operational setpoints, provenance и risk
+
+- **ENG-Q811.** Operational setpoint выполняется как Command, даже если UI выглядит как редактируемое numeric field.
+- **ENG-Q812.** Setpoint Command может иметь отдельный feedback Parameter.
+- **ENG-Q813.** Desired operational setpoint и measured feedback имеют разные semantic identities, если это разные values.
+- **ENG-Q814.** Durable engineering setting и operational setpoint являются разными semantics.
+- **ENG-Q815.** Изменение operational setpoint не требует configuration publication само по себе.
+- **ENG-Q816.** Durable tuning/policy value может требовать configuration publication даже при технически одинаковом protocol write; решает предметная semantics.
+- **ENG-Q817.** Каждая Command Invocation имеет stable execution identity.
+- **ENG-Q818.** Invocation фиксирует initiator.
+- **ENG-Q819.** Invocation фиксирует origin class: operator UI, Rule, Scenario, API, integration, mobile, specialized service, diagnostic operation и другие declared origins.
+- **ENG-Q820.** Invocation фиксирует target object и version Command Definition.
+- **ENG-Q821.** Invocation фиксирует arguments в семантике, с которой команда была запущена.
+- **ENG-Q822.** Позднейшее изменение Command Definition не меняет смысл historical Invocation.
+- **ENG-Q823.** Command имеет risk class 1–5.
+- **ENG-Q824.** Risk class участвует в authorization, confirmation, approval и audit policy, а не является только UI-меткой.
+- **ENG-Q825.** Type/Profile может предоставлять default risk class.
+- **ENG-Q826.** Object/Template/site configuration может повышать risk requirements.
+- **ENG-Q827.** Instance не может произвольно снизить package-defined minimum risk без специально разрешённого governed override.
+- **ENG-Q828.** Organization policy может повышать требования Command для определённых scopes.
+- **ENG-Q829.** Effective risk может зависеть от argument values.
+- **ENG-Q830.** Effective risk может зависеть от current operational context.
+
+### 11.3 Preconditions, interlocks, rights, confirmation и approvals
+
+- **ENG-Q831.** Command Definition может иметь semantic preconditions.
+- **ENG-Q832.** Preconditions используют stable Parameters/state/relations references.
+- **ENG-Q833.** Operational conditions вроде Maintenance mode=false могут быть precondition Command.
+- **ENG-Q834.** Preconditions могут быть hard-blocking или advisory.
+- **ENG-Q835.** Safety interlock и recommendation/advisory condition являются разными semantics.
+- **ENG-Q836.** Недоступную Command обычно следует показывать disabled с объяснением; security-sensitive existence может скрываться согласно rights.
+- **ENG-Q837.** Пользователь может получить объяснение, почему Command недоступна.
+- **ENG-Q838.** Authoritative precondition evaluation выполняется command execution path, не только browser/UI.
+- **ENG-Q839.** UI precheck используется для раннего feedback, но не является authoritative.
+- **ENG-Q840.** Перед execution выполняется authoritative recheck, поскольку state может измениться после UI precheck.
+- **ENG-Q841.** Hard interlock нельзя обойти обычным confirmation.
+- **ENG-Q842.** Допустимый interlock override моделируется отдельной Semantic Command с собственными rights/risk/audit.
+- **ENG-Q843.** Dispatcher не обходит локальный PLC/SIS safety interlock.
+- **ENG-Q844.** UI различает Dispatcher precondition rejection, local controller rejection, safety-system rejection и unknown rejection.
+- **ENG-Q845.** Право видеть объект не даёт автоматически право выполнять его Commands.
+- **ENG-Q846.** Право выполнить одну Command не даёт автоматически права на все Commands объекта.
+- **ENG-Q847.** Rights могут задаваться по Command class/type/action/scope.
+- **ENG-Q848.** Command rights могут зависеть от location/scope.
+- **ENG-Q849.** Command rights могут учитывать operational duty/shift через опубликованные policies.
+- **ENG-Q850.** Temporary substitution/delegation может изменять effective Command rights согласно IAM policy.
+- **ENG-Q851.** Rule/service principal подчиняется тем же authorization principles, что и human principal, с соответствующей subject semantics.
+- **ENG-Q852.** Rule не получает implicit command authority из прав инженера, который её создал.
+- **ENG-Q853.** Не все Commands требуют confirmation dialog; confirmation зависит от risk/context policy.
+- **ENG-Q854.** Low-risk routine Command может выполняться одним явным action без лишнего modal.
+- **ENG-Q855.** High-risk Command может требовать явного повторного подтверждения target/action.
+- **ENG-Q856.** Confirmation показывает target и actual argument values.
+- **ENG-Q857.** Confirmation показывает relevant current state/critical warnings, когда это влияет на решение.
+- **ENG-Q858.** Универсального Are you sure недостаточно для значимых Commands.
+- **ENG-Q859.** Risk policy может требовать reauthentication.
+- **ENG-Q860.** Risk policy может требовать MFA.
+- **ENG-Q861.** Reauthentication отделяется от обычной login-session validity.
+- **ENG-Q862.** Допустимо bounded reauthentication window для серии операций согласно policy/risk.
+- **ENG-Q863.** Command может требовать подтверждения вторым пользователем.
+- **ENG-Q864.** Second-person approval требует другого principal.
+- **ENG-Q865.** Approve Command может иметь отдельные права.
+- **ENG-Q866.** Self-approval запрещается, когда policy требует separation of duties, даже если инициатор имеет несколько roles.
+- **ENG-Q867.** Approval относится к конкретной Invocation с конкретными arguments/context.
+- **ENG-Q868.** Изменение arguments после approval аннулирует approval.
+- **ENG-Q869.** Существенное изменение operational context может аннулировать approval согласно policy.
+- **ENG-Q870.** Approval может иметь expiry.
+- **ENG-Q871.** Некоторые Commands требуют reason/justification.
+- **ENG-Q872.** Reason может сочетать predefined category и free text.
+- **ENG-Q873.** Routine low-risk Command не обязана всегда требовать reason.
+- **ENG-Q874.** Policy может требовать reason по risk/scope/mode.
+
+### 11.4 Technical binding, raw diagnostic writes и argument validation
+
+- **ENG-Q875.** Semantic Command имеет отдельный technical execution binding.
+- **ENG-Q876.** Device Profile может предоставлять default technical implementation binding.
+- **ENG-Q877.** Raw protocol write допустим только как внутренний технический executor Semantic Command.
+- **ENG-Q878.** Vendor HTTP call может быть technical implementation Semantic Command.
+- **ENG-Q879.** Technical binding может быть versioned sequence нескольких операций.
+- **ENG-Q880.** Command implementation может использовать несколько Connections, если semantic contract и authority model это допускают.
+- **ENG-Q881.** Command может иметь несколько alternative implementations.
+- **ENG-Q882.** Выбор implementation выполняется explicit/policy-driven образом.
+- **ENG-Q883.** Generic raw/network capability не может напрямую писать в endpoint, управляющий modeled actuator.
+- **ENG-Q884.** Actuator write выполняется только designated Command executor.
+- **ENG-Q885.** Исключительный raw write оформляется Raw Diagnostic Command.
+- **ENG-Q886.** Rule/Scenario не может вызывать Raw Diagnostic Command.
+- **ENG-Q887.** Organization policy может полностью запретить Raw Diagnostic Command.
+- **ENG-Q888.** Raw Diagnostic Command имеет отдельное право.
+- **ENG-Q889.** Raw Diagnostic Command может требовать diagnostic/service mode.
+- **ENG-Q890.** Raw Diagnostic Command требует reason/audit согласно policy.
+- **ENG-Q891.** Command arguments валидируются до execution.
+- **ENG-Q892.** Numeric arguments валидируются по quantity/unit compatibility.
+- **ENG-Q893.** Command limits являются отдельной semantics от alarm/operating limits.
+- **ENG-Q894.** Device Profile может задавать technical absolute limits Command.
+- **ENG-Q895.** Site/organization policy может задавать более строгие operational command limits.
+- **ENG-Q896.** UI показывает effective allowed range и provenance ограничения.
+- **ENG-Q897.** Display-unit to canonical command-unit conversion выполняется machine-safe по unit semantics.
+- **ENG-Q898.** Invocation сохраняет достаточный snapshot/evidence основных evaluated preconditions для audit/explainability.
+- **ENG-Q899.** Не требуется снимок всей системы; сохраняется только relevant evaluated evidence/references по contract.
+- **ENG-Q900.** Preconditions повторно проверяются после acceptance и перед dispatch, если между стадиями мог измениться state.
+
+### 11.5 Invocation lifecycle, success criteria, timeout и uncertainty
+
+- **ENG-Q901.** Invocation использует единую общую lifecycle model.
+- **ENG-Q902.** Success/Fail недостаточно для Command lifecycle.
+- **ENG-Q903.** Lifecycle различает requested, validating, awaiting authorization/approval, accepted, dispatched, executing/acknowledged где известно, succeeded, failed, timed out, uncertain, canceled/rejected где применимо.
+- **ENG-Q904.** Adapter показывает только те execution stages, которые реально может доказать; вымышленные состояния запрещены.
+- **ENG-Q905.** Нельзя показывать Succeeded, если доказан только факт отправки.
+- **ENG-Q906.** Success означает выполнение объявленного success criterion.
+- **ENG-Q907.** Success criterion может быть Adapter/device acknowledgement.
+- **ENG-Q908.** Success criterion может быть изменение feedback Parameter.
+- **ENG-Q909.** Success criterion может сочетать acknowledgement и feedback.
+- **ENG-Q910.** Success criterion может использовать состояние другого managed object, если это часть semantic contract.
+- **ENG-Q911.** Success criterion имеет timeout там, где result не мгновенный.
+- **ENG-Q912.** Success criterion учитывает quality/freshness feedback, если feedback используется как evidence.
+- **ENG-Q913.** Stale feedback не доказывает успешность Command автоматически.
+- **ENG-Q914.** Device/request acceptance и фактическое достижение технологического результата являются разными states/evidence.
+- **ENG-Q915.** UI может показывать Accepted до final result.
+- **ENG-Q916.** Protocol ACK не означает Succeeded, если contract требует process feedback.
+- **ENG-Q917.** Timeout не всегда означает Failed; если physical outcome неизвестен, используется Uncertain.
+- **ENG-Q918.** Execution timeout и success-observation timeout различаются там, где protocol/Command semantics это позволяют.
+- **ENG-Q919.** Timeout policy задаётся Command Definition/Profile с допустимыми governed overrides.
+- **ENG-Q920.** UI объясняет, почему timeout классифицирован как Failed или Uncertain.
+- **ENG-Q921.** Uncertain является полноценным Command state, а не только текстом ошибки.
+- **ENG-Q922.** Uncertain применяется, когда Command могла физически выполниться, но confirmation/evidence потеряны.
+- **ENG-Q923.** При Uncertain UI предупреждает против слепого повторения.
+- **ENG-Q924.** При Uncertain UI предоставляет путь проверки actual equipment state.
+- **ENG-Q925.** Uncertain может позднее разрешиться в Succeeded/Failed при появлении достоверного feedback с сохранением всех transitions.
+
+### 11.6 Retry, idempotency, concurrency, cancellation, queueing, Edge и authority
+
+- **ENG-Q926.** Автоматический retry не разрешён для любой Command по умолчанию.
+- **ENG-Q927.** Command объявляет retry semantics.
+- **ENG-Q928.** Idempotent и non-idempotent Commands различаются.
+- **ENG-Q929.** Set-value action может быть idempotent, increment-like action может быть non-idempotent; окончательно определяет contract.
+- **ENG-Q930.** Automatic retry допустим только когда Command/transport semantics позволяют безопасное повторение.
+- **ENG-Q931.** Retry attempts принадлежат одной logical Invocation, но имеют отдельные execution attempt identities.
+- **ENG-Q932.** Каждый execution attempt виден в diagnostics/audit.
+- **ENG-Q933.** Public API поддерживает idempotency key для Command Invocation.
+- **ENG-Q934.** UI защищает от accidental double-submit.
+- **ENG-Q935.** Повторный request с тем же idempotency identity не создаёт две независимые физические Commands в пределах declared window/retention semantics.
+- **ENG-Q936.** Request idempotency и физическая idempotency action являются разными понятиями.
+- **ENG-Q937.** Commands имеют concurrency policy.
+- **ENG-Q938.** Неограниченное параллельное выполнение Commands одного ресурса не является default.
+- **ENG-Q939.** Command Definition может объявлять exclusive group/scope.
+- **ENG-Q940.** Новая Command может быть отклонена, пока conflicting Command in-flight, согласно policy.
+- **ENG-Q941.** Command может supersede предыдущую только если semantic contract это явно допускает.
+- **ENG-Q942.** Object context показывает in-flight Commands.
+- **ENG-Q943.** Concurrency scope может быть шире одного объекта, если Commands воздействуют на общий actuator/resource.
+- **ENG-Q944.** Не каждую Command можно отменить после dispatch.
+- **ENG-Q945.** Command объявляет cancellation capability.
+- **ENG-Q946.** Отмена ожидания в Dispatcher не означает физическую отмену уже отправленной action.
+- **ENG-Q947.** Protocol/device Abort моделируется как explicit capability/semantic operation, если поддерживается.
+- **ENG-Q948.** Offline target не получает delayed queued Command по умолчанию.
+- **ENG-Q949.** Deferred Command допускается только как явно объявленная safe semantics.
+- **ENG-Q950.** Deferred Command имеет validity window/expiry.
+- **ENG-Q951.** Перед deferred execution повторно проверяются authorization/preconditions/context.
+- **ENG-Q952.** Expired deferred Command не выполняется после позднего reconnect.
+- **ENG-Q953.** Edge может принимать local Commands offline согласно опубликованным offline auth/command policies.
+- **ENG-Q954.** Offline Edge использует опубликованную локальную Command Definition/version.
+- **ENG-Q955.** Full не ставит Command на disconnected Edge для выполнения после reconnect по умолчанию.
+- **ENG-Q956.** Специально поддерживаемая deferred remote Command имеет explicit semantics.
+- **ENG-Q957.** Offline Edge Command сохраняет local origin/identity/audit.
+- **ENG-Q958.** После reconnect Full принимает факты уже существующей Invocation, не создавая новую.
+- **ENG-Q959.** Actuator Command выполняется только authoritative executor соответствующего contour.
+- **ENG-Q960.** Desired placement само по себе не предоставляет command authority.
+- **ENG-Q961.** При uncertain authority handover actuator Commands ограничиваются/блокируются согласно safety policy.
+- **ENG-Q962.** UI явно объясняет blocking из-за uncertain execution authority.
+
+### 11.7 Rules, Scenarios, API, UI, history и operational context
+
+- **ENG-Q963.** Rule вызывает Semantic Command через общий Command API/Model.
+- **ENG-Q964.** Rule не может выполнять Adapter raw write вместо Command.
+- **ENG-Q965.** Rule Invocation имеет собственный origin principal/context.
+- **ENG-Q966.** Risk/authorization policy может различать human и automated Rule origin.
+- **ENG-Q967.** Rule не может автоматически удовлетворить interactive human confirmation, если нет специально опубликованного automated execution contract.
+- **ENG-Q968.** Command Definition объявляет допустимые initiator classes/policies.
+- **ENG-Q969.** Scenario вызывает Semantic Commands и не пишет устройство напрямую.
+- **ENG-Q970.** Scenario может orchestrate несколько Commands.
+- **ENG-Q971.** Failure одной Command обрабатывается explicit scenario policy, а не скрытым continuation.
+- **ENG-Q972.** Compensation Command моделируется явно, если сценарий требует compensating action.
+- **ENG-Q973.** External integration управляет modeled object только через Semantic Command.
+- **ENG-Q974.** Vendor HTTP interface не является исключением из Semantic Command Model.
+- **ENG-Q975.** Public API возвращает Command Invocation identity.
+- **ENG-Q976.** Public API позволяет читать lifecycle/result Invocation по identity.
+- **ENG-Q977.** API request timeout не доказывает, что physical Command не выполнилась.
+- **ENG-Q978.** API явно моделирует asynchronous/uncertain result.
+- **ENG-Q979.** Commands могут иметь разные UI presentations: button, setpoint, selector, contextual action и другие appropriate controls.
+- **ENG-Q980.** UI presentation не меняет Command execution semantics.
+- **ENG-Q981.** Одна Command может отображаться по-разному в Dashboard и object inspector.
+- **ENG-Q982.** Разные UI presentations ссылаются на одну Command Definition identity.
+- **ENG-Q983.** UI показывает unavailable/disabled reason.
+- **ENG-Q984.** UI различает no rights, false precondition, offline object, unavailable executor, uncertain authority, approval required, maintenance restriction и другие meaningful causes.
+- **ENG-Q985.** Object context предоставляет Command history.
+- **ENG-Q986.** Система предоставляет общий Command activity/history view/search в appropriate operational/audit context; точный UX уточняется в OPS.
+- **ENG-Q987.** Command history хранит arguments/result/origin согласно rights/sensitivity.
+- **ENG-Q988.** Command history immutable и не редактируется.
+- **ENG-Q989.** Historical Parameter correction не меняет Command facts.
+- **ENG-Q990.** Command arguments могут иметь sensitivity classification.
+- **ENG-Q991.** Audit/history поддерживает controlled display/redaction sensitive arguments без потери integrity evidence.
+- **ENG-Q992.** Secrets обычно не передаются как ordinary Command arguments; используются secret references/secured operation semantics.
+- **ENG-Q993.** Maintenance state/context может ограничивать Commands.
+- **ENG-Q994.** Maintenance context не даёт автоматического разрешения на любые risky Commands.
+- **ENG-Q995.** Manual-control ownership может ограничивать automated Commands.
+- **ENG-Q996.** Command Model проверяет effective control context.
+- **ENG-Q997.** UI показывает текущего owner/control context там, где это влияет на доступность Command.
+- **ENG-Q998.** Alarm может предоставлять contextual Commands.
+- **ENG-Q999.** Alarm context не создаёт копию Command Definition.
+- **ENG-Q1000.** Command Invocation из Alarm context сохраняет link на alarm episode/context.
+- **ENG-Q1001.** Закрытие Alarm не означает автоматически успешность Command.
+- **ENG-Q1002.** Command Invocation может быть связана с Incident response.
+- **ENG-Q1003.** Incident policy может добавлять особые approval/reason requirements.
+- **ENG-Q1004.** Link Invocation↔Incident сохраняется как provenance/context.
+
+### 11.8 Diagnostics, test/simulation, versioning, impact, templates и composite Commands
+
+- **ENG-Q1005.** Engineering показывает technical implementation binding Command в соответствующем technical view.
+- **ENG-Q1006.** Technical view показывает Adapter/Profile/Connection/executor provenance.
+- **ENG-Q1007.** Raw technical details могут быть скрыты от operator и доступны engineer согласно rights.
+- **ENG-Q1008.** Engineering предоставляет commissioning/test flow Command binding до production use.
+- **ENG-Q1009.** Test action, способная изменить equipment, всё равно является реальной Command.
+- **ENG-Q1010.** Название Test не даёт authorization/safety bypass actuator action.
+- **ENG-Q1011.** Command можно проверять against simulator/test context без physical equipment.
+- **ENG-Q1012.** Simulated Invocation визуально и семантически отличима от real Invocation.
+- **ENG-Q1013.** Simulation history не смешивается с production command history как факты реального воздействия.
+- **ENG-Q1014.** Shadow mode может проверить, была бы Command разрешена, без выполнения.
+- **ENG-Q1015.** Shadow evaluation может проверять rights, preconditions, risk, selected implementation и executor readiness.
+- **ENG-Q1016.** Shadow result не гарантирует допустимость Command в будущем, потому что context может измениться.
+- **ENG-Q1017.** Published Command Definition имеет version provenance.
+- **ENG-Q1018.** Изменение argument schema создаёт новую version state.
+- **ENG-Q1019.** Изменения risk, preconditions, success criterion и execution semantics versioned.
+- **ENG-Q1020.** Historical Invocation интерпретируется по Command Definition version, действовавшей при execution.
+- **ENG-Q1021.** Изменение display label обычно compatible и не меняет identity.
+- **ENG-Q1022.** Удаление/изменение argument анализируется на compatibility с существующими callers; breaking changes требуют migration.
+- **ENG-Q1023.** Добавление нового required argument является breaking для существующих callers без миграции.
+- **ENG-Q1024.** Добавление optional argument с default может быть compatible после анализа.
+- **ENG-Q1025.** Изменение physical quantity argument, например Pressure→Temperature, breaking.
+- **ENG-Q1026.** Совместимая unit change, например bar→kPa, может быть compatible.
+- **ENG-Q1027.** Изменение success criterion анализирует impact на operational consumers/scenarios.
+- **ENG-Q1028.** Изменение risk class анализирует permissions и automated usages.
+- **ENG-Q1029.** Impact analysis Command показывает Dashboard usages.
+- **ENG-Q1030.** Impact analysis показывает Rules usages.
+- **ENG-Q1031.** Impact analysis показывает Scenario usages.
+- **ENG-Q1032.** Impact analysis показывает API/integration contracts/usages.
+- **ENG-Q1033.** Impact analysis показывает Alarm contextual actions.
+- **ENG-Q1034.** Impact analysis показывает specialized-service usages.
+- **ENG-Q1035.** Object Type может определять Semantic Command contract.
+- **ENG-Q1036.** Device Profile предоставляет technical implementation binding Command.
+- **ENG-Q1037.** Object Template может задавать local command policy/default presentation/allowed constraints.
+- **ENG-Q1038.** Engineering показывает provenance semantic definition, template policy и technical binding.
+- **ENG-Q1039.** Profile update не может silently заменить active command technical binding; update проходит governed lifecycle.
+- **ENG-Q1040.** Template update risk/precondition changes проходят обычный preview/conflict/impact lifecycle.
+- **ENG-Q1041.** Semantic Commands допустимы у logical/digital managed objects.
+- **ENG-Q1042.** Command Model применяется ко всем managed resource state changes, не только physical actuators; actuator-specific fencing является усиленным подслучаем.
+- **ENG-Q1043.** Restart VM/service modeled as managed resource action также выполняется как Semantic Command.
+- **ENG-Q1044.** Одна Semantic Command может представлять compound equipment action.
+- **ENG-Q1045.** Compound Command может реализовываться несколькими protocol operations.
+- **ENG-Q1046.** Пользователю не обязательно видеть каждую low-level write как отдельную Command.
+- **ENG-Q1047.** Low-level execution attempts compound Command остаются диагностически traceable.
+
+### 11.9 Long-running results, failure taxonomy, storms, bulk/schedule, historical context и feedback routing
+
+- **ENG-Q1048.** Command может быть long-running и выполняться минуты/часы.
+- **ENG-Q1049.** Browser session не владеет lifecycle long-running Command.
+- **ENG-Q1050.** Пользователь может закрыть страницу и позже открыть status/result Command.
+- **ENG-Q1051.** Long-running Command может публиковать progress, если implementation знает достоверный progress.
+- **ENG-Q1052.** Нельзя показывать вымышленные проценты progress, если implementation их не предоставляет.
+- **ENG-Q1053.** Command result может содержать typed output payload.
+- **ENG-Q1054.** Structured result имеет declared schema.
+- **ENG-Q1055.** Normalized result/failure category и raw technical error text являются разными слоями.
+- **ENG-Q1056.** Adapter/package может добавлять protocol-specific diagnostics result/failure.
+- **ENG-Q1057.** Failure taxonomy различает validation, authorization, precondition, routing/executor, transport, device rejection, success-criterion failure и timeout/uncertainty.
+- **ENG-Q1058.** Access denied не отображается как device failure.
+- **ENG-Q1059.** Device rejection не отображается как network timeout.
+- **ENG-Q1060.** UI даёт normalized explanation и technical drill-down по правам.
+- **ENG-Q1061.** Command Model включает protection от command storms.
+- **ENG-Q1062.** Rate limits могут задаваться per principal/command/object/scope.
+- **ENG-Q1063.** Rate limiting не заменяет semantic concurrency/safety restrictions.
+- **ENG-Q1064.** Storm protection создаёт appropriate diagnostic/security/operational indication.
+- **ENG-Q1065.** Bulk Commands поддерживаются там, где semantic action допускает применение к множеству объектов.
+- **ENG-Q1066.** Bulk user operation сохраняет individual target/result Invocation identities, даже если UX запуска единый.
+- **ENG-Q1067.** Перед bulk Command показывается affected-target preview.
+- **ENG-Q1068.** До запуска показывается per-target eligibility.
+- **ENG-Q1069.** Можно выполнить только eligible subset, если пользователь явно понимает partial scope.
+- **ENG-Q1070.** Bulk result показывает success/fail/uncertain per target.
+- **ENG-Q1071.** Частичный/uncertain bulk result нельзя маскировать общим Success.
+- **ENG-Q1072.** Scheduled Command задаётся через explicit Schedule/Scenario/Automation semantics, а не скрытым date field кнопки.
+- **ENG-Q1073.** Scheduled execution повторно проходит Command Model в момент фактического execution.
+- **ENG-Q1074.** Rights/conditions для scheduled execution проверяются по policy момента исполнения, а не только при создании schedule.
+- **ENG-Q1075.** Historical/time-travel UI не позволяет live Command execution по умолчанию.
+- **ENG-Q1076.** Для live control требуется явный выход/переход из historical context.
+- **ENG-Q1077.** Command availability при stale UI state определяется explicit policy; stale context учитывается в preconditions/risk.
+- **ENG-Q1078.** High-risk Command может требовать fresh-state prerequisites.
+- **ENG-Q1079.** UI заранее объясняет недостаточную freshness для Command.
+- **ENG-Q1080.** Telemetry active source и Command executor/Connection не обязаны совпадать.
+- **ENG-Q1081.** Command Definition отдельно определяет execution route/role semantics.
+- **ENG-Q1082.** Success feedback Parameter может приходить из другого source/Connection.
+- **ENG-Q1083.** Success evidence сохраняет provenance фактического feedback source.
+- **ENG-Q1084.** Если Command dispatch известен, но required success feedback недоступен, result не обязательно Failed; часто это Uncertain по contract.
+- **ENG-Q1085.** Command может иметь fallback success evidence только если оно явно declared.
+- **ENG-Q1086.** Значимые Command lifecycle transitions создают operational/audit facts.
+- **ENG-Q1087.** Не каждая внутренняя technical stage обязана создавать отдельный общий Event; event emission задаётся policy, а details остаются в command history/audit.
+- **ENG-Q1088.** Command failure может быть source Notification/Alarm только по configured policy, а не автоматически для каждой ошибки.
+- **ENG-Q1089.** High-risk Uncertain может требовать escalation policy.
+
+### 11.10 Manual/emergency/break-glass/licensing, editor, validation и impact
+
+- **ENG-Q1090.** Command Invocation и persistent Manual Control ownership являются разными concepts.
+- **ENG-Q1091.** Обычный Start/Stop сам по себе не переводит объект в persistent manual mode.
+- **ENG-Q1092.** Вход/выход Manual Control mode является отдельной governed operation там, где model это поддерживает.
+- **ENG-Q1093.** Commands внутри manual mode продолжают проходить Command Model.
+- **ENG-Q1094.** Emergency operation не образует параллельную command system; она остаётся Command с emergency policy/classification.
+- **ENG-Q1095.** Emergency policy может сокращать confirmation latency, если задержка опаснее, но только по заранее опубликованным правилам.
+- **ENG-Q1096.** Emergency Command не отключает audit.
+- **ENG-Q1097.** Emergency/safety action существующего operational contour не блокируется коммерческой лицензией.
+- **ENG-Q1098.** Break-glass access может временно предоставить Command rights согласно security policy.
+- **ENG-Q1099.** Break-glass usage явно visible/audited/reviewable.
+- **ENG-Q1100.** Break-glass не является постоянным bypass hard preconditions/interlocks.
+- **ENG-Q1101.** License expiry не может внезапно отключить critical Commands существующего contour.
+- **ENG-Q1102.** License может ограничивать expansion/new advanced command capabilities, если это не ослабляет existing safety/security contour.
+- **ENG-Q1103.** Engineering предоставляет Command section/editor в Type/Profile/Object context.
+- **ENG-Q1104.** Semantic Command definition и technical execution binding визуально разделены.
+- **ENG-Q1105.** Command editor структурирует semantic identity, arguments, risk, preconditions, rights, confirmation, success, retry/idempotency и binding по секциям, а не одной гигантской форме.
+- **ENG-Q1106.** До Publish доступен static preview Command contract.
+- **ENG-Q1107.** Доступен preview effective command policy на конкретном object/context.
+- **ENG-Q1108.** Доступна permission/policy simulation «как Command выглядит для указанной role/principal context» без выдачи реальных прав.
+- **ENG-Q1109.** Policy preview/simulation не изменяет actual rights.
+- **ENG-Q1110.** Full Command validation проверяет argument schema.
+- **ENG-Q1111.** Full Command validation проверяет units/ranges.
+- **ENG-Q1112.** Full Command validation проверяет precondition references.
+- **ENG-Q1113.** Full Command validation обнаруживает invalid/cyclic condition dependencies там, где применимо.
+- **ENG-Q1114.** Full Command validation проверяет rights/policies consistency.
+- **ENG-Q1115.** Full Command validation проверяет risk requirements.
+- **ENG-Q1116.** Full Command validation проверяет technical binding.
+- **ENG-Q1117.** Full Command validation проверяет Adapter capabilities.
+- **ENG-Q1118.** Full Command validation проверяет Connection/executor placement.
+- **ENG-Q1119.** Full Command validation проверяет success feedback references.
+- **ENG-Q1120.** Full Command validation проверяет timeout/retry/idempotency consistency.
+- **ENG-Q1121.** Full Command validation проверяет Rule/Scenario/API consumer compatibility.
+- **ENG-Q1122.** Full Command validation проверяет authority requirements actuator contour.
+- **ENG-Q1123.** Command impact analysis показывает direct consumers.
+- **ENG-Q1124.** Command impact analysis показывает transitive consumers.
+- **ENG-Q1125.** Изменение risk class показывает automated callers/Rules, которые потеряют eligibility/rights.
+- **ENG-Q1126.** Изменение arguments schema показывает affected Dashboard controls/API clients/templates и другие callers.
+- **ENG-Q1127.** Удаление Command требует resolution governed references до Publish.
+
+### 11.11 Deletion, observed/physical split, templates, human factors, explainability и no-bypass invariant
+
+- **ENG-Q1128.** Delete Command Definition в change set является planned removal.
+- **ENG-Q1129.** Active Command остаётся доступной по active config до publication removal.
+- **ENG-Q1130.** Publication removal может запретить новые Invocations, но не уничтожает in-flight Invocation; её versioned contract и lifecycle сохраняются.
+- **ENG-Q1131.** Historical command semantics сохраняются после удаления Definition/package/profile через semantic retention.
+- **ENG-Q1132.** Observed object может иметь Commands без individual promotion только по заранее опубликованному source/profile semantic command contract и rights policy.
+- **ENG-Q1133.** Наличие technical write capability само по себе не делает observed object controllable.
+- **ENG-Q1134.** Promotion observed→managed не открывает raw writes автоматически как Commands.
+- **ENG-Q1135.** Functional-position Command обычно принадлежит functional semantic identity, когда действие относится к функции оборудования.
+- **ENG-Q1136.** Physical-unit-specific Commands допустимы для diagnostics/calibration/device-specific actions.
+- **ENG-Q1137.** При replacement physical unit functional Command identity сохраняется, если функция/semantic contract не изменились.
+- **ENG-Q1138.** Technical profile/binding Command может измениться при replacement через governed migration.
+- **ENG-Q1139.** Command Definitions могут приходить из Object Type/Template.
+- **ENG-Q1140.** Local overrides Command допускаются только в declared override points/policies.
+- **ENG-Q1141.** UI показывает inherited/overridden risk, preconditions и binding provenance.
+- **ENG-Q1142.** Template update Command policy проходит тот же preview/conflict/update lifecycle.
+- **ENG-Q1143.** Dangerous Commands визуально различимы не только цветом.
+- **ENG-Q1144.** Human-error prevention размещения/различимости critical controls является functional requirement; точная геометрия определяется Web/design layer.
+- **ENG-Q1145.** Dangerous control явно показывает target identity, особенно при похожих объектах.
+- **ENG-Q1146.** Bulk control особо явно показывает target scope.
+- **ENG-Q1147.** После user action UI немедленно показывает создание/acceptance Invocation state.
+- **ENG-Q1148.** UI feedback предотвращает повторный click из-за неопределённости принятия request.
+- **ENG-Q1149.** UI может optimistic показать Requested, но не Succeeded до authoritative evidence.
+- **ENG-Q1150.** Для значимых Commands доступна explainability trace «Почему?».
+- **ENG-Q1151.** Explainability показывает, почему Command была разрешена/запрещена.
+- **ENG-Q1152.** Explainability показывает effective risk policy.
+- **ENG-Q1153.** Explainability показывает evaluated preconditions.
+- **ENG-Q1154.** Explainability показывает selected executor/authority.
+- **ENG-Q1155.** Explainability показывает selected implementation binding.
+- **ENG-Q1156.** Explainability показывает, почему result классифицирован Success/Fail/Uncertain.
+- **ENG-Q1157.** Explainability показывает execution attempts/retries.
+- **ENG-Q1158.** Любое намерение изменить state modeled managed resource проходит Command Model независимо от initiator.
+- **ENG-Q1159.** UI state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1160.** Rules state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1161.** Scenarios state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1162.** Public API state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1163.** Integrations state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1164.** VMS/ACS/ТОиР и другие specialized services используют Command Model, когда действие меняет state modeled managed resource.
+- **ENG-Q1165.** Mobile state-changing actions modeled managed resource используют Command Model.
+- **ENG-Q1166.** Command Model не применяется к операциям, которые действительно не являются управлением modeled resource, например read/discovery или разрешённая non-actuator diagnostic interaction согласно capability contract.
+- **ENG-Q1167.** Нельзя обойти Command Model, переименовав write в integration action, service operation или другое техническое название.
+
+## 12. Принятые Functional Requirements — `ENG-FR001–ENG-FR217`
 
 - **ENG-FR001.** Engineering является специализированным workspace внутри общего Web Shell Dispatcher, а не отдельным приложением.
 - **ENG-FR002.** Engineering работает с общей объектной и конфигурационной моделью Dispatcher; специализированные сервисы не получают параллельный механизм сохранения managed configuration.
@@ -1074,44 +1486,116 @@
 - **ENG-FR148.** Full Parameter validation охватывает type, units, sources, placement, resources, freshness, calculations, consumers, security и migration compatibility.
 - **ENG-FR149.** Configuration lifecycle state Parameter и runtime operational state отображаются раздельно и одновременно.
 - **ENG-FR150.** Effective Parameter value концептуально строится через explainable pipeline от source fact до effective semantic value; неиспользуемые stages могут отсутствовать.
+- **ENG-FR151.** Semantic Command имеет устойчивую identity, versioned definition и отдельные Invocation identities.
+- **ENG-FR152.** Semantic Command описывает намерение изменить managed resource, а техническая protocol operation является implementation detail.
+- **ENG-FR153.** Command Definition и Command Invocation являются разными сущностями: первая — managed configuration, вторая — operational transaction/fact.
+- **ENG-FR154.** Command arguments используют typed schema, units, constraints и stable machine semantics.
+- **ENG-FR155.** Operational setpoint выполняется через Command Model даже когда UI представляет его как editable value.
+- **ENG-FR156.** Durable configuration setting и runtime operational setpoint определяются предметной семантикой, а не способом protocol write.
+- **ENG-FR157.** Каждая Invocation сохраняет target, command version, arguments, initiator, origin и execution provenance.
+- **ENG-FR158.** Command risk class участвует в confirmation, authentication, approval, rights и audit policies.
+- **ENG-FR159.** Effective risk может усиливаться object/site/organization/context policies и не понижается ниже защищённого minimum без явно разрешённого governed override.
+- **ENG-FR160.** Command preconditions имеют typed semantic references и authoritative evaluation непосредственно перед исполнением.
+- **ENG-FR161.** Недоступная Command по возможности остаётся объяснимой: UI сообщает причину запрета вместо безусловного скрытия.
+- **ENG-FR162.** Hard interlock нельзя обойти обычным confirmation; любой допустимый override является отдельной усиленной semantic operation.
+- **ENG-FR163.** Права просмотра объекта, редактирования configuration, выполнения Command, approval и diagnostic write являются независимыми capabilities.
+- **ENG-FR164.** Confirmation UX зависит от risk/context и для значимых Commands показывает target, arguments и критический operational context.
+- **ENG-FR165.** Reauthentication, MFA и second-person approval являются policy-controlled слоями Command authorization.
+- **ENG-FR166.** Approval относится к конкретной Invocation/arguments/context и становится недействительным после существенного изменения утверждённого действия.
+- **ENG-FR167.** Command может требовать structured reason/justification согласно risk/policy.
+- **ENG-FR168.** Semantic Command имеет отдельно управляемый technical implementation binding через Device Profile/Adapter/Connection.
+- **ENG-FR169.** Generic network/raw capability не предоставляет managed actuator authority.
+- **ENG-FR170.** Raw Diagnostic Command является отдельным command contour с отдельными правами, reason, audit и service/diagnostic restrictions.
+- **ENG-FR171.** Command arguments валидируются по semantic type, units, command limits и effective site/device constraints.
+- **ENG-FR172.** Command Invocation сохраняет достаточную evidence о проверенных preconditions для последующего объяснения решения.
+- **ENG-FR173.** Command lifecycle различает request, authorization, dispatch, execution evidence и конечный result; отсутствие доказательств не заменяется вымышленным Success.
+- **ENG-FR174.** Success определяется объявленным success criterion, а не самим фактом отправки запроса.
+- **ENG-FR175.** Protocol acknowledgement и фактический технологический результат являются различными evidence levels.
+- **ENG-FR176.** Timeout может приводить к Uncertain, если невозможно доказать, выполнилось physical action или нет.
+- **ENG-FR177.** Uncertain является полноценным состоянием Command и может позднее разрешиться при появлении достоверного feedback без переписывания history.
+- **ENG-FR178.** Автоматический retry разрешён только для Command/transport semantics, где это явно безопасно; logical Invocation и individual attempts сохраняются отдельно.
+- **ENG-FR179.** Request idempotency и физическая idempotency действия являются разными понятиями.
+- **ENG-FR180.** Command concurrency регулируется explicit policy/exclusive scopes и не сводится к бесконтрольному параллельному execution.
+- **ENG-FR181.** Cancellation capability является частью Command contract; прекращение ожидания Dispatcher не означает отмену физически уже отправленного действия.
+- **ENG-FR182.** Offline target не создаёт скрытую delayed queue Command по умолчанию.
+- **ENG-FR183.** Deferred Command поддерживается только как явно объявленная semantics с validity, revalidation и expiry.
+- **ENG-FR184.** Edge выполняет offline Commands по опубликованному локальному contract и после reconnect синхронизирует факты существующей Invocation, а не создаёт новую.
+- **ENG-FR185.** Actuator Command выполняется только authoritative executor; desired placement само по себе execution authority не предоставляет.
+- **ENG-FR186.** Rule, Scenario, API, integration, mobile и specialized service используют тот же Semantic Command Model.
+- **ENG-FR187.** Automated initiator не может автоматически удовлетворить human-confirmation/approval policy без специально опубликованного automated execution contract.
+- **ENG-FR188.** Public Command API возвращает Invocation identity и поддерживает asynchronous/uncertain lifecycle.
+- **ENG-FR189.** Различные UI presentations Command — button/setpoint/selector/context action — не создают различные execution semantics.
+- **ENG-FR190.** Command history является immutable operational record с arguments, origin, lifecycle и result согласно rights/sensitivity.
+- **ENG-FR191.** Command Model учитывает maintenance, manual-control ownership и другие operational exception contexts.
+- **ENG-FR192.** Contextual Command из Alarm/Incident сохраняет связь с соответствующим operational context, не создавая новый Command Definition.
+- **ENG-FR193.** Commissioning/test action, способная изменить equipment, остаётся реальной Command и не получает safety bypass из-за названия Test.
+- **ENG-FR194.** Simulation/shadow execution явно отделены от production Invocation и не создают ложных фактов физического воздействия.
+- **ENG-FR195.** Command Definition versioning охватывает arguments, risk, preconditions, success, retry и technical-binding semantics.
+- **ENG-FR196.** Command migration выполняет compatibility/consumer impact analysis для Rules, Scenarios, Dashboards, APIs и specialized services.
+- **ENG-FR197.** Semantic Command Model применяется к управляемым physical и digital resources; actuator-specific authority является усиленным подмножеством общего command contract.
+- **ENG-FR198.** Composite Command может скрывать low-level technical sequence от обычного пользователя, сохраняя diagnostic traceability attempts.
+- **ENG-FR199.** Long-running Command lifecycle не принадлежит browser session и остаётся доступным после ухода пользователя со страницы.
+- **ENG-FR200.** Command failure taxonomy различает validation, authorization, precondition, routing, transport, device rejection, success-criterion failure и uncertainty.
+- **ENG-FR201.** Command storm protection и rate policies дополняют, но не заменяют semantic concurrency/safety restrictions.
+- **ENG-FR202.** Bulk Command сохраняет per-target Invocation/result semantics и не маскирует partial или uncertain result общим Success.
+- **ENG-FR203.** Scheduled action повторно проходит Command Model в момент реального исполнения.
+- **ENG-FR204.** Historical/time-travel context блокирует accidental live Command execution до явного возврата к live context.
+- **ENG-FR205.** Command availability может требовать достаточной freshness/quality operational context, особенно для high-risk actions.
+- **ENG-FR206.** Telemetry source и Command execution route являются независимыми relationships; success feedback может приходить из отдельного source.
+- **ENG-FR207.** Command Definition, technical implementation, evaluated policies, executor и result должны быть explainable через Engineering/diagnostic drill-down.
+- **ENG-FR208.** Emergency/break-glass execution остаётся внутри Command Model, не отключает audit и использует заранее опубликованные усиленные policies.
+- **ENG-FR209.** Commercial licensing не блокирует safety/emergency Commands существующего operational contour.
+- **ENG-FR210.** Engineering предоставляет отдельный Command editor, где semantic contract и technical implementation binding визуально разделены.
+- **ENG-FR211.** Command validation охватывает schema, units, limits, preconditions, rights, risk, Adapter/Connection/executor, success, retry/idempotency и authority constraints.
+- **ENG-FR212.** Удаление Command Definition прекращает возможность новых Invocation после publication, но не уничтожает in-flight или historical Invocation semantics.
+- **ENG-FR213.** Observed object получает control capability только через заранее определённый semantic command/source/profile policy; наличие технического write interface недостаточно.
+- **ENG-FR214.** Functional-position Commands сохраняют semantic continuity при replacement physical unit, когда назначение объекта не изменилось.
+- **ENG-FR215.** Human-error prevention для command controls является functional requirement: dangerous actions, targets и bulk scope должны быть однозначно различимы не только цветом.
+- **ENG-FR216.** UI может оптимистично показать создание Requested Invocation, но не должен показывать Succeeded до authoritative evidence.
+- **ENG-FR217.** Любое намерение изменить state modeled managed resource проходит Command Model независимо от инициатора или используемого внешнего protocol.
 
-## 12. Functional model после `ENG-Q790`
+## 13. Functional model после `ENG-Q1167`
 
-### 12.1 Connection / execution path
+### 13.1 Connection / execution path
 
 - **Adapter** — installed software contribution/capability; **Connection** — managed configuration; **Endpoint** — typed addressable resource side when it has independent semantics.
 - Connection configuration, software deployment, activation и runtime health остаются разными states.
 - Desired execution placement не равно фактическому executor/authority. Для actuator-capable contour действует один authoritative executor, а handover имеет явный lifecycle и recovery semantics.
 - Secrets/certificates подключаются references, а diagnostic connection test не публикует draft configuration.
 
-### 12.2 Parameter semantic pipeline
+### 13.2 Parameter semantic pipeline
 
 Parameter имеет stable identity и отдельные layers definition/source/runtime. Effective value концептуально может проходить цепочку:
 
 `source fact/raw → decode → normalization/calibration → source-specific semantic value → active-source selection → operational exception/substitution → effective semantic value → consumers`.
 
-Не каждый Parameter обязан использовать каждый layer, но применённые transformations должны оставаться typed, versioned и explainable.
+Не каждый Parameter обязан использовать каждый layer, но применённые transformations остаются typed, versioned и explainable.
 
-### 12.3 Data trust
+### 13.3 Data trust and history continuity
 
-Value quality, time quality, freshness, connection state и provenance не сливаются в один флаг. Last-known value сохраняется, но не выдаётся за fresh sample. Late data, backfill, interpolation и historical correction имеют разные semantics.
+Value quality, time quality, freshness, connection state и provenance не сливаются в один флаг. Last-known value сохраняется, но не выдаётся за fresh sample. Late data, backfill, interpolation и historical correction имеют разные semantics. Parameter/source identities, semantic versions и configuration lineage позволяют интерпретировать history после profile changes, Edge offline, source failover, corrections и package uninstall.
 
-### 12.4 History continuity
+### 13.4 Semantic Command invariant
 
-Parameter identity, source provenance, semantic/unit versions и configuration lineage позволяют интерпретировать history после profile changes, Edge offline, source failover, corrections и package uninstall. Historical correction не переписывает original facts, audit, commands или already-generated immutable evidence.
+Любое намерение изменить state modeled managed resource проходит **Semantic Command Model** независимо от инициатора: UI, Rule, Scenario, API, integration, mobile или specialized service. Technical protocol write/vendor call является implementation detail и не предоставляет bypass. Raw actuator write возможен только как internal executor authorized Semantic Command либо как отдельная усиленная Raw Diagnostic Command.
 
-### 12.5 Operational control boundary
+### 13.5 Command lifecycle and evidence
 
-Writable-looking Parameter/setpoint не предоставляет direct equipment write. Намерение изменить managed equipment выполняется через Semantic Command Model; raw diagnostic write остаётся отдельным усиленным diagnostic command contour.
+Command Definition и Command Invocation разделены. Invocation сохраняет versioned semantic contract, arguments, initiator/origin, evaluated policy evidence, selected executor/implementation, individual attempts и lifecycle. `Requested`, `Accepted`, `Dispatched`, `Succeeded`, `Failed` и `Uncertain` не подменяют друг друга; success определяется declared evidence criterion, а timeout при неизвестном physical outcome может завершаться `Uncertain`.
 
-## 13. Checkpoint traceability
+### 13.6 Safety, authority and automation
+
+Risk, preconditions/interlocks, confirmation, reauthentication/MFA, second-person approval, execution authority, retry/idempotency и concurrency являются явными policy layers. Automated initiators не получают human authority автоматически. Edge offline выполняет только опубликованный local command contract, а desired placement не равно actuator authority.
+
+## 14. Checkpoint traceability
 
 | Checkpoint | Диапазон | Содержание | Git |
 |---|---|---|---|
 | `ENG-CP01` | `ENG-Q001–ENG-Q110`, `ENG-FR001–ENG-FR025` | Engineering foundation + Objects & Structure | `688392edb17ddce6e4d3874ff54344aacc2033b0` |
 | `ENG-CP02` | добавлены `ENG-Q111–ENG-Q250`, `ENG-FR026–ENG-FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `fa38f437a90f98cdb4091a25187eec67f2213e6a` |
-| `ENG-CP03` | добавлены `ENG-Q251–ENG-Q790`, `ENG-FR059–ENG-FR150` | Connections / execution placement + complete Parameter/value pipeline | `READY TO COMMIT` |
+| `ENG-CP03` | добавлены `ENG-Q251–ENG-Q790`, `ENG-FR059–ENG-FR150` | Connections / execution placement + complete Parameter/value pipeline | `45756985f305ac0e952319d2b399262726beb964` |
+| `ENG-CP04` | добавлены `ENG-Q791–ENG-Q1167`, `ENG-FR151–ENG-FR217` | Complete Semantic Command Model | `READY TO COMMIT` |
 
-## 14. Точка продолжения
+## 15. Точка продолжения
 
-Продолжить с `ENG-Q791` и подробно определить **Semantic Commands**: command definitions, arguments, risk, preconditions/interlocks, confirmations/approvals, execution authority, timeout/uncertain results, idempotency/retry, concurrency, feedback/success criteria, offline Edge policy, diagnostics и integration with Rules/API/UI. Git checkpoint выполнять автоматически по `../ROADMAP.md`.
+Продолжить с `ENG-Q1168` и закрыть **Discovery proposal / Observed / Promotion / Import**: authoritative source identity/incarnation, proposal review, matching/collisions, merge/rebind/split corrections, promotion ownership, bulk discovery handling, disappeared/reappeared entities и strict import-to-draft semantics. Затем перейти к full Validation / Impact / Approval / Publish / Deploy / Activate / Edge lifecycle. Git checkpoint выполнять автоматически по `../ROADMAP.md`.

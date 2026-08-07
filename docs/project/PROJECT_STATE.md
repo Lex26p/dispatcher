@@ -3,7 +3,7 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA перед этим пакетом:** `fa38f437a90f98cdb4091a25187eec67f2213e6a`.
+**Последний подтверждённый SHA перед этим пакетом:** `45756985f305ac0e952319d2b399262726beb964`.
 
 ## 1. Завершённый Product Concept
 
@@ -26,33 +26,33 @@ Functional Specification определяет наблюдаемое повед�
 
 **Статус:** `IN PROGRESS`.
 
-Принято и подготовлено к `ENG-CP03`:
+Принято и подготовлено к `ENG-CP04`:
 
-- `ENG-Q001–ENG-Q790` без намеренных пропусков;
-- `ENG-FR001–ENG-FR150`;
+- `ENG-Q001–ENG-Q1167` без намеренных пропусков;
+- `ENG-FR001–ENG-FR217`;
 - Engineering workspace/change-set/object foundation;
-- Types / Device Profiles / Object Templates и их lifecycle/migrations;
+- Types / Device Profiles / Object Templates и lifecycle/migrations;
 - Connections / Adapters / Endpoints / Credentials / execution placement;
-- connection testing/runtime/deploy/authority separation;
-- полный Parameter semantic pipeline от source fact до effective value;
-- types/quantities/units, source bindings, acquisition, timestamps, provenance, quality/freshness;
-- normalization/calibration/limits, historization/late data/gaps/deadbands/retention;
-- multiple sources, manual substitution, calculated/aggregate/counter semantics;
-- Parameter bulk engineering, observed/runtime diagnostics, commissioning, permissions, scale, validation и impact.
+- complete Parameter/value/source/quality/freshness/history/substitution model;
+- complete Semantic Command Model: identity, typed arguments, risk, preconditions/interlocks, rights, confirmations, approvals, technical binding;
+- invocation lifecycle, evidence-based success, timeout/uncertainty, retries/idempotency, concurrency/cancellation/deferred execution;
+- Full/Edge authority, offline execution, Rules/Scenarios/API/UI/service origins, diagnostics/simulation, bulk/scheduled/emergency/break-glass, versioning/impact;
+- no-bypass invariant for any state-changing action of a modeled managed resource.
 
 Checkpoint history:
 
 - `ENG-CP01` — `688392edb17ddce6e4d3874ff54344aacc2033b0`;
 - `ENG-CP02` — `fa38f437a90f98cdb4091a25187eec67f2213e6a`;
-- `ENG-CP03` добавляет `ENG-Q251–ENG-Q790` и `ENG-FR059–ENG-FR150` и ожидает commit/push.
+- `ENG-CP03` — `45756985f305ac0e952319d2b399262726beb964`;
+- `ENG-CP04` добавляет `ENG-Q791–ENG-Q1167` и `ENG-FR151–ENG-FR217` и ожидает commit/push.
 
 ## 4. Следующая точка продолжения
 
-После подтверждения SHA `ENG-CP03` продолжить с:
+После подтверждения SHA `ENG-CP04` продолжить с:
 
-> `ENG-Q791...` — Semantic Commands: definitions, arguments, risk, safety/preconditions, confirmations/approvals, execution lifecycle, feedback/success criteria, timeout/uncertainty, idempotency/retry, concurrency, Edge/offline policy и diagnostics.
+> `ENG-Q1168...` — Discovery proposal / Observed / Promotion / Import: source identity/incarnation, proposal review/matching, correction/rebind/split, promotion ownership, bulk discovery handling и strict import-to-draft semantics.
 
-Далее закрыть оставшиеся Engineering-блоки по `ROADMAP.md`.
+Далее закрыть full Validation / Impact / Approval / Publish / Deploy / Activate / Edge и остальные Engineering blocks по `ROADMAP.md`.
 
 ## 5. Checkpoint discipline
 
