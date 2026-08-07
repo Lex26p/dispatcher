@@ -1,9 +1,9 @@
 # Реестр продуктовых решений «Диспетчера»
 
 **Статус:** промежуточная фиксация принятых продуктовых решений.  
-**Редакция:** 4.  
+**Редакция:** 6.  
 **Дата:** 7 августа 2026 года.  
-**Охват:** решения от `PRD-Q001` через `PRD-Q690`, включая заменяющие решения с суффиксами `R` и `N`, уточнения первой независимой проверки и точечные решения второй проверки.
+**Охват:** решения от `PRD-Q001` через `PRD-Q784`, включая действующие заменяющие решения с суффиксами `R` и `N`. Три независимые сквозные проверки общей концепции завершены; их принятые результаты встроены непосредственно в реестр.
 
 Решения со знаком `*` приняты по рекомендованному варианту, но затем уточнены прямыми комментариями пользователя. Текст уже содержит итоговую формулировку.
 
@@ -873,3 +873,123 @@
 | `PRD-Q688` | B | Licensing metric для dynamic/ephemeral resources учитывает их специфику и может основываться, например, на concurrently observed, concurrently managed, configured/promoted или явно определённой категории; метрика должна быть понятной и не превращаться в набор скрытых micro-limits. |
 | `PRD-Q689` | B | Dynamic license exceed не выключает уже работающий visibility baseline: система продолжает безопасное наблюдение, показывает exceed и ограничивает только разрешённое коммерческой policy расширение. |
 | `PRD-Q690` | B | Mandatory safety visibility не равна полной лицензированной management functionality; это разделение предотвращает и эксплуатационные blind spots, и скрытый обход коммерческой модели. |
+
+## Execution authority и recovery configuration
+
+| ID | Вариант | Принятое решение |
+|---|---:|---|
+| `PRD-Q691` | B | Новый authoritative executor не активируется, пока нет достаточного основания считать прежний authority утратившим возможность воздействия на тот же actuator; недоступность прежнего узла сама по себе недостаточна. |
+| `PRD-Q692` | B | Потеря связи Full↔Edge не означает потерю execution authority Edge: автономный Edge может продолжать опубликованный исполнительный контур. |
+| `PRD-Q693` | B | Administrative/desired assignment executor и фактическая execution authority различаются; target placement может быть изменён до завершения безопасного handover, сохраняя видимое desired/actual расхождение. |
+| `PRD-Q694` | B | Изменение desired executor само по себе не даёт новому узлу права выполнять команды; actual authority возникает только после успешного authority transition. |
+| `PRD-Q695` | принято | На продуктовом уровне различаются current authority, target authority, handover pending/completed/blocked и authority uncertain/degraded; технический механизм перехода определяется архитектурой. |
+| `PRD-Q696` | B | Если прежний executor нельзя подтвердить как безопасно выведенный, обычный automatic handover блокируется и система явно показывает невозможность установить exclusive execution authority. |
+| `PRD-Q697` | B | Blocked handover не означает автоматическую остановку прежнего автономного executor: блокируется передача authority новому контуру, а не сама разрешённая работа старого. |
+| `PRD-Q698` | B | Для случаев, когда graceful handover невозможен, допускается отдельная усиленная emergency/recovery operation передачи authority. |
+| `PRD-Q699` | принято | Emergency authority transfer имеет отдельное право, target, причину, усиленное подтверждение, impact warning и полный audit; это не обычный automatic failover. |
+| `PRD-Q700` | B | Emergency authority transfer не выполняется автоматически только по timeout, потому что unreachable Edge может продолжать воздействие на оборудование. |
+| `PRD-Q701` | B | Full, восстановленный из backup, не считает свою старую desired configuration безусловной актуальной истиной до завершения recovery reconciliation. |
+| `PRD-Q702` | B | Если Edge сообщает active configuration новее состояния восстановленного Full, фиксируется явная configuration-lineage divergence, а не запускается автоматический downgrade. |
+| `PRD-Q703` | B | Более новая active configuration Edge продолжает работу до recovery decision, если нет отдельного основания считать её небезопасной. |
+| `PRD-Q704` | B | Full не принимает более новую Edge configuration автоматически как новую официальную published configuration; Edge предоставляет проверяемые факты о ранее активированной версии, но не становится скрытым configuration authority. |
+| `PRD-Q705` | принято | При recovery divergence поддерживаются три семантических пути: восстановить проверяемую более новую официальную конфигурацию; сохранить текущую Edge operation и сформировать corrective publication; либо выполнить явный governed rollback к более старой конфигурации. |
+| `PRD-Q706` | B | Downgrade после DR не выполняется фоновым desired-state reconciliation; это явное управляемое recovery/configuration решение. |
+| `PRD-Q707` | принято | Edge сохраняет проверяемую provenance active configuration: stable publication/version identity, origin, activation record, integrity information и lineage; конкретный формат относится к архитектуре. |
+| `PRD-Q708` | B | После restore разные Edge могут сообщать разные более новые версии; это допустимая recovery divergence, которую система показывает без автоматического выбора «победителя». |
+| `PRD-Q709` | B | Recovery reconciliation конфигурации оценивается по consistency domains, чтобы независимые области можно было восстанавливать независимо. |
+| `PRD-Q710` | B | Нерешённая recovery divergence ограничивает publication/activation только в затронутом consistency/dependency scope, а не обязательно во всей установке. |
+| `PRD-Q711` | B | Восстановление configuration authority входит в recovery/audit lineage: фиксируются recovery point, обнаруженные Edge states, принятое решение, инициатор и итоговые desired/active versions. |
+
+## Observed identity, ownership и эволюция physical tracking
+
+| ID | Вариант | Принятое решение |
+|---|---:|---|
+| `PRD-Q712` | B | Универсальное правило «тот же внешний ID = тот же объект» недостаточно; source identity интерпретируется с учётом конкретного source contract и lifecycle guarantees. |
+| `PRD-Q713` | B | External source identity концептуально включает source namespace, source-specific identity и, где нужно, lifecycle/incarnation semantics. |
+| `PRD-Q714` | B | Adapter/profile источника объявляет identity contract: scope уникальности, возможность reuse, смысл disappearance, наличие generation/incarnation и критерии различения новой и вернувшейся сущности. |
+| `PRD-Q715` | B | Для reusable source IDs используются incarnation semantics; новая incarnation получает новую Dispatcher identity, когда источник даёт достаточные основания считать её новой сущностью. |
+| `PRD-Q716` | B | При недостаточной уверенности платформа не выполняет необратимый automatic merge двух потенциально разных сущностей; identity uncertainty обрабатывается source-specific policy. |
+| `PRD-Q717` | B | Поддерживается governed исправление ошибочного identity matching: split, merge/rebind и привязка к правильной external identity с сохранением provenance корректировки. |
+| `PRD-Q718` | B | Promotion observed object в managed configuration не прекращает наблюдение: одна identity может одновременно иметь runtime facts источника и индивидуальную managed configuration Dispatcher. |
+| `PRD-Q719` | B | Одна и та же семантическая характеристика не имеет двух одновременных authoritative owners. |
+| `PRD-Q720` | принято | На общем уровне различаются source-owned observed facts, Dispatcher-managed desired configuration, user-managed annotations/metadata и derived data. |
+| `PRD-Q721` | B | Изменение source-owned observed property является новым фактом, а не configuration conflict; drift возникает только там, где существует сравнимый desired state. |
+| `PRD-Q722` | B | Promotion не превращает автоматически все source properties в managed settings; индивидуальная configuration добавляется только для тех аспектов, где она нужна. |
+| `PRD-Q723` | B | Ownership конкретных properties задаётся семантикой object type/profile/source/service extension, а не ручным выбором владельца для каждого поля. |
+| `PRD-Q724` | B | Пользователь не обязан с первого дня разделять каждый потенциально заменяемый объект на functional position и physical unit; простая combined model остаётся допустимой. |
+| `PRD-Q725` | B | Позднее combined object может быть управляемо materialized/split в functional position и individually tracked physical unit(s). |
+| `PRD-Q726` | B | При таком split существующая operational identity обычно сохраняется за functional position, чтобы не разрывать эксплуатационные ссылки, trends, alarms, rules и dashboards. |
+| `PRD-Q727` | B | Первоначальный физический экземпляр получает отдельную physical-unit identity и исторический installation interval, где исходные данные позволяют это определить. |
+| `PRD-Q728` | B | Split не переписывает механически всю старую parameter history на physical unit; исходная semantic identity и provenance сохраняются, а новые relations добавляют контекст. |
+| `PRD-Q729` | B | Данные, достоверно относящиеся к физическому экземпляру — serial, passport, calibration, warranty, repair history — могут быть явно перенесены/привязаны к physical unit управляемой миграцией. |
+| `PRD-Q730` | B | Существующие ссылки на operational object после split продолжают указывать на functional position; physical-unit-specific ссылки создаются только там, где они действительно нужны. |
+| `PRD-Q731` | B | Materialization/split является значимым governed configuration/migration change с impact analysis, а не обратимой косметической операцией. |
+
+## Operational exceptions и governed historical correction
+
+| ID | Вариант | Принятое решение |
+|---|---:|---|
+| `PRD-Q732` | B | Разные operational exceptions сохраняют собственную предметную семантику, но используют общий lifecycle-envelope: identity, scope, type, owner/initiator, reason, start/end semantics, lifecycle authority, state, audit и reconciliation data. |
+| `PRD-Q733` | B | Каждый safety-relevant operational exception имеет одного authoritative owner своего lifecycle. |
+| `PRD-Q734` | B | Для объектов, исполняемых на Edge, runtime authority exception обычно находится в исполнительном контуре, которому exception нужен для корректного локального поведения, согласно опубликованной policy. |
+| `PRD-Q735` | B | Full и Edge не завершают независимо один и тот же exception; другие узлы могут наблюдать или запрашивать изменение, но не создают конкурирующие lifecycle truths. |
+| `PRD-Q736` | B | End semantics exception различают как минимум «до конкретного момента», «на заданную длительность», «до явного снятия» и предметно допустимое условие завершения; одного wall-clock timestamp недостаточно как универсальной модели. |
+| `PRD-Q737` | B | При недостаточном time quality автоматическая expiry не должна переводить систему в потенциально менее безопасное состояние, если момент завершения нельзя определить надёжно. |
+| `PRD-Q738` | B | Поведение при плохом времени зависит от типа exception и опубликованной policy; единого fail-open/fail-closed правила для всех исключений нет. |
+| `PRD-Q739` | B | Automatic expiry или иное автоматическое завершение exception является отдельным audited operational fact с причиной перехода. |
+| `PRD-Q740` | B | Различия Full/Edge по exception после reconnect разрешаются через authoritative lifecycle, immutable facts и class-specific reconciliation, а не last-write-wins. |
+| `PRD-Q741` | B | Сам reconnect не снимает operational exception и не меняет реальное operational state. |
+| `PRD-Q742` | B | Effective operational context показывает проблемы authority/time, влияющие на достоверность lifecycle exception, чтобы оператор мог объяснить текущее поведение объекта. |
+| `PRD-Q743` | B | Historian допускает governed correction обычных analog/discrete/structured historical values, backfill/source errors и других подтверждённых исторических ошибок. |
+| `PRD-Q744` | B | Correction не заменяет исходное сохранённое значение без следа; исходный fact/provenance сохраняется. |
+| `PRD-Q745` | принято | Correction содержит target/range, исходный provenance, corrected value или правило, reason, основание/source, actor/process, время, version/identity и audit. |
+| `PRD-Q746` | B | Late/backfill data и correction различаются: первое добавляет ранее отсутствовавший/поздний факт, второе официально корректирует уже известную историческую интерпретацию. |
+| `PRD-Q747` | B | Обычный просмотр может использовать effective/corrected series, но расследование и аудит могут показать исходные значения и provenance. |
+| `PRD-Q748` | B | Correction применяет явную recalculation policy к aggregates, derived values и аналитическим представлениям; последствия пересчёта не скрываются. |
+| `PRD-Q749` | B | Уже сформированные immutable reports/evidence не переписываются после correction; они сохраняют использованное состояние данных и могут ссылаться на последующую correction. |
+| `PRD-Q750` | B | Alarms/incidents, реально возникшие на ошибочном measurement, не удаляются ретроспективно; correction может быть связана с ними как объясняющий последующий факт. |
+| `PRD-Q751` | B | Historian correction не изменяет immutable command history и audit. |
+| `PRD-Q752` | B | Counter correction становится специализированным профилем общей historical-correction semantics, сохраняя counter-specific segments/reset/rollover/replacement rules. |
+
+## Distributed notification execution
+
+| ID | Вариант | Принятое решение |
+|---|---:|---|
+| `PRD-Q753` | B | Edge может автономно исполнять заранее опубликованные Edge-capable notification policies при потере Full, если доступны нужные локальные каналы и контекст. |
+| `PRD-Q754` | B | Notification policy имеет явную execution-placement semantics; не каждая политика автоматически копируется и исполняется на Edge. |
+| `PRD-Q755` | B | Конкретная notification execution/chain имеет понятную authority; Full и Edge не создают две независимые authoritative chains одного события. |
+| `PRD-Q756` | принято | Stable identity имеют как минимум originating operational fact/alarm episode, notification execution/chain, escalation step и delivery attempt. |
+| `PRD-Q757` | B | После reconnect Full принимает синхронизированные notification/delivery facts и продолжает только действительно незавершённые релевантные шаги вместо перезапуска цепочки с начала. |
+| `PRD-Q758` | B | Успешная Edge delivery не повторяется Full только потому, что Full ранее о ней не знал; используется semantic deduplication. |
+| `PRD-Q759` | B | Неопределённый результат доставки сохраняется как uncertain и обрабатывается channel/policy-specific retry semantics; timeout не считается доказанным failure. |
+| `PRD-Q760` | B | Платформа не обещает exactly-once во внешних каналах, но обеспечивает stable identities, controlled retry, внутреннюю deduplication и сохранение delivery lifecycle. |
+| `PRD-Q761` | B | Edge использует опубликованный достаточный snapshot/policy контекста получателей, дежурств, маршрутизации, escalation и каналов, необходимый для разрешённой автономной доставки. |
+| `PRD-Q762` | B | После reconnect сохраняется фактический notification-policy snapshot, которым располагал Edge; история не переписывается под более поздние изменения Full. |
+| `PRD-Q763` | B | Edge хранит только минимально необходимый subset notification configuration для назначенных ему автономных policies. |
+| `PRD-Q764` | B | Если шаг требует Full-only канала, Edge фиксирует невозможность локального выполнения и следует опубликованной fallback/pending/escalation policy, не считая шаг выполненным. |
+| `PRD-Q765` | B | После reconnect Full может выполнить ранее невозможные шаги только если они всё ещё релевантны и не были выполнены другим контуром. |
+| `PRD-Q766` | B | Релевантность delayed notification после reconnect определяется notification policy, включая варианты cancel, late delivery, summary или продолжение escalation. |
+| `PRD-Q767` | B | Qualifying operator reactions на Edge могут локально подавлять/сокращать дальнейшую escalation в соответствии с заранее опубликованной policy. |
+| `PRD-Q768` | B | Notification facts Full/Edge объединяются по stable identity и origin; дальнейшее состояние chain вычисляется из immutable facts без last-write-wins. |
+| `PRD-Q769` | B | Диагностическое представление сохраняет provenance notification execution: Full/Edge, channel, attempt, time, result и policy snapshot. |
+
+## Package semantic retention и граница actuator access
+
+| ID | Вариант | Принятое решение |
+|---|---:|---|
+| `PRD-Q770` | B | Uninstall package не может сделать сохранённые пользовательские и исторические данные неинтерпретируемыми. |
+| `PRD-Q771` | B | Для исторической интерпретации не требуется сохранять весь удалённый package исполняемым; runtime code и retained semantic metadata разделяются. |
+| `PRD-Q772` | принято | Для contribution, чья семантика используется сохранёнными данными, остаётся минимально достаточное неисполняемое semantic description: identity/version, schema/fields, enum meanings, units, labels, structural metadata и исторические relationships, где применимо. |
+| `PRD-Q773` | B | Retained semantic descriptor не исполняет старый package code. |
+| `PRD-Q774` | B | UI-компоненты удалённого package не обязаны сохраняться навсегда; исторические данные должны оставаться читаемыми хотя бы в безопасном общем representation с type/values/timestamps/provenance. |
+| `PRD-Q775` | B | Удаление retained semantic metadata допускается только после impact analysis, подтверждающего отсутствие исторических зависимостей, либо после явной semantic migration. |
+| `PRD-Q776` | B | Новая версия package не переопределяет автоматически смысл старых historical data; используется semantic version времени их создания или явная migration. |
+| `PRD-Q777` | B | Semantic migration сохраняет provenance и факт преобразования и не притворяется, что исторические данные изначально имели новую семантику. |
+| `PRD-Q778` | B | Semantic retention применяется к любой package contribution, чья семантика попала в сохраняемые пользовательские/исторические данные, а не только к специализированным сервисам. |
+| `PRD-Q779` | B | Обычная network/raw capability сама по себе не предоставляет право обращаться к managed actuator endpoint. |
+| `PRD-Q780` | принято | Managed actuator endpoint — технический endpoint/resource, через который можно изменить состояние managed object в обход его semantic Command Model; конкретное обнаружение и маркировка относится к архитектуре/adapter contracts. |
+| `PRD-Q781` | B | Непосредственный технический actuator access разрешён только специально назначенному contour, например protocol adapter/authoritative executor или diagnostic Command Model operation. |
+| `PRD-Q782` | B | Integration, управляющая modeled managed object через vendor API или иной транспорт, представляет действие semantic command и проходит Command Model. |
+| `PRD-Q783` | B | Network/raw capability может использоваться для разрешённых внешних/диагностических/информационных ресурсов, которые не образуют actuator-path обход managed object. |
+| `PRD-Q784` | B | Общая концепция не фиксирует конкретный firewall/sandbox/ACL mechanism; архитектура обязана технически обеспечить product invariant «generic network/raw capability не включает actuator authority». |
+

@@ -1,21 +1,15 @@
 # «Диспетчер»
 
-Репозиторий проекта универсальной модульной SCADA-платформы «Диспетчер».
+Репозиторий продуктовой концепции универсальной модульной SCADA-платформы «Диспетчер».
 
-В репозитории зафиксированы правила совместной работы, промежуточная общая продуктовая концепция редакции 5, расширенный реестр продуктовых решений через `PRD-Q690` и углублённая рабочая концепция дашбордов и мнемосхем. Дорожная карта, программная архитектура и исходный код ещё не создаются.
+Общая горизонтальная концепция прошла три независимые сквозные проверки. Все действующие результаты встроены в канонические документы; рабочее дерево не хранит отдельные audit-отчёты и промежуточные журналы.
 
-## С чего начинать работу
+## Начало работы
 
-1. [`AGENTS.md`](AGENTS.md) — обязательные правила работы ассистента.
-2. [`docs/project/PROJECT_STATE.md`](docs/project/PROJECT_STATE.md) — текущее состояние и точка продолжения.
-3. [`docs/product/PRODUCT_CONCEPT.md`](docs/product/PRODUCT_CONCEPT.md) — актуальная связная продуктовая концепция.
-4. [`docs/product/PRODUCT_DECISIONS.md`](docs/product/PRODUCT_DECISIONS.md) — точный реестр решений.
-5. [`docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md`](docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md) — текущая углублённая тема.
-6. [`docs/project/INTERACTION_PROTOCOL.md`](docs/project/INTERACTION_PROTOCOL.md) — порядок обсуждения и передачи изменений.
-7. [`docs/project/CONCEPT_AUDIT_RESOLUTION_2026-08-07.md`](docs/project/CONCEPT_AUDIT_RESOLUTION_2026-08-07.md) — карта решений первой независимой проверки.
-8. [`docs/project/CONCEPT_AUDIT_RECHECK_2026-08-07.md`](docs/project/CONCEPT_AUDIT_RECHECK_2026-08-07.md) — результат второй проверки и закрытие остаточных замечаний.
-9. [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md), [`OPEN_QUESTIONS.md`](docs/project/OPEN_QUESTIONS.md) и [`AI_WORK_NOTES.md`](docs/project/AI_WORK_NOTES.md) — служебная память проекта.
+1. [`AGENTS.md`](AGENTS.md) — правила работы.
+2. [`docs/project/PROJECT_STATE.md`](docs/project/PROJECT_STATE.md) — текущий этап и точка продолжения.
+3. [`docs/product/PRODUCT_CONCEPT.md`](docs/product/PRODUCT_CONCEPT.md) — связная общая концепция.
+4. [`docs/product/PRODUCT_DECISIONS.md`](docs/product/PRODUCT_DECISIONS.md) — точный реестр решений через `PRD-Q784`.
+5. [`docs/project/OPEN_QUESTIONS.md`](docs/project/OPEN_QUESTIONS.md) — индекс следующих предметных концепций.
 
-## Источник истины
-
-Актуальным состоянием проекта считается содержимое ветки `master` репозитория `Lex26p/dispatcher` на последнем полном SHA, подтверждённом пользователем. Переписка используется для обсуждения, но долговременная фиксация выполняется документами репозитория.
+История прежних редакций, аудитов и удалённых служебных файлов остаётся доступна через Git.

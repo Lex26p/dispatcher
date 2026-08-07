@@ -3,76 +3,54 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA до этого пакета:** `339a706ca988679f7d429cd0976d786e9378602b`.
+**Последний подтверждённый SHA до этого пакета:** `7fc15e0b54348188fd9f3977c05532135d6026d3`.
 
-## 1. Текущий режим
+## 1. Статус этапа
 
-Общая продуктовая концепция зрелой универсальной модульной SCADA-платформы «Диспетчер» прошла первую независимую сквозную проверку и повторную проверку качества исправлений. Исходные `AUD-001–AUD-026`, остаточная несогласованность discovery и новые `AUD2-001–AUD2-002` закрыты решениями через `PRD-Q690`, включая заменяющий `PRD-Q042R`. Дорожная карта, программная архитектура, технологический стек и код по-прежнему не формируются.
+Этап общей горизонтальной продуктовой концепции завершён. Концепция прошла три независимые сквозные проверки; все принятые результаты встроены непосредственно в `PRODUCT_CONCEPT.md` и `PRODUCT_DECISIONS.md`.
 
-## 2. Зафиксированный объём
+Текущий реестр содержит `PRD-Q001–PRD-Q784`. Отдельные audit-отчёты, служебные журналы и дублирующие рабочие документы удалены из актуального дерева; история остаётся в Git.
 
-Редакция 5 содержит итоговый реестр решений `PRD-Q001–PRD-Q690` и отдельно подчёркивает результаты второй проверки:
+## 2. Ключевые горизонтальные инварианты
 
-- `PRD-Q042R`: configuration discovery/proposal отделено от authoritative runtime observation;
-- `PRD-Q677–PRD-Q682`: Emergency Disable является persistent protective override и не отменяется обычным reconciliation;
-- `PRD-Q683–PRD-Q690`: observed objects при license exceed сохраняют обязательную safety/visibility baseline, а расширенные функции регулируются прозрачной license policy;
-- первая проверка `AUD-001–AUD-026` и вторая проверка качества исправлений документированы отдельными audit-resolution файлами.
+- Одна core identity управляемого объекта; специализированные сервисы используют typed extensions, а не дубликаты объектов.
+- Type, device profile и object template разделены.
+- Configuration discovery/proposal отделено от authoritative runtime observation.
+- Managed configuration, administrative transaction, package deployment и secret operation — разные классы изменений.
+- Любой actuator action managed object проходит semantic Command Model; generic raw/network capability не даёт actuator authority.
+- Publish, Deploy и Activate разделены; Edge имеет desired/active state и consistency domains.
+- Каждый исполнительный контур имеет одного authoritative executor; потеря связи не означает потерю authority, а handover не выполняется только по timeout.
+- Restore старого Full не вызывает автоматический downgrade более новой active configuration Edge; recovery divergence требует явного решения.
+- Reconciliation распределённых runtime facts выполняется по классу сущности, без универсального last-write-wins.
+- Observed source identity учитывает namespace, lifecycle guarantees и incarnation/reuse semantics.
+- Operational exceptions имеют явный authoritative lifecycle и учитывают качество времени.
+- Historian сохраняет provenance, time quality, gaps, counter segments и governed corrections без уничтожения исходных фактов.
+- Notifications могут исполняться автономно на Edge по опубликованной policy со stable identities и deduplication после reconnect.
+- Emergency Disable является persistent protective override и не отменяется обычным reconciler.
+- Cross-domain sensitivity дополняет обычные permissions, не создавая отдельный DLP/IAM слой.
+- Licensing не ослабляет safety, security, audit integrity и recoverability и не создаёт blind spots для реально observed объектов.
+- Package removal отделяет runtime removal от retained historical semantic metadata.
 
-Суффиксы `R` и `N` в более ранних решениях обозначают итоговые заменяющие формулировки. Отвергнутые черновые варианты не являются продуктовыми решениями.
+## 3. Канонические файлы
 
-## 3. Ключевые инварианты после двух проверок
+1. `AGENTS.md` — правила работы.
+2. `docs/product/PRODUCT_CONCEPT.md` — связная общая концепция, редакция 6.
+3. `docs/product/PRODUCT_DECISIONS.md` — реестр решений через `PRD-Q784`.
+4. `docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md` — углублённая тема дашбордов/мнемосхем.
+5. `docs/project/OPEN_QUESTIONS.md` — индекс следующих предметных концепций.
 
-### Управление
+## 4. Точка продолжения
 
-Любое действие, предназначенное изменить состояние управляемого объекта, проходит Command Model. Raw diagnostic write существует только как отдельная усиленно контролируемая команда. Rules поддерживают supervisory и совместимое некритическое closed-loop управление, но не заменяют hard-real-time/safety controller.
+Следующий этап — подробная продуктовая проработка предметных областей и специализированных сервисов. Конкретную тему выбирает пользователь; возможные направления перечислены в `OPEN_QUESTIONS.md`.
 
-### Change governance
+Эти концепции описывают зрелый продукт и могут уточнять горизонтальную модель. Это не порядок реализации.
 
-Любое изменение относится к одному из четырёх классов: managed configuration, administrative transaction, package/software deployment или secret/credential operation. Специализированные сервисы не получают собственный параллельный Save/Apply lifecycle. Package остаётся install/version unit, внутри которой могут быть несколько typed contributions.
+## 5. Пока не начинаем
 
-### Full / Edge / HA
+Без отдельного решения пользователя не формировать:
 
-Publish отделён от фактической activation. Edge показывает desired/active configuration, взаимозависимые изменения образуют consistency domains, а каждый execution contour имеет одного authoritative executor. После partition применяется class-specific reconciliation, не last-write-wins. Offline authorization зависит от риска; restore создаёт явную recovery lineage.
-
-### Object foundation
-
-Общая модель включает managed и observed dynamic objects. Специализированные сервисы расширяют одну core identity service extensions. Person минимально связывает SCADA account, ACS subject, ТОиР и notification roles без HR-модели. Managed resource и authentication principal различаются. Индивидуальная physical unit сохраняет identity через склад/установку/ремонт.
-
-### Достоверность и эксплуатационные исключения
-
-Persistent Rule state не является скрытой конфигурацией. Manual substitution, manual control, automation override, alarm suppression и maintenance остаются разными mechanisms, но формируют единый effective operational context. Time quality является отдельной системной характеристикой. Counters имеют reset/rollover/replacement segments.
-
-### Security/privacy/licensing
-
-Cross-domain sensitivity дополняет permissions/scopes и работает при export/API, не превращая продукт в DLP. Licensing регулирует коммерческое расширение, но никогда не блокирует safety, security remediation, backup/restore, emergency access, audit integrity и recoverability существующего контура. Emergency Disable удерживает безопасный actual state как явный protective override до авторизованного снятия и не может быть автоматически отменён reconciler. Dynamic object-scale exceed не скрывает реально observed ресурсы: обязательная visibility baseline сохраняется.
-
-### VMS, BIM и Knowledge
-
-VMS имеет authoritative archive policy и может использовать внешнюю VMS/NVR или Edge как owner. BIM остаётся специализированной предметной функциональностью с 3D workspace; окончательная top-level service topology решается в BIM-концепции. Dashboard — operational live view, Knowledge/Document — долговременный управляемый информационный content.
-
-## 4. Актуальные продуктовые документы
-
-1. `docs/product/PRODUCT_CONCEPT.md` — общая концепция, редакция 5.
-2. `docs/product/PRODUCT_DECISIONS.md` — точный реестр решений через `PRD-Q690`.
-3. `docs/product/DASHBOARDS_AND_MIMICS_CONCEPT.md` — углублённая рабочая концепция дашбордов и мнемосхем.
-4. `docs/project/CONCEPT_AUDIT_RESOLUTION_2026-08-07.md` — карта первой независимой проверки `AUD-001–AUD-026` к принятым решениям.
-5. `docs/project/CONCEPT_AUDIT_RECHECK_2026-08-07.md` — результат второй проверки и закрытие `AUD2-001–AUD2-002`.
-6. `docs/product/BASELINE_CONCEPT_2026-08-04.md` — историческая исходная концепция.
-
-## 5. Точка продолжения
-
-Следующий рекомендуемый шаг — передать **редакцию 5 в совершенно новый независимый чат на третью сквозную проверку с чистого листа**. Третьему аудитору следует дать актуальный commit и задание на полный аудит концепции, но не использовать результаты первых двух проверок как список того, что нужно искать. Это снижает anchoring и позволяет обнаружить проблемы, пропущенные предыдущим аудиторским контекстом.
-
-После третьей проверки отдельно и подробно обсуждаются крупные предметные области: HVAC, энергетика/энергоучёт, пожарные системы, СКУД, BIM, карты/планы, IT и сети, вода/насосы, освещение, лифты/эскалаторы, VMS, ТОиР и другие области. Предметные концепции могут уточнять сегодняшние границы.
-
-Для обычной работы читать `AGENTS.md`, настоящий файл, `docs/product/PRODUCT_CONCEPT.md`, `PRODUCT_DECISIONS.md` и оба audit-resolution документа. Для третьего независимого аудита сначала анализировать продуктовые документы без audit-resolution файлов и открыть историю аудитов только после собственного списка находок. Не восстанавливать решения по истории чата.
-
-## 6. Действующие ограничения работы
-
-- Не использовать отменённый черновик дорожной карты.
-- Не определять очередность реализации внутри продуктовой концепции.
-- Не обозначать функции «будущими» только ради упрощения концепции.
-- Не смешивать продуктовый сервис с программным микросервисом.
-- Не считать отдельную инженерную область автоматическим основанием для отдельного сервиса.
-- Независимый аудит формирует замечания, но не изменяет репозиторий и не принимает продуктовые решения вместо основного чата.
-- Не тратить контекст на исчерпывающую проверку каждого подтверждённого коммита без причины.
+- roadmap и очередность реализации;
+- программную архитектуру;
+- технологический стек;
+- схемы БД и внутренние API;
+- исходный код.
