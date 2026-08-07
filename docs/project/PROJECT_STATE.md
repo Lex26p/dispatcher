@@ -3,79 +3,64 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA до этого пакета:** `d4f4b4ef696662c9ef5eec965b21b42e3ac0b61a`.
+**Последний подтверждённый SHA перед этим пакетом:** `688392edb17ddce6e4d3874ff54344aacc2033b0`.
 
-## 1. Завершённый этап
+## 1. Завершённый Product Concept
 
-Общая горизонтальная Product Concept завершена.
+Общая горизонтальная Product Concept завершена и остаётся фундаментом требований:
 
-- реестр: `PRD-Q001–PRD-Q803`;
-- три независимые сквозные проверки завершены и их принятые результаты встроены в канон;
-- application scope зафиксирован от одного Compact-контроллера Residential & Small-Site Automation до крупной распределённой Full/Edge SCADA;
-- рабочее дерево очищено от промежуточных audit/notes документов; история остаётся в Git.
+- `PRD-Q001–PRD-Q803`;
+- Full / Compact / Edge;
+- общая object/configuration/command/alarm/history/package/security модель;
+- application scope от одного Compact-контроллера до крупной распределённой Full/Edge SCADA.
 
-## 2. Текущий этап
+Product Concept не расширяется по инерции. Возврат туда происходит только при обнаружении нового фундаментального product-level решения или противоречия.
 
-Идёт **Functional Specification** — слой требований между Product Concept и System Architecture.
+## 2. Текущий этап — Functional Specification
 
-Functional foundation зафиксирован в Git. Активная спецификация: `docs/functional/engineering/ENGINEERING_CONFIGURATION.md`.
+Functional Specification определяет наблюдаемое поведение продукта, user flows, lifecycle, validations, permissions и Full/Compact/Edge semantics достаточно подробно для последующего UX/API/System Architecture design.
 
-## 3. Engineering — текущее состояние
+Рабочий навигатор: `../functional/ROADMAP.md`.
 
-Приняты и подготовлены к первому смысловому checkpoint:
+## 3. Engineering / Configuration — текущее состояние
 
-- `ENG-Q001–ENG-Q050` — Engineering foundation: service/workspace, change sets, autosave, revisions/checkpoints, registries/editors, collaboration, validation foundation;
-- `ENG-Q051–ENG-Q110` — Objects & Structure: locations, object registry, creation, identity, typed relations, functional/physical split, observed objects, Duplicate/Create Copies, move/delete;
-- `ENG-FR001–ENG-FR025` — нормативные functional requirements, включая автоматически зафиксированные очевидные решения.
+**Статус:** `IN PROGRESS`.
 
-Первый Engineering checkpoint: `ENG-CP01`.
+Принято и подготовлено к `ENG-CP02`:
 
-## 4. Правило Git-checkpoints
+- `ENG-Q001–ENG-Q250` без намеренных пропусков;
+- `ENG-FR001–ENG-FR058`;
+- Engineering workspace/change-set/object foundation;
+- Types / Device Profiles / Object Templates;
+- type/profile/template versioning и compatibility;
+- linked template instances, local overrides, selective propagation;
+- nested template dependency semantics;
+- detach/adopt/reattach;
+- profile replacement и type migration with provenance.
 
-Контрольные точки больше не отслеживаются вручную по сообщениям.
+`ENG-CP01` уже соответствует commit `688392edb17ddce6e4d3874ff54344aacc2033b0`.
 
-`docs/functional/ROADMAP.md` содержит постоянный checkpoint protocol:
+`ENG-CP02` добавляет `ENG-Q111–ENG-Q250` и `ENG-FR026–ENG-FR058` и ожидает commit/push.
 
-- checkpoint после самостоятельного смыслового блока;
-- ориентир `100–200` новых Q между точками;
-- связный блок не режется искусственно ради номера;
-- перед каждым checkpoint обязательны Q/FR transfer, Decision Register, roadmap update, PROJECT_STATE update и coverage-check;
-- диапазоны следующих Q заранее не фиксируются.
+## 4. Следующая точка продолжения
 
-## 5. Следующая точка продолжения
+После подтверждения SHA `ENG-CP02` продолжить с:
 
-Начать `ENG-Q111...`:
+> `ENG-Q251...` — Connections / Adapters / Endpoints / Credentials / execution placement.
 
-> **Types, Device Profiles, Object Templates, inheritance/composition и managed update semantics.**
+Затем перейти к Parameters и Semantic Commands.
 
-После завершения этого смыслового блока применяется `ENG-CP02` согласно roadmap; отдельное напоминание пользователя о checkpoint не требуется.
+## 5. Checkpoint discipline
 
-## 6. Ближайшая последовательность функционального этапа
+Пользователю не требуется вручную отслеживать момент фиксации. Правила находятся в `../functional/ROADMAP.md`:
 
-1. Завершить Engineering / Configuration (`ENG-*`).
-2. Operations / Dispatcher Workspace (`OPS-*`).
-3. Web Platform (`WEB-*`).
-4. Architecture Readiness Review #1.
+- смысловой блок имеет приоритет над фиксированным количеством вопросов;
+- ориентир — `100–200` новых Q между checkpoints;
+- перед ZIP обязательны перенос всех Q/FR, coverage-check, roadmap и PROJECT_STATE update;
+- диапазон следующего checkpoint заранее не фиксируется.
 
-Это порядок проработки требований, а не release/MVP roadmap.
+## 6. Architecture readiness
 
-## 7. Первый architecture-readiness gate
+До `GATE-A` не выбирать по инерции frontend/backend frameworks, конкретную DB, message broker, internal transport, fencing/lease/consensus implementation или исходный код.
 
-После ENG + OPS + WEB должен быть определён центральный сквозной контур:
-
-> инженер создаёт/изменяет конфигурацию → Validate/Impact/Publish → Deploy/Activate на runtime/Edge → диспетчер видит live state/alarm → выполняет semantic command → получает result/uncertain state → audit/history сохраняют факты.
-
-Если этот контур не требует архитектурных догадок о пользовательском смысле действий, можно переходить к первой системной архитектуре, не дожидаясь полной детализации всех специализированных сервисов.
-
-## 8. Пока не фиксируем автоматически
-
-До Architecture Readiness Review #1 не переходить по инерции к:
-
-- выбору frontend/backend frameworks;
-- схеме БД;
-- внутренним API/transport protocols;
-- message broker;
-- fencing/lease/consensus implementation;
-- исходному коду.
-
-Архитектурный вопрос можно отметить как dependency, но не подменять им functional requirement.
+`GATE-A` выполняется после достаточной детализации Engineering + Operations + Web Platform и проверяет центральный сквозной contour от configuration до runtime/command/audit.

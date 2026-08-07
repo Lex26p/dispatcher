@@ -1,261 +1,159 @@
 # Дорожная карта функциональной спецификации
 
 **Тип документа:** временный рабочий навигатор.  
-**Не является:** продуктовой концепцией, release roadmap или календарным планом разработки.  
-**Удаляется:** после завершения функционального этапа и переноса итогового состояния в канонические документы следующего этапа.
+**Не является:** Product Concept, release roadmap или календарным планом реализации.  
+**Удаляется:** после завершения functional stage и переноса итогового состояния в канонические документы следующего этапа.
 
 ## 1. Статусы
 
 - `NOT STARTED` — область ещё не разбиралась подробно.
 - `IN PROGRESS` — идёт функциональная проработка.
-- `REVIEW` — основная спецификация собрана и проверяется на сквозную согласованность.
-- `DONE` — функциональная граница области зафиксирована достаточно для следующего этапа.
-- `BLOCKED` — продолжение невозможно без решения зависимости.
+- `REVIEW` — основная спецификация собрана и проходит сквозную проверку.
+- `DONE` — функциональная граница зафиксирована достаточно для следующего этапа.
+- `BLOCKED` — продолжение требует решения зависимости.
 
 ## 2. Текущее положение
 
 | Этап | Статус | Результат |
 |---|---|---|
-| Общая продуктовая концепция | `DONE` | `PRD-Q001–PRD-Q803`, три независимые проверки, application scope |
-| Functional foundation | `DONE` | структура functional docs, roadmap, reference scenarios зафиксированы в Git |
-| Engineering / Configuration | `IN PROGRESS` | приняты `ENG-Q001–ENG-Q110`, `ENG-FR001–ENG-FR025`; первый смысловой checkpoint |
-| Operations / Dispatcher Workspace | `NOT STARTED` | вторая центральная функциональная спецификация |
+| Общая продуктовая концепция | `DONE` | `PRD-Q001–PRD-Q803` |
+| Functional foundation | `DONE` | структура functional docs, roadmap, reference scenarios |
+| Engineering / Configuration | `IN PROGRESS` | `ENG-Q001–ENG-Q250`, `ENG-FR001–ENG-FR058`; `ENG-CP02` подготовлен |
+| Operations / Dispatcher Workspace | `NOT STARTED` | вторая центральная functional specification |
 | Web Platform | `NOT STARTED` | общий поведенческий контракт Web UI |
-| Architecture Readiness Review #1 | `NOT STARTED` | проверка готовности центрального сквозного контура к архитектуре |
+| Architecture Readiness Review #1 | `NOT STARTED` | проверка центрального сквозного контура |
 
-## 3. Ближайший маршрут
-
-### FS-00 — Functional foundation
-
-**Статус:** `DONE`
-
-**Сделано:**
-
-- отделён слой functional specification от Product Concept;
-- определена система идентификаторов;
-- создан временный roadmap;
-- создан набор reference scenarios;
-- созданы каркасы Engineering, Operations и Web Platform;
-- foundation зафиксирован в Git.
-
----
-
-### FS-10 — Engineering / Configuration
+## 3. FS-10 — Engineering / Configuration
 
 **Статус:** `IN PROGRESS`
 
-**Цель:** полностью описать пользовательский и функциональный путь от создания/обнаружения сущности до публикации и фактической активации конфигурации.
+### Сделано
 
-**Сделано:**
+1. Engineering workspace и service navigation foundation.
+2. Change sets, autosave/revisions/checkpoints/compare.
+3. Registry/tree/inspector/editor behaviour.
+4. Collaborative editing, conflicts и validation foundation.
+5. Locations, Object Registry, creation, stable identity.
+6. Typed relationships foundation.
+7. Functional position / physical unit foundation.
+8. Observed-object Engineering semantics.
+9. Duplicate / Create Copies / deletion foundation.
+10. Object Type semantic contract, inheritance/composition/capabilities/versioning.
+11. Device Profile semantics, mapping, compatibility, local profile workflow.
+12. Object Template semantics, typed inputs, nested templates, linked instances.
+13. Template update/propagation, selective rollout, local overrides, conflicts.
+14. Detach/adopt/reattach, template deletion resolution.
+15. Device Profile replacement и Object Type migration с traceability.
 
-1. Engineering service/workspace foundation.
-2. Рабочий контекст и change sets.
-3. Autosave/revisions/checkpoints/compare.
-4. Registry / tree / inspector / editor behaviour.
-5. Collaborative editing и conflict semantics.
-6. Validation foundation.
-7. Locations и Object Registry foundation.
-8. Object creation и stable identity semantics.
-9. Typed relationships foundation.
-10. Functional position / physical unit foundation.
-11. Observed-object Engineering semantics.
-12. Duplicate / Create Copies foundation.
-13. Move/delete и historical identity continuity.
+**Принято:** `ENG-Q001–ENG-Q250`, `ENG-FR001–ENG-FR058`.
 
-**Принятые диапазоны:** `ENG-Q001–ENG-Q110`, `ENG-FR001–ENG-FR025`.
+### Следующий блок
 
-**Следующий блок:** `ENG-Q111...` — Types, Device Profiles, Object Templates, inheritance/composition и managed update semantics.
+`ENG-Q251...` — **Connections / Adapters / Endpoints / Credentials / execution placement**.
 
-**Осталось крупными блоками:**
+После него: Parameters, затем Semantic Commands и остальные открытые блоки Engineering.
 
-- Types / Profiles / Templates;
-- Connections / Adapters / Endpoints;
+### Remaining крупными блоками
+
+- Connections / Adapters / Endpoints / Credentials / execution placement;
 - Parameters;
 - Semantic Commands;
-- углубление Relationships;
-- Discovery proposal / Observed / Promotion;
-- Import;
-- Draft/Validation/Impact — детальная завершённая модель;
+- углубление Relationships там, где потребуется редактор/scale behaviour;
+- Discovery proposal / Observed / Promotion details;
+- Import UX/schemas на уровне Engineering;
+- Validation / Impact — полная модель;
 - Approval / Publish;
 - Deploy / Activate / Edge desired-vs-active;
 - Versions / corrective publication / recovery divergence;
 - Engineering diagnostics / permissions;
 - Compact/simple setup;
-- полный coverage review по reference scenarios.
-
-**Reference scenarios:** `RS-001`, `RS-002`, `RS-003`, `RS-004`, `RS-005`, `RS-014`, `RS-015`, `RS-019`.
+- полный reference-scenario coverage review.
 
 **Критерий DONE:** инженер может пройти сквозной путь от пустой установки/готового template до работающего объекта без неизвестных функциональных переходов.
 
-**Открывает:** `FS-20`, существенную часть `FS-30`, подготовку API/domain contracts.
-
 ---
 
-### FS-20 — Operations / Dispatcher Workspace
+## 4. Ближайшая последовательность functional stage
 
-**Статус:** `NOT STARTED`
+1. `FS-10` Engineering / Configuration.
+2. `FS-20` Operations / Dispatcher Workspace.
+3. `FS-30` Web Platform.
+4. `GATE-A` Architecture Readiness Review #1.
+5. System Architecture при PASS, без ожидания детализации каждого специализированного сервиса.
+6. Остальные functional subject specs продолжаются по dependencies на устойчивом foundation.
 
-**Зависит от:** основных сущностей и переходов `FS-10`.
+Это порядок **проработки требований**, а не очередность зрелости функций и не MVP roadmap.
 
-**Цель:** описать ежедневную работу диспетчера с работающей системой.
+## 5. Checkpoint protocol — постоянные точки фиксации в Git
 
-**Основные блоки:**
-
-1. Стартовый workspace и контекст площадки.
-2. Object context и effective operational state.
-3. Live parameters, quality, freshness и connection state.
-4. Alarms и быстрый переход к причине.
-5. Semantic commands, confirmation, uncertainty и results.
-6. Trends/history в оперативном контексте.
-7. Incidents, My Work, tasks и handover.
-8. Manual control, substitution, suppression и maintenance context.
-9. VMS/ACS/ТОиР contextual transitions.
-10. Full/Edge degraded/offline states.
-11. Operator permissions и explainability.
-
-**Reference scenarios:** `RS-006`, `RS-007`, `RS-008`, `RS-009`, `RS-010`, `RS-011`, `RS-012`.
-
-**Критерий DONE:** диспетчер однозначно понимает текущее состояние объекта, причину проблемы, доступные действия и результат своих действий.
-
-**Открывает:** полноценный `FS-30`, дальнейшие ALM/HIS/MAINT/VMS specifications.
-
----
-
-### FS-30 — Web Platform
-
-**Статус:** `NOT STARTED`
-
-**Зависит от:** ключевых UX-потребностей `FS-10` и `FS-20`.
-
-**Цель:** определить единый поведенческий контракт web shell и общих UI primitives без выбора frontend technology.
-
-**Основные блоки:**
-
-1. Global shell.
-2. Service navigation.
-3. Routing, stable URLs и context preservation.
-4. Registries/tables/filter/search patterns.
-5. Inspector.
-6. Editor layout framework.
-7. Realtime subscriptions и stale/degraded representation.
-8. Actions, rights, disabled/hidden states и explanations.
-9. Errors, background operations и progress.
-10. Notifications/personal area.
-11. Fullscreen, kiosk, wallboard и responsive/mobile principles.
-12. Accessibility и density.
-13. Performance behaviour: virtualization, pagination, incremental loading.
-
-**Reference scenarios:** все основные `RS-*`, особенно `RS-001`, `RS-006`, `RS-013`.
-
-**Критерий DONE:** Engineering и Operations могут быть реализованы поверх одной согласованной Web Platform без дублирующих shell/navigation/editor patterns.
-
-**Открывает:** Architecture Readiness Review #1.
-
----
-
-### GATE-A — Architecture Readiness Review #1
-
-**Статус:** `NOT STARTED`
-
-**Не является:** полным завершением всего функционального ТЗ.
-
-**Проверяем:**
-
-- сущности и lifecycle Engineering;
-- основные operator flows;
-- общий Web behaviour;
-- reference contour от config до runtime/command/audit;
-- отсутствие противоречий с `PRD-Q001–Q803`;
-- достаточность функциональных контрактов для проектирования API/application boundaries.
-
-**Критерий PASS:** можно проектировать первую системную архитектуру без необходимости угадывать базовое поведение Engineering, Operations и Web.
-
----
-
-## 4. Checkpoint protocol — постоянные точки фиксации в Git
-
-Этот раздел нужен специально, чтобы не отслеживать вручную объём переписки и не решать каждый раз заново, пора ли делать Git-checkpoint.
+Этот протокол действует автоматически: пользователю не нужно считать вопросы или напоминать о checkpoint.
 
 ### CP-1. Когда checkpoint обязателен
 
-Checkpoint создаётся при выполнении **любого** из условий:
+Checkpoint создаётся при выполнении любого условия:
 
-1. завершён самостоятельный смысловой блок функциональной спецификации;
+1. завершён самостоятельный смысловой блок;
 2. с предыдущего checkpoint принято ориентировочно `100–200` новых `*-Q...` решений;
-3. связный блок превысил ориентир, но его нельзя разумно разрезать — checkpoint делается сразу после завершения блока, даже если диапазон получился больше 200;
-4. спецификация переходит в `REVIEW` или `DONE`;
-5. обнаружено и принято существенное изменение Product Concept, влияющее на уже зафиксированные требования.
+3. связный блок превысил ориентир и его нельзя разумно разрезать — checkpoint сразу после завершения блока;
+4. subject specification переходит в `REVIEW` или `DONE`;
+5. принято существенное изменение Product Concept, влияющее на уже зафиксированные requirements.
 
-Число 100–200 — **ориентир, не квота**. Смысловая целостность важнее номера вопроса.
+Диапазон `100–200` — ориентир, а не квота; смысловая целостность важнее номера Q.
 
-### CP-2. Что обязательно входит в checkpoint
+### CP-2. Что обязательно сделать перед checkpoint
 
-Перед формированием пакета необходимо:
-
-- перенести в subject specification все принятые `Q` решения с точными ID;
-- перенести все автоматически принятые очевидные решения как `FR`/нормативные правила;
-- обновить Decision Register / traceability диапазон;
-- обновить `Done / Remaining / Next` в этом roadmap;
+- перенести все принятые `Q` в соответствующую specification;
+- перенести автоматически принятые факты как `FR`/нормативные правила;
+- обновить Decision Register/traceability;
+- выполнить coverage-check на пропуски и дубли ID;
+- убедиться, что значимые решения не остались только в чате;
+- обновить `Done / Remaining / Next` в roadmap;
 - обновить `docs/project/PROJECT_STATE.md`;
-- выполнить coverage-check на пропуски номеров, дубли и решения, оставшиеся только в чате;
-- проверить локальные Markdown-ссылки затронутых файлов;
-- только после этого формировать ZIP для Git.
+- проверить затронутые Markdown links/structure;
+- только затем сформировать ZIP для Git.
 
-### CP-3. Что не является поводом для отдельного checkpoint
+### CP-3. Что не создаёт checkpoint само по себе
 
-Не создавать Git-пакет только потому, что:
+- фиксированное число сообщений;
+- 10–30 новых решений внутри незавершённого смыслового блока;
+- редакционная правка без нового нормативного содержания.
 
-- прошло фиксированное число сообщений;
-- принято 10–30 очевидных решений внутри незавершённого блока;
-- изменилось только рабочее пояснение без нового нормативного решения.
+### CP-4. Engineering checkpoint history
 
-### CP-4. Planned checkpoints Engineering
+| Точка | Диапазон | Содержание | Состояние |
+|---|---|---|---|
+| `ENG-CP01` | `Q001–Q110`, `FR001–FR025` | Engineering foundation + Objects & Structure | `COMMITTED` — `688392edb17ddce6e4d3874ff54344aacc2033b0` |
+| `ENG-CP02` | `Q111–Q250`, `FR026–FR058` | Types / Profiles / Templates + lifecycle / propagation / migrations | `READY TO COMMIT` |
+| `ENG-CP03+` | фактический следующий завершённый блок или threshold CP-1 | диапазон заранее не фиксируется | `PLANNED` |
+| `ENG-FINAL` | полный Engineering coverage review | все remaining закрыты/явно делегированы dependent specs | `PLANNED` |
 
-| Точка | Условие | Состояние |
-|---|---|---|
-| `ENG-CP01` | Foundation + Objects & Structure, `ENG-Q001–ENG-Q110` | `CURRENT / READY TO COMMIT` |
-| `ENG-CP02` | Завершён следующий крупный смысловой блок (сейчас Types / Profiles / Templates); целевой ориентир 100–200 новых Q с предыдущей точки | `PLANNED` |
-| `ENG-CP03+` | Каждый следующий завершённый блок или достижение checkpoint threshold по CP-1 | `PLANNED` |
-| `ENG-FINAL` | Полный Engineering coverage review, все Remaining закрыты или явно вынесены в зависимые specs, статус `REVIEW/DONE` | `PLANNED` |
+После commit `ENG-CP02` заменить его состояние на `COMMITTED` и записать фактический SHA при следующем checkpoint/update.
 
-После каждого checkpoint фактический диапазон Q записывается в таблицу; следующий диапазон заранее не фиксируется.
+## 6. FS-20 — Operations / Dispatcher Workspace
 
-## 5. Следующая волна функциональных спецификаций
+**Статус:** `NOT STARTED`.  
+Зависит от основных сущностей и lifecycle `FS-10`. Цель — ежедневная operator workflow: live state, alarms, semantic commands, trends, incidents/My Work, operational exceptions, contextual VMS/ACS/ТОиР, Full/Edge degraded states и rights/explainability.
 
-Эти области не должны блокировать `GATE-A`, если их горизонтальный смысл уже достаточен для центрального контура. Детальная проработка идёт после/параллельно архитектурному foundation согласно зависимостям.
+## 7. FS-30 — Web Platform
 
-| Порядок | Область | Статус | Основная зависимость |
-|---:|---|---|---|
-| 1 | Events / Alarms / Incidents / Notifications | `NOT STARTED` | OPS + Web |
-| 2 | Historian / Trends / Reports | `NOT STARTED` | OPS + Engineering parameters |
-| 3 | Automation | `NOT STARTED` | Engineering + Command Model + runtime contracts |
-| 4 | Dashboards | `NOT STARTED` | Web Platform + object/context contracts |
-| 5 | Mimics | `NOT STARTED` | Web Platform + object/context + command contracts |
-| 6 | ТОиР | `NOT STARTED` | object/physical-unit + OPS |
-| 7 | VMS | `NOT STARTED` | object foundation + OPS + Web |
-| 8 | СКУД | `NOT STARTED` | Person + object foundation + OPS |
-| 9 | Spatial / Maps / BIM | `NOT STARTED` | object/location + Web |
-| 10 | IT / Networks / Virtualization | `NOT STARTED` | observed-object + Engineering |
+**Статус:** `NOT STARTED`.  
+Зависит от ключевых UX-потребностей Engineering и Operations. Определяет общий shell/navigation/routing/registries/inspectors/editors/realtime/degraded/action/permission/error/fullscreen/mobile/accessibility/performance behaviour без выбора frontend framework.
 
-## 6. Предметные проверки общей модели
+## 8. GATE-A — Architecture Readiness Review #1
 
-Эти темы не обязаны становиться самостоятельными сервисами. Их задача — проверить, что функциональные механизмы действительно работают на разных реальных доменах.
+**Статус:** `NOT STARTED`.
 
-| Область | Статус | Что проверяет |
-|---|---|---|
-| HVAC | `NOT STARTED` | типы/профили, PID supervisory, commands, alarms, mimics, ТОиР |
-| Energy | `NOT STARTED` | electrical topology, counters, interval data, quality, reports |
-| Fire | `NOT STARTED` | certified local contour, alarms, plans, restricted commands |
-| Water / Utilities | `NOT STARTED` | distributed Edge, pumps, pressure/flow, counters, maps |
-| Lifts / Escalators | `NOT STARTED` | specialized states, diagnostics, contextual UI |
-| Residential & Small-Site | `NOT STARTED` | scale-down UX, Compact, local I/O, templates, local autonomy |
+PASS означает, что можно проектировать первую системную архитектуру без необходимости угадывать базовое поведение Engineering, Operations и Web. Gate проверяет центральный contour config → validate/impact/publish → deploy/activate → live state/alarm → semantic command → result → audit/history.
 
-## 7. Правила ведения roadmap
+## 9. Следующая волна subject specifications
 
-- Roadmap описывает **порядок проработки**, а не очередность появления функций в зрелом продукте.
-- Не добавлять даты и оценки без отдельной задачи планирования ресурсов/реализации.
-- После каждого принятого блока обновлять только фактический status и `Done / Remaining / Next`.
-- Не дублировать сюда содержание functional requirements.
-- Если тема оказалась частью другой спецификации, объединить её и удалить лишний пункт.
-- Git-checkpoints выполняются по протоколу раздела 4 автоматически, без отдельного отслеживания пользователем.
-- После завершения functional stage удалить этот файл; Git сохранит историю.
+После/вокруг architecture foundation по dependencies: Events/Alarms/Incidents/Notifications; Historian/Trends/Reports; Automation; Dashboards; Mimics; ТОиР; VMS; СКУД; Spatial/Maps/BIM; IT/Networks/Virtualization; предметные domain checks HVAC/Energy/Fire/Water/Residential и другие.
+
+## 10. Правила ведения roadmap
+
+- roadmap фиксирует порядок проработки, а не очередность функций зрелого продукта;
+- не добавлять сроки/оценки без отдельного resource/implementation planning;
+- не дублировать в roadmap сами functional requirements;
+- после каждого checkpoint обновлять только фактические Done/Remaining/Next и checkpoint history;
+- если тема становится частью другой specification, объединить её и удалить лишнее;
+- после завершения functional stage удалить ROADMAP.md; Git сохранит историю.
