@@ -2,7 +2,7 @@
 
 **Дата:** 7 августа 2026 года.  
 **Проверенный исходный commit:** `3da5f084eeb3f354c218a9fe6dfe02a3e9c7abdb`.  
-**Статус:** все замечания первой проверки разобраны; принятые продуктовые решения внесены в `PRODUCT_DECISIONS.md`.
+**Статус:** первая проверка закрыта; повторная проверка качества исправлений и точечные остаточные решения зафиксированы отдельно в `CONCEPT_AUDIT_RECHECK_2026-08-07.md`.
 
 Документ не заменяет исходный аудиторский отчёт. Его задача — дать следующему независимому проверяющему компактную карту «замечание → принятые решения» без восстановления контекста чата.
 
@@ -16,7 +16,7 @@
 | `AUD-006` | P1 | `PRD-Q565–Q569` | Закрыт: один authoritative executor, сохранение operation identity через HA. |
 | `AUD-007` | P1 | `PRD-Q574–Q579` | Закрыт: class-specific reconciliation вместо last-write-wins. |
 | `AUD-008` | P1 | `PRD-Q611–Q614` | Закрыт: persistent Rule state отделён от managed configuration. |
-| `AUD-009` | P1 | `PRD-Q584–Q591` | Закрыт: observed/discovered runtime objects входят в общий object foundation. |
+| `AUD-009` | P1 | `PRD-Q042R`, `PRD-Q584–Q591` | Закрыт после второй проверки: configuration discovery/proposal отделено от authoritative runtime observation; observed runtime objects входят в общий object foundation. |
 | `AUD-010` | P1 | `PRD-Q592–Q597` | Закрыт: одна core identity + service extensions + cross-service impact analysis. |
 | `AUD-011` | P1 | `PRD-Q598–Q602` | Закрыт минимальной Person linkage без HR-модели. |
 | `AUD-012` | P1 | `PRD-Q615–Q622` | Закрыт: operational exceptions разделены по dimensions и имеют единый effective context. |
@@ -37,7 +37,7 @@
 
 ## Что проверить повторно
 
-Повторный независимый аудит должен не заново проектировать продукт, а проверить минимум четыре вещи:
+Повторный независимый аудит был выполнен на commit `339a706ca988679f7d429cd0976d786e9378602b`. Его результат и точечное закрытие остаточных замечаний зафиксированы в `CONCEPT_AUDIT_RECHECK_2026-08-07.md`. Исторически он проверял минимум четыре вещи:
 
 1. что `AUD-001–AUD-026` действительно закрыты без логических дыр;
 2. что новые `PRD-Q528–Q676` не противоречат более ранним решениям;
