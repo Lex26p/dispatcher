@@ -3,11 +3,11 @@
 **Дата состояния:** 7 августа 2026 года.  
 **Репозиторий:** `https://github.com/Lex26p/dispatcher`.  
 **Ветка:** `master`.  
-**Последний подтверждённый SHA до этого пакета:** `1cf035d6fb9dfdde2a94ecc54acdfa106962a3b3`.
+**Последний подтверждённый SHA до этого пакета:** `d4f4b4ef696662c9ef5eec965b21b42e3ac0b61a`.
 
 ## 1. Завершённый этап
 
-Общая горизонтальная продуктовая концепция завершена.
+Общая горизонтальная Product Concept завершена.
 
 - реестр: `PRD-Q001–PRD-Q803`;
 - три независимые сквозные проверки завершены и их принятые результаты встроены в канон;
@@ -16,27 +16,50 @@
 
 ## 2. Текущий этап
 
-Начат этап **Functional Specification** — слой требований между Product Concept и System Architecture.
+Идёт **Functional Specification** — слой требований между Product Concept и System Architecture.
 
-Он должен определить наблюдаемое поведение продукта, пользовательские flows, рабочие области, функциональные lifecycle, validations, errors, permissions и Full/Compact/Edge semantics достаточно подробно для последующего проектирования UX/API/архитектуры.
+Functional foundation зафиксирован в Git. Активная спецификация: `docs/functional/engineering/ENGINEERING_CONFIGURATION.md`.
 
-Правила этапа: `../functional/README.md`.
+## 3. Engineering — текущее состояние
 
-## 3. Текущая дорожная карта
+Приняты и подготовлены к первому смысловому checkpoint:
 
-Временный рабочий навигатор: `../functional/ROADMAP.md`.
+- `ENG-Q001–ENG-Q050` — Engineering foundation: service/workspace, change sets, autosave, revisions/checkpoints, registries/editors, collaboration, validation foundation;
+- `ENG-Q051–ENG-Q110` — Objects & Structure: locations, object registry, creation, identity, typed relations, functional/physical split, observed objects, Duplicate/Create Copies, move/delete;
+- `ENG-FR001–ENG-FR025` — нормативные functional requirements, включая автоматически зафиксированные очевидные решения.
 
-Ближайшая последовательность:
+Первый Engineering checkpoint: `ENG-CP01`.
 
-1. Functional foundation — структура, сценарии, правила.
-2. Engineering / Configuration (`ENG-*`).
-3. Operations / Dispatcher Workspace (`OPS-*`).
-4. Web Platform (`WEB-*`).
-5. Architecture Readiness Review #1.
+## 4. Правило Git-checkpoints
+
+Контрольные точки больше не отслеживаются вручную по сообщениям.
+
+`docs/functional/ROADMAP.md` содержит постоянный checkpoint protocol:
+
+- checkpoint после самостоятельного смыслового блока;
+- ориентир `100–200` новых Q между точками;
+- связный блок не режется искусственно ради номера;
+- перед каждым checkpoint обязательны Q/FR transfer, Decision Register, roadmap update, PROJECT_STATE update и coverage-check;
+- диапазоны следующих Q заранее не фиксируются.
+
+## 5. Следующая точка продолжения
+
+Начать `ENG-Q111...`:
+
+> **Types, Device Profiles, Object Templates, inheritance/composition и managed update semantics.**
+
+После завершения этого смыслового блока применяется `ENG-CP02` согласно roadmap; отдельное напоминание пользователя о checkpoint не требуется.
+
+## 6. Ближайшая последовательность функционального этапа
+
+1. Завершить Engineering / Configuration (`ENG-*`).
+2. Operations / Dispatcher Workspace (`OPS-*`).
+3. Web Platform (`WEB-*`).
+4. Architecture Readiness Review #1.
 
 Это порядок проработки требований, а не release/MVP roadmap.
 
-## 4. Первый architecture-readiness gate
+## 7. Первый architecture-readiness gate
 
 После ENG + OPS + WEB должен быть определён центральный сквозной контур:
 
@@ -44,28 +67,7 @@
 
 Если этот контур не требует архитектурных догадок о пользовательском смысле действий, можно переходить к первой системной архитектуре, не дожидаясь полной детализации всех специализированных сервисов.
 
-## 5. Активные functional-файлы
-
-- `docs/functional/README.md` — правила слоя.
-- `docs/functional/ROADMAP.md` — временная дорожная карта.
-- `docs/functional/REFERENCE_SCENARIOS.md` — сквозные сценарии.
-- `docs/functional/engineering/ENGINEERING_CONFIGURATION.md` — первый активный functional spec.
-- `docs/functional/operations/OPERATIONS.md` — подготовленная граница второй спецификации.
-- `docs/functional/web-platform/WEB_PLATFORM.md` — подготовленная граница Web Platform specification.
-
-## 6. Точка продолжения
-
-После фиксации этого пакета начать `ENG-Q001` и первый раунд Engineering UX:
-
-- верхнеуровневые рабочие области Engineering;
-- entry point;
-- location/context;
-- registry vs editor;
-- текущий change set;
-- переходы object ↔ connection ↔ type/profile/template;
-- Compact simple setup vs professional Engineering.
-
-## 7. Пока не фиксируем автоматически
+## 8. Пока не фиксируем автоматически
 
 До Architecture Readiness Review #1 не переходить по инерции к:
 
