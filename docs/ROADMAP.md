@@ -53,7 +53,7 @@
   - получить состояние устройства;
   - минимальные интеграционные тесты API.
 
-- [ ] **S06 — Blazor WebAssembly read UI**
+- [x] **S06 — Blazor WebAssembly read UI**
   - страница текущих значений;
   - REST-загрузка первоначального состояния;
   - SignalR realtime-обновления;
@@ -61,6 +61,7 @@
   - базовый application shell по правилам `docs/WEB_UI.md`.
 
 - [ ] **S07 — Write path Web → Modbus**
+  - подключить Modbus polling к runtime host;
   - writable-tag;
   - команда из Web;
   - server-side validation;

@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+
+<div class="application-shell">
+    <header class="global-header">
+        <button class="menu-button"
+                type="button"
+                aria-label="Открыть глобальную навигацию"
+                @onclick="ToggleGlobalNavigation">
+            <span aria-hidden="true">☰</span>
+        </button>
+
+        <div class="brand">Dispatcher</div>
+        <div class="global-section">Мониторинг</div>
+    </header>
+
+    @if (_globalNavigationOpen)
+    {
+        <div class="global-nav-backdrop"
+             @onclick="CloseGlobalNavigation">
+            <nav class="global-nav-drawer"
+                 aria-label="Глобальная навигация"
+                 @onclick:stopPropagation="true">
+                <div class="global-nav-title">Сервисы</div>
+
+                <NavLink class="global-nav-link"
+                         ActiveClass="active"
+                         href=""
+                         Match="NavLinkMatch.All"
+                         @onclick="CloseGlobalNavigation">
+                    Мониторинг
+                </NavLink>
+
+                <div class="global-nav-link disabled">
+                    <span>Редактор устройств</span>
+                    <span class="nav-note">позже</span>
+                </div>
+
+                <div class="global-nav-link disabled">
+                    <span>Мнемосхемы</span>
+                    <span class="nav-note">позже</span>
+                </div>
+            </nav>
+        </div>
+    }
+
+    <div class="application-content">
+        @Body
+    </div>
+</div>
+
+@code {
+    private bool _globalNavigationOpen;
+
+    private void ToggleGlobalNavigation()
+    {
+        _globalNavigationOpen = !_globalNavigationOpen;
+    }
+
+    private void CloseGlobalNavigation()
+    {
+        _globalNavigationOpen = false;
+    }
+}

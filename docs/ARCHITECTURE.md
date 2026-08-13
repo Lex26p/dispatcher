@@ -11,70 +11,50 @@ Dispatcher строится как расширяемая система дис�
 - подключать дополнительные протоколы без переделки Web и основной логики;
 - в дальнейшем отображать данные на мнемосхемах.
 
-На ранних этапах система должна оставаться простой. Архитектурные границы нужны для развития, но каждый отдельный компонент не обязан сразу становиться отдельным процессом или сетевым микросервисом.
+На ранних этапах система должна оставаться простой.
 
-## 2. Логическая схема
-
-```text
-                         ┌─────────────────────┐
-                         │ Blazor WebAssembly  │
-                         │        Web          │
-                         └──────────┬──────────┘
-                                    │
-                              REST / SignalR
-                                    │
-                         ┌──────────▼──────────┐
-                         │   ASP.NET Core      │
-                         │      Server         │
-                         └──────────┬──────────┘
-                                    │
-                    Dispatcher.Contracts
-                                    │
-                    ┌───────────────┴───────────────┐
-                    │                               │
-          ┌─────────▼─────────┐           ┌────────▼────────┐
-          │    TagService     │           │ DeviceState     │
-          │ current tag data  │           │    Service      │
-          └─────────▲─────────┘           └────────▲────────┘
-                    │                               │
-                    └───────────────┬───────────────┘
-                                    │
-                         ┌──────────┴──────────┐
-                         │                     │
-              ┌──────────▼─────────┐  ┌───────▼────────┐
-              │  Modbus service   │  │  SNMP service  │
-              │   first stage     │  │     later      │
-              └──────────┬─────────┘  └───────┬────────┘
-                         │                     │
-                      Devices               Devices
-```
-
-## 3. Центральная модель: Tag
-
-Верхние уровни системы работают с логическим идентификатором тега.
-
-Примеры:
+## 2. Логическая схема S06
 
 ```text
-pump01.running
-pump01.pressure
-boiler01.temperature
-switch01.port01.status
+┌──────────────────────────────────────────────────────┐
+│ Browser                                               │
+│ Dispatcher.Web — Blazor WebAssembly                  │
+│                                                      │
+│ REST snapshot + SignalR updates                      │
+└───────────────────────┬──────────────────────────────┘
+                        │ same origin
+┌───────────────────────▼──────────────────────────────┐
+│ Dispatcher.Server — ASP.NET Core                     │
+│                                                      │
+│ REST                    RuntimeHub                   │
+│  │                         ▲                         │
+│  │                         │                         │
+│  └─────────────┬───────────┘                         │
+│                │                                     │
+│       RuntimeHubPublisher                            │
+└────────────────┼─────────────────────────────────────┘
+                 │
+       ┌─────────┴─────────┐
+       │                   │
+┌──────▼──────┐     ┌──────▼──────────┐
+│ TagService  │     │ DeviceState     │
+│             │     │ Service         │
+└──────▲──────┘     └──────▲──────────┘
+       │                   │
+       └─────────┬─────────┘
+                 │
+        protocol services
+                 │
+               Devices
 ```
 
-Верхний уровень не должен использовать:
+`Dispatcher.Contracts` задаёт DTO и имена SignalR-событий между Server и Web.
 
-```text
-Holding Register 40001
-Coil 17
-OID 1.3.6.1....
-```
+## 3. Runtime services Core
 
-Эти данные принадлежат конкретному протокольному адаптеру и конфигурации устройства.
+### TagService
 
-### Runtime-значение тега
-
-Текущее значение внутри Core представлено `TagValue`:
+Хранит текущие значения:
 
 ```text
 TagId
@@ -82,28 +62,19 @@ Value
 Timestamp
 ```
 
-Connection state устройства хранится отдельно от значения тега. `Quality` конкретного тега пока не добавляется: последнее успешно прочитанное значение остаётся в `TagService`, а доступность источника определяется через `DeviceStateService`.
-
-## 4. Runtime services Core
-
-### TagService
-
-`TagService` — владелец текущих значений тегов.
-
-Он предоставляет:
+API:
 
 ```text
-Set(tagId, value)
-Set(tagId, value, timestamp)
-Get(tagId)
-GetAll()
+Set
+Get
+GetAll
 ```
+
+С S06 после `Set` публикуется in-process событие `Changed`.
 
 ### DeviceStateService
 
-Connection state хранится в protocol-neutral `DeviceStateService`.
-
-Минимальное состояние:
+Хранит protocol-neutral состояние:
 
 ```text
 DeviceId
@@ -113,174 +84,187 @@ LastSuccessfulPollAt
 Error
 ```
 
-Core не хранит Modbus address, Unit ID или другие protocol-specific данные состояния.
+С S06 после изменения состояния публикуется in-process событие `Changed`.
 
-## 5. Modbus
+Эти события не содержат SignalR или ASP.NET типов.
 
-Modbus расположен в отдельном проекте `Dispatcher.Modbus`.
+## 4. Modbus
 
-### Конфигурация S04
-
-```text
-ModbusTcpDevice
-├── DeviceId
-├── Host
-├── Port
-└── UnitId
-
-ModbusPollingPlan
-├── Device
-├── Points
-├── PollInterval
-└── RequestTimeout
-
-ModbusHoldingRegisterPoint
-├── TagId
-└── Address
-```
-
-`Address` — raw 0-based protocol address, передаваемый в Function Code 03.
-
-### Poll cycle
+Modbus остаётся отдельным проектом `Dispatcher.Modbus`.
 
 Один poll-cycle:
 
-1. открывает одно TCP-соединение;
-2. последовательно читает все Holding Register points;
-3. только после успешного чтения всего набора обновляет `TagService`;
-4. переводит устройство в `Online`;
+1. открывает TCP-соединение;
+2. читает настроенные Holding Register points;
+3. обновляет `TagService`;
+4. обновляет `DeviceStateService`;
 5. закрывает соединение.
 
-При ошибке устройство переводится в `Offline`, а следующий cycle снова устанавливает соединение.
+На S06 автоматический запуск polling из Server ещё не подключён. Это остаётся частью завершения Phase 1.
 
-## 6. Server и API
+## 5. Dispatcher.Contracts
 
-Начиная с S05 `Dispatcher.Server` регистрирует:
+Проект не зависит от Core, Server, Modbus или Web.
+
+Содержит:
 
 ```text
-TagService          Singleton
-DeviceStateService  Singleton
+TagValueDto
+DeviceStateDto
+DeviceConnectionStatusDto
+RuntimeHubContract
 ```
 
-REST snapshot endpoints:
+`RuntimeHubContract` фиксирует:
+
+```text
+Path = /hubs/runtime
+TagChanged
+DeviceStateChanged
+```
+
+Так строки realtime-протокола не дублируются между Server и Web.
+
+## 6. Server
+
+Runtime services зарегистрированы как singleton:
+
+```text
+TagService
+DeviceStateService
+```
+
+Server предоставляет:
 
 ```text
 GET /health
 GET /api/tags
 GET /api/devices
+SignalR /hubs/runtime
 ```
 
-Server не отдаёт Core-типы напрямую наружу. На HTTP-границе они преобразуются в DTO из dependency-free проекта `Dispatcher.Contracts`.
+### RuntimeHubPublisher
+
+Server подписывается на in-process `Changed` события Core и преобразует их в публичные DTO:
 
 ```text
-Core runtime model
-       ↓
-Dispatcher.Server
-       ↓ mapping
-Dispatcher.Contracts
-       ↓ JSON
-Web / external client
+TagService.Changed
+      ↓
+RuntimeHubPublisher
+      ↓
+TagChanged
+      ↓
+SignalR clients
 ```
 
-`Dispatcher.Contracts` не зависит от Core, Modbus или Server. На S06 этот же проект может использовать Blazor-клиент.
+То же применяется для `DeviceStateService`.
 
-На S05 Server ещё не владеет конфигурацией Modbus и не запускает polling worker автоматически. Его задача на этом шаге — предоставить корректную REST-границу над runtime state.
+Core не знает о SignalR.
 
 ## 7. Web
 
-Web реализуется на Blazor WebAssembly.
+`Dispatcher.Web` — Blazor WebAssembly.
 
-Web не должен ссылаться на Core или Modbus. Он работает через HTTP/SignalR и DTO из `Dispatcher.Contracts`.
-
-Для связи:
-
-- REST — получение snapshot и выполнение будущих команд;
-- SignalR — realtime-изменения, начиная с S06.
-
-### Базовая компоновка Web
-
-Web проектируется как инженерный рабочий инструмент с высокой информационной плотностью.
-
-Основная схема экранов сервисов:
+Он зависит только от:
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ ☰  Global header                                                │
-├──────────────┬──────────────────────────────────┬────────────────┤
-│ Local        │ Optional contextual toolbar      │ Properties     │
-│ navigation   ├──────────────────────────────────┤                │
-│              │                                  │                │
-│              │          Work area               │                │
-│              │                                  │                │
-└──────────────┴──────────────────────────────────┴────────────────┘
+Dispatcher.Contracts
+Microsoft.AspNetCore.Components.WebAssembly
+Microsoft.AspNetCore.SignalR.Client
 ```
 
-Полные правила находятся в `docs/WEB_UI.md`.
+Web не ссылается на Core или Modbus.
 
-## 8. Configuration и runtime
+### Синхронизация runtime state
 
-Постоянная конфигурация и runtime state разделены.
+При загрузке:
 
-### Configuration
+```text
+GET /api/tags
+GET /api/devices
+        ↓
+initial snapshot
+```
 
-Примеры:
+Затем:
 
-- имя устройства;
-- IP;
-- port;
-- protocol;
-- Unit ID;
-- Tag ID;
-- register/OID;
-- data type;
-- polling interval;
-- writable.
+```text
+SignalR
+├── TagChanged
+└── DeviceStateChanged
+```
 
-Постоянное хранилище конфигурации добавляется на этапе редактора устройств.
+При восстановлении SignalR-соединения Web снова читает REST snapshot. Это закрывает окно пропущенных событий во время reconnect.
 
-### Runtime
+### Hosting
 
-Примеры:
+Blazor WebAssembly исполняется в браузере.
 
-- текущее значение;
-- timestamp;
-- connection state;
-- quality.
-
-Runtime-данные на первом этапе живут в памяти.
-
-## 9. Развёртывание на раннем этапе
-
-Логические компоненты не обязаны быть отдельными процессами.
-
-Допустимо:
+В текущем deployment layout статические assets `Dispatcher.Web` раздаёт `Dispatcher.Server`:
 
 ```text
 Browser
-   │
-   ▼
-ASP.NET Core process
-   ├── Server
-   ├── Core runtime services
-   └── protocol workers
+   ↓
+http://host/
+   ├── Blazor static assets
+   ├── /api/*
+   └── /hubs/runtime
 ```
 
-Это уменьшает инфраструктурную сложность.
+Это same-origin deployment и не требует CORS.
 
-## 10. Не входит в первые этапы
+Для .NET 10 framework assets публикуются через endpoint-based static assets (`MapStaticAssets`). `index.html` содержит `<script type="importmap"></script>`, а bootstrap script задаётся через fingerprint placeholder:
 
-До отдельного решения не добавляем:
+```text
+_framework/blazor.webassembly#[.{fingerprint}].js
+```
+
+Во время build placeholder заменяется фактическим fingerprinted именем файла.
+
+## 8. UI layout S06
+
+Экран мониторинга:
+
+```text
+┌───────────────────────────────────────────────────────────┐
+│ ☰ Dispatcher   Мониторинг                                │
+├─────────────────┬─────────────────────────────────────────┤
+│ Local nav       │ compact workspace toolbar              │
+│                 ├─────────────────────────────────────────┤
+│ Все данные      │                                         │
+│                 │ current tags table                      │
+│ Устройства      │                                         │
+│ device01        │                                         │
+│ ...             │                                         │
+└─────────────────┴─────────────────────────────────────────┘
+```
+
+Глобальная навигация открывается overlay-панелью через `☰`.
+
+Правая панель свойств не показывается на мониторинге, потому что текущий экран не является редактором.
+
+Полные постоянные правила находятся в `docs/WEB_UI.md`.
+
+## 9. Configuration и runtime
+
+Постоянная конфигурация и runtime state разделены.
+
+На текущем этапе runtime живёт в памяти.
+
+Постоянное хранение конфигурации добавляется на этапе редактора устройств.
+
+## 10. Не входит в S06
+
+Не добавляются:
 
 - alarms;
 - event journal;
 - historian;
-- authentication;
-- roles/permissions;
-- reports;
-- scripts;
-- redundancy;
-- distributed message brokers;
-- Kubernetes;
-- преждевременное разделение на множество сетевых сервисов.
+- users/roles;
+- сложная UI-библиотека;
+- charts;
+- device editor;
+- Modbus write;
+- сложный message bus.
 
-Эти функции рассматриваются после появления рабочего контура Modbus → Web, редактора устройств, SNMP и простой мнемосхемы.
+Следующий технический результат — завершить Phase 1 реальным hosted polling и write path.

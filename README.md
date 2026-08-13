@@ -42,6 +42,7 @@ Modbus TCP device
 - Server API: ASP.NET Core.
 - Web: Blazor WebAssembly.
 - Realtime: SignalR.
+- Blazor/SignalR packages: 10.0.10.
 - Modbus: NModbus 3.0.83.
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
@@ -55,8 +56,6 @@ Target framework проекта централизованно зафиксир�
 - `rollForward: latestFeature`;
 - prerelease SDK разрешены, чтобы проект мог собираться установленными preview feature band SDK .NET 10.
 
-Это не меняет target framework: код по-прежнему собирается для `net10.0`.
-
 ## Текущая структура solution
 
 ```text
@@ -65,74 +64,91 @@ Dispatcher.slnx
 │   ├── Dispatcher.Contracts/
 │   ├── Dispatcher.Core/
 │   ├── Dispatcher.Modbus/
-│   └── Dispatcher.Server/
+│   ├── Dispatcher.Server/
+│   └── Dispatcher.Web/
 └── tests/
     ├── Dispatcher.Core.Tests/
     ├── Dispatcher.Modbus.Tests/
     └── Dispatcher.Server.Tests/
 ```
 
-`Dispatcher.Contracts` содержит публичные DTO границы Server ↔ Web и не зависит от Core или Modbus.
+`Dispatcher.Web` зависит только от `Dispatcher.Contracts` и platform packages Blazor/SignalR. Он не ссылается на Core или Modbus.
 
-## Runtime API
+## Runtime API и realtime
 
-Начиная с S05 ASP.NET Core публикует snapshot текущего runtime-состояния:
+ASP.NET Core публикует:
 
 ```text
 GET /health
 GET /api/tags
 GET /api/devices
+
+SignalR /hubs/runtime
 ```
 
-`GET /api/tags` возвращает логические теги:
+Web работает в два этапа:
 
 ```text
-TagId
-Value
-Timestamp
+1. REST snapshot
+       ↓
+   текущее состояние
+
+2. SignalR
+       ↓
+   последующие изменения
 ```
 
-`GET /api/devices` возвращает protocol-neutral состояние устройств:
+После восстановления SignalR-соединения Web повторно загружает REST snapshot, чтобы восстановить изменения, которые могли произойти во время разрыва.
+
+События SignalR:
 
 ```text
-DeviceId
-Status
-UpdatedAt
-LastSuccessfulPollAt
-Error
+TagChanged
+DeviceStateChanged
 ```
 
-API не публикует Modbus register address, Unit ID и другие protocol-specific данные.
+## Web UI S06
 
-На S05 Server регистрирует `TagService` и `DeviceStateService` как singleton runtime services. Автоматический запуск Modbus polling из Server пока не добавлен: API уже читает те же runtime-сервисы, которые будут наполняться protocol workers.
+Первый экран — `Мониторинг`.
+
+Компоновка:
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ ☰  Dispatcher   Мониторинг                                   │
+├──────────────────┬────────────────────────────────────────────┤
+│ Локальная        │ Текущие значения          SignalR / refresh│
+│ навигация        ├────────────────────────────────────────────┤
+│                  │                                            │
+│ Все данные       │                 Tag table                  │
+│ Устройства       │                                            │
+│                  │                                            │
+└──────────────────┴────────────────────────────────────────────┘
+```
+
+Глобальная навигация открывается поверх рабочей области по `☰` и не занимает постоянную ширину.
+
+Панель свойств справа на экране мониторинга не показывается, потому что это пока не редактор. Для Device Editor и Mimic Editor правило `слева → выбор, центр → работа, справа → свойства` остаётся обязательным.
+
+Blazor WebAssembly исполняется в браузере. В текущем deployment-layout его статические файлы раздаёт тот же `Dispatcher.Server`, поэтому Web, REST и SignalR работают с одного origin.
+
+Для .NET 10 bootstrap-файл Blazor WebAssembly является fingerprinted static asset. `index.html` содержит import map и использует placeholder `blazor.webassembly#[.{fingerprint}].js`, а Server публикует static web assets через `MapStaticAssets()`.
 
 ## Текущий Modbus scope
 
-После S04 backend поддерживает:
+Backend поддерживает:
 
-```text
-несколько Holding Register UInt16
-              ↓
-       poll cycle
-              ↓
-         TagService
+- Modbus TCP;
+- Function Code 03;
+- несколько Holding Register `UInt16`;
+- polling interval;
+- timeout;
+- reconnect через новое соединение каждого cycle;
+- protocol-neutral `Online/Offline` состояние.
 
-и отдельно:
+`ModbusHoldingRegisterPoint.Address` — raw protocol address (`ushort`).
 
-Modbus device
-      ↓
-DeviceStateService
-      ↓
-Online / Offline
-```
-
-Один poll cycle открывает одно TCP-соединение, последовательно читает все настроенные точки и закрывает соединение.
-
-Следующий cycle снова устанавливает соединение. Это является минимальной reconnect-моделью текущей версии: после ошибки устройство становится `Offline`, а следующий cycle автоматически делает новую попытку.
-
-`ModbusHoldingRegisterPoint.Address` — raw protocol address (`ushort`), передаваемый в Modbus Function 03. Формат документации вида `40001` пока автоматически не преобразуется.
-
-Пока поддерживается только Holding Register `UInt16`. Группировка соседних регистров, другие Modbus areas, преобразования типов и запись появятся позже.
+На S06 Server всё ещё не запускает Modbus polling автоматически. Этот шаг проверяет Web/REST/SignalR границу. Полное чтение `Modbus → Web` будет соединено с runtime host до завершения Phase 1.
 
 ## Основные принципы
 

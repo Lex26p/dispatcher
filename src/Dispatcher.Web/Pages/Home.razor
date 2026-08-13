@@ -1,0 +1,208 @@
+@page "/"
+@implements IDisposable
+@inject RuntimeStateClient RuntimeState
+
+<PageTitle>Dispatcher — Мониторинг</PageTitle>
+
+<div class="monitoring-shell">
+    <aside class="local-navigation">
+        <div class="local-nav-heading">Мониторинг</div>
+
+        <div class="local-nav-item active">
+            <span>Все данные</span>
+            <span class="item-count">@RuntimeState.Tags.Count</span>
+        </div>
+
+        <div class="local-nav-section">Устройства</div>
+
+        <div class="device-list">
+            @if (RuntimeState.Devices.Count == 0)
+            {
+                <div class="compact-empty">
+                    Нет устройств
+                </div>
+            }
+            else
+            {
+                @foreach (var device in RuntimeState.Devices)
+                {
+                    <div class="device-row"
+                         title="@device.Error">
+                        <span class="status-dot @StatusClass(device.Status)"
+                              aria-hidden="true"></span>
+                        <span class="device-id">@device.DeviceId</span>
+                        <span class="device-status">
+                            @StatusText(device.Status)
+                        </span>
+                    </div>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="workspace">
+        <div class="workspace-toolbar">
+            <div class="workspace-toolbar-left">
+                <span class="workspace-title">Текущие значения</span>
+                <span class="workspace-count">
+                    @RuntimeState.Tags.Count
+                </span>
+            </div>
+
+            <div class="workspace-toolbar-right">
+                <span class="realtime-state @ConnectionClass(RuntimeState.ConnectionState)">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    @ConnectionText(RuntimeState.ConnectionState)
+                </span>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_refreshing"
+                        @onclick="RefreshAsync">
+                    @(_refreshing ? "Обновление…" : "Обновить")
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(RuntimeState.LastError))
+        {
+            <div class="runtime-error">
+                @RuntimeState.LastError
+            </div>
+        }
+
+        <div class="table-area">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tag ID</th>
+                        <th>Значение</th>
+                        <th>Время</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (RuntimeState.Tags.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="3" class="table-empty">
+                                Текущих значений пока нет.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var tag in RuntimeState.Tags)
+                        {
+                            <tr>
+                                <td class="tag-id">@tag.TagId</td>
+                                <td class="tag-value">@FormatValue(tag.Value)</td>
+                                <td class="timestamp">
+                                    @tag.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+@code {
+    private bool _refreshing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        RuntimeState.Changed += OnRuntimeChanged;
+        await RuntimeState.StartAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _refreshing = true;
+
+        try
+        {
+            await RuntimeState.RefreshAsync();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private void OnRuntimeChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string StatusClass(DeviceConnectionStatusDto status)
+    {
+        return status switch
+        {
+            DeviceConnectionStatusDto.Online => "online",
+            DeviceConnectionStatusDto.Offline => "offline",
+            _ => "unknown"
+        };
+    }
+
+    private static string StatusText(DeviceConnectionStatusDto status)
+    {
+        return status switch
+        {
+            DeviceConnectionStatusDto.Online => "Online",
+            DeviceConnectionStatusDto.Offline => "Offline",
+            _ => "Unknown"
+        };
+    }
+
+    private static string ConnectionClass(
+        RuntimeConnectionState state)
+    {
+        return state switch
+        {
+            RuntimeConnectionState.Connected => "connected",
+            RuntimeConnectionState.Reconnecting => "reconnecting",
+            _ => "disconnected"
+        };
+    }
+
+    private static string ConnectionText(
+        RuntimeConnectionState state)
+    {
+        return state switch
+        {
+            RuntimeConnectionState.Connecting => "SignalR: подключение",
+            RuntimeConnectionState.Connected => "SignalR: подключен",
+            RuntimeConnectionState.Reconnecting => "SignalR: переподключение",
+            _ => "SignalR: отключен"
+        };
+    }
+
+    private static string FormatValue(object? value)
+    {
+        if (value is null)
+        {
+            return "null";
+        }
+
+        if (value is JsonElement json)
+        {
+            return json.ValueKind switch
+            {
+                JsonValueKind.String => json.GetString() ?? string.Empty,
+                JsonValueKind.True => "True",
+                JsonValueKind.False => "False",
+                JsonValueKind.Null => "null",
+                _ => json.ToString()
+            };
+        }
+
+        return value.ToString() ?? string.Empty;
+    }
+
+    public void Dispose()
+    {
+        RuntimeState.Changed -= OnRuntimeChanged;
+    }
+}

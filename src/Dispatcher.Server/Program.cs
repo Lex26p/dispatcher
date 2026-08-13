@@ -1,14 +1,20 @@
-using Dispatcher.Contracts.Devices;
-using Dispatcher.Contracts.Tags;
+using Dispatcher.Contracts.Realtime;
 using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
+using Dispatcher.Server.Realtime;
+using Dispatcher.Server.Runtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<TagService>();
 builder.Services.AddSingleton<DeviceStateService>();
 
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<RuntimeHubPublisher>();
+
 var app = builder.Build();
+
+app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Ok(new
 {
@@ -18,40 +24,23 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapGet("/api/tags", (TagService tagService) =>
 {
     return tagService.GetAll()
-        .Select(tag => new TagValueDto(
-            tag.TagId,
-            tag.Value,
-            tag.Timestamp))
+        .Select(RuntimeContractMapper.ToDto)
         .ToArray();
 });
 
 app.MapGet("/api/devices", (DeviceStateService deviceStateService) =>
 {
     return deviceStateService.GetAll()
-        .Select(state => new DeviceStateDto(
-            state.DeviceId,
-            MapStatus(state.Status),
-            state.UpdatedAt,
-            state.LastSuccessfulPollAt,
-            state.Error))
+        .Select(RuntimeContractMapper.ToDto)
         .ToArray();
 });
 
-app.Run();
+app.MapHub<RuntimeHub>(RuntimeHubContract.Path);
 
-static DeviceConnectionStatusDto MapStatus(DeviceConnectionStatus status)
-{
-    return status switch
-    {
-        DeviceConnectionStatus.Unknown => DeviceConnectionStatusDto.Unknown,
-        DeviceConnectionStatus.Online => DeviceConnectionStatusDto.Online,
-        DeviceConnectionStatus.Offline => DeviceConnectionStatusDto.Offline,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(status),
-            status,
-            "Unknown device connection status.")
-    };
-}
+app.MapStaticAssets();
+app.MapFallbackToFile("index.html");
+
+app.Run();
 
 public partial class Program
 {

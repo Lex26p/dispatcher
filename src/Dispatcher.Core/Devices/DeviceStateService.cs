@@ -7,6 +7,8 @@ public sealed class DeviceStateService
     private readonly ConcurrentDictionary<string, DeviceRuntimeState> _states =
         new(StringComparer.Ordinal);
 
+    public event Action<DeviceRuntimeState>? Changed;
+
     public DeviceRuntimeState SetOnline(
         string deviceId,
         DateTimeOffset timestamp)
@@ -21,6 +23,8 @@ public sealed class DeviceStateService
             Error: null);
 
         _states[deviceId] = state;
+        Changed?.Invoke(state);
+
         return state;
     }
 
@@ -31,7 +35,7 @@ public sealed class DeviceStateService
     {
         ValidateDeviceId(deviceId);
 
-        return _states.AddOrUpdate(
+        var state = _states.AddOrUpdate(
             deviceId,
             _ => new DeviceRuntimeState(
                 deviceId,
@@ -45,6 +49,10 @@ public sealed class DeviceStateService
                 timestamp,
                 current.LastSuccessfulPollAt,
                 error));
+
+        Changed?.Invoke(state);
+
+        return state;
     }
 
     public DeviceRuntimeState? Get(string deviceId)

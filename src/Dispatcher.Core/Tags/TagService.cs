@@ -7,6 +7,8 @@ public sealed class TagService
     private readonly ConcurrentDictionary<string, TagValue> _values =
         new(StringComparer.Ordinal);
 
+    public event Action<TagValue>? Changed;
+
     public TagValue Set(string tagId, object? value)
     {
         return Set(tagId, value, DateTimeOffset.UtcNow);
@@ -18,6 +20,8 @@ public sealed class TagService
 
         var tagValue = new TagValue(tagId, value, timestamp);
         _values[tagId] = tagValue;
+
+        Changed?.Invoke(tagValue);
 
         return tagValue;
     }
