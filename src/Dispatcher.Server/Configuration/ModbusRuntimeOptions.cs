@@ -12,12 +12,73 @@ public sealed class ModbusRuntimeOptions
 
     public ModbusPollingPlan CreatePollingPlan()
     {
-        if (!Enabled)
+        EnsureEnabled();
+
+        var device = CreateDevice();
+        var requestTimeout = CreateRequestTimeout();
+
+        if (Device.Points is null || Device.Points.Count == 0)
         {
             throw new InvalidOperationException(
-                "Modbus runtime is disabled.");
+                "Modbus:Device:Points must contain at least one point.");
         }
 
+        var points = Device.Points
+            .Select((point, index) => CreatePoint(
+                point,
+                $"Modbus:Device:Points:{index}"))
+            .ToArray();
+
+        return new ModbusPollingPlan(
+            Device: device,
+            Points: points,
+            PollInterval: CreatePollInterval(),
+            RequestTimeout: requestTimeout);
+    }
+
+    public ModbusRuntimePointOptions? FindPoint(string tagId)
+    {
+        if (string.IsNullOrWhiteSpace(tagId)
+            || Device?.Points is null)
+        {
+            return null;
+        }
+
+        return Device.Points.FirstOrDefault(
+            point => string.Equals(
+                point.TagId,
+                tagId,
+                StringComparison.Ordinal));
+    }
+
+    public bool IsTagWritable(string tagId)
+    {
+        return Enabled
+            && FindPoint(tagId)?.Writable == true;
+    }
+
+    public ModbusWriteTarget CreateWriteTarget(
+        ModbusRuntimePointOptions point)
+    {
+        EnsureEnabled();
+        ArgumentNullException.ThrowIfNull(point);
+
+        if (!point.Writable)
+        {
+            throw new InvalidOperationException(
+                $"Tag '{point.TagId}' is read-only.");
+        }
+
+        return new ModbusWriteTarget(
+            CreateDevice(),
+            CreatePoint(
+                point,
+                $"Modbus tag '{point.TagId}'"),
+            CreateRequestTimeout());
+    }
+
+    private ModbusTcpDevice CreateDevice()
+    {
         ArgumentNullException.ThrowIfNull(Device);
 
         ValidateRequired(
@@ -39,60 +100,65 @@ public sealed class ModbusRuntimeOptions
                 "Modbus:Device:UnitId must be between 0 and 255.");
         }
 
+        return new ModbusTcpDevice(
+            Device.DeviceId,
+            Device.Host,
+            Device.Port,
+            (byte)Device.UnitId);
+    }
+
+    private TimeSpan CreatePollInterval()
+    {
         if (Device.PollIntervalMilliseconds <= 0)
         {
             throw new InvalidOperationException(
                 "Modbus:Device:PollIntervalMilliseconds must be greater than zero.");
         }
 
+        return TimeSpan.FromMilliseconds(
+            Device.PollIntervalMilliseconds);
+    }
+
+    private TimeSpan CreateRequestTimeout()
+    {
         if (Device.RequestTimeoutMilliseconds <= 0)
         {
             throw new InvalidOperationException(
                 "Modbus:Device:RequestTimeoutMilliseconds must be greater than zero.");
         }
 
-        if (Device.Points is null || Device.Points.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "Modbus:Device:Points must contain at least one point.");
-        }
-
-        var points = Device.Points
-            .Select((point, index) => CreatePoint(point, index))
-            .ToArray();
-
-        return new ModbusPollingPlan(
-            Device: new ModbusTcpDevice(
-                Device.DeviceId,
-                Device.Host,
-                Device.Port,
-                (byte)Device.UnitId),
-            Points: points,
-            PollInterval: TimeSpan.FromMilliseconds(
-                Device.PollIntervalMilliseconds),
-            RequestTimeout: TimeSpan.FromMilliseconds(
-                Device.RequestTimeoutMilliseconds));
+        return TimeSpan.FromMilliseconds(
+            Device.RequestTimeoutMilliseconds);
     }
 
     private static ModbusHoldingRegisterPoint CreatePoint(
         ModbusRuntimePointOptions point,
-        int index)
+        string path)
     {
         ArgumentNullException.ThrowIfNull(point);
 
         ValidateRequired(
             point.TagId,
-            $"Modbus:Device:Points:{index}:TagId");
+            $"{path}:TagId");
 
         if (point.Address is < 0 or > ushort.MaxValue)
         {
             throw new InvalidOperationException(
-                $"Modbus:Device:Points:{index}:Address must be between 0 and 65535.");
+                $"{path}:Address must be between 0 and 65535.");
         }
 
         return new ModbusHoldingRegisterPoint(
             point.TagId,
             (ushort)point.Address);
+    }
+
+    private void EnsureEnabled()
+    {
+        if (!Enabled)
+        {
+            throw new InvalidOperationException(
+                "Modbus runtime is disabled.");
+        }
     }
 
     private static void ValidateRequired(
@@ -129,4 +195,11 @@ public sealed class ModbusRuntimePointOptions
     public string TagId { get; set; } = string.Empty;
 
     public int Address { get; set; }
+
+    public bool Writable { get; set; }
 }
+
+public sealed record ModbusWriteTarget(
+    ModbusTcpDevice Device,
+    ModbusHoldingRegisterPoint Point,
+    TimeSpan RequestTimeout);

@@ -1,7 +1,5 @@
 # Архитектурные решения
 
-Этот файл фиксирует принятые решения, чтобы следующие изменения не основывались на догадках.
-
 Если решение меняется, старое не удаляется молча: его статус меняется на `Superseded`, а ниже добавляется новое решение с причиной.
 
 ---
@@ -20,19 +18,15 @@ Core и Server реализуются на C#/.NET.
 
 Web-клиент реализуется на Blazor WebAssembly.
 
-Для сложной графики в будущем допускается JavaScript interop без отказа от Blazor в остальной части приложения.
-
 ---
 
 ## D-003 — TagService как центр runtime-состояния
 
 **Status:** Accepted
 
-Центральной runtime-абстракцией измеряемых/управляемых данных является логический Tag.
+`TagService` хранит текущие значения логических Tag.
 
-`TagService` хранит текущие значения тегов.
-
-Connection state устройства хранится отдельно в protocol-neutral `DeviceStateService`.
+Connection state хранится отдельно в `DeviceStateService`.
 
 ---
 
@@ -40,9 +34,7 @@ Connection state устройства хранится отдельно в proto
 
 **Status:** Accepted
 
-Web, мнемосхемы и общая предметная логика обращаются к логическим `TagId` и `DeviceId`.
-
-Прямые зависимости верхних уровней от Modbus-register, coil, SNMP OID и других protocol-specific адресов запрещены.
+Web и общая логика работают с `TagId`/`DeviceId`, а не Modbus register/OID.
 
 ---
 
@@ -50,9 +42,7 @@ Web, мнемосхемы и общая предметная логика обр
 
 **Status:** Accepted
 
-Не строим заранее полноценную SCADA.
-
-До отдельной необходимости не вводим alarms, events, roles, historian, message broker, distributed services и сложный plugin runtime.
+Не вводим преждевременно alarms, historian, roles, brokers, distributed services и generic plugin framework.
 
 ---
 
@@ -60,7 +50,7 @@ Web, мнемосхемы и общая предметная логика обр
 
 **Status:** Accepted
 
-Core, Server и протокольные компоненты проектируются с явными границами, но в ранней версии могут выполняться в одном серверном процессе.
+Core, Server и protocol components имеют явные границы, но ранняя версия выполняется в одном host.
 
 ---
 
@@ -68,12 +58,7 @@ Core, Server и протокольные компоненты проектиру
 
 **Status:** Accepted
 
-Для Web:
-
-- REST используется для получения snapshot и будущих команд;
-- SignalR используется для realtime-изменений.
-
-После SignalR reconnect клиент повторно получает REST snapshot.
+REST используется для snapshot и команд, SignalR — для realtime changes.
 
 ---
 
@@ -81,7 +66,7 @@ Core, Server и протокольные компоненты проектиру
 
 **Status:** Accepted
 
-Постоянная конфигурация устройства/тега не смешивается с текущими runtime-значениями.
+Persistent configuration не смешивается с текущими runtime values.
 
 ---
 
@@ -89,9 +74,7 @@ Core, Server и протокольные компоненты проектиру
 
 **Status:** Accepted
 
-Перед каждым шагом разработки агент обязан читать актуальный `master` репозитория и необходимые файлы.
-
-Правила взаимодействия подробно описаны в `AGENTS.md`.
+Перед каждым шагом читается актуальный `master` и необходимые файлы.
 
 ---
 
@@ -99,9 +82,7 @@ Core, Server и протокольные компоненты проектиру
 
 **Status:** Accepted
 
-Web-интерфейс проектируется с приоритетом рабочей области и информационной плотности.
-
-Подробные UI-правила зафиксированы в `docs/WEB_UI.md`.
+UI проектируется с приоритетом рабочей области и информационной плотности.
 
 ---
 
@@ -109,9 +90,7 @@ Web-интерфейс проектируется с приоритетом ра
 
 **Status:** Accepted
 
-Первая реализация Modbus TCP использует NModbus 3.x, начиная с `3.0.83`.
-
-Зависимость изолирована внутри `Dispatcher.Modbus`.
+Первая Modbus TCP реализация использует NModbus 3.x (`3.0.83`).
 
 ---
 
@@ -119,17 +98,15 @@ Web-интерфейс проектируется с приоритетом ра
 
 **Status:** Accepted
 
-Состояние соединения устройства хранится в `DeviceStateService`, а не кодируется специальным тегом.
+Connection state хранится в protocol-neutral `DeviceStateService`.
 
 ---
 
-## D-013 — Reconnect S04 через новое соединение каждого poll-cycle
+## D-013 — Reconnect через новое соединение каждого poll-cycle
 
 **Status:** Accepted
 
-Каждый Modbus poll-cycle открывает соединение, читает набор точек и закрывает его.
-
-Persistent connection и сложный reconnect вводятся только при необходимости.
+Каждый cycle открывает новое TCP-соединение. Persistent connection вводится только при необходимости.
 
 ---
 
@@ -137,19 +114,7 @@ Persistent connection и сложный reconnect вводятся только 
 
 **Status:** Accepted
 
-Публичные DTO находятся в `Dispatcher.Contracts`.
-
-```text
-Dispatcher.Contracts
-    └── не зависит от Core / Modbus / Server / Web
-
-Dispatcher.Server
-    ├── Dispatcher.Contracts
-    └── Dispatcher.Core
-
-Dispatcher.Web
-    └── Dispatcher.Contracts
-```
+`Dispatcher.Contracts` не зависит от Core/Modbus/Server/Web. Web ссылается на Contracts, но не Core.
 
 ---
 
@@ -157,11 +122,7 @@ Dispatcher.Web
 
 **Status:** Accepted
 
-`Dispatcher.Web` остаётся client-side Blazor WebAssembly.
-
-Статические assets раздаёт `Dispatcher.Server`, поэтому Web, REST и SignalR работают с одного origin.
-
-Для .NET 10 Server использует `MapStaticAssets()`, а `index.html` использует fingerprinted Blazor bootstrap asset.
+Client-side WASM, REST и SignalR работают с одного origin.
 
 ---
 
@@ -169,11 +130,7 @@ Dispatcher.Web
 
 **Status:** Accepted
 
-`TagService` и `DeviceStateService` публикуют простые in-process `Changed` events.
-
-`Dispatcher.Server` преобразует их в SignalR через `RuntimeHubPublisher`.
-
-Core не зависит от SignalR.
+Core публикует in-process `Changed`; Server преобразует их в SignalR.
 
 ---
 
@@ -181,26 +138,76 @@ Core не зависит от SignalR.
 
 **Status:** Accepted
 
-S07 разделён на два подшага:
+S07A использует strongly typed секцию `Modbus`; persistent configuration относится к S08.
+
+---
+
+## D-018 — Write routing выполняется по логическому TagId
+
+**Status:** Accepted
+
+Публичная команда:
 
 ```text
-S07A hosted read runtime
-S07B write path
+POST /api/tags/{tagId}/write
 ```
 
-В S07A один Modbus TCP device конфигурируется через strongly typed секцию `Modbus` стандартной ASP.NET Core configuration system.
+содержит только логический `TagId` и новое значение.
 
-По умолчанию polling выключен:
+Server разрешает `TagId` в текущей configuration и только затем получает Modbus-specific:
 
 ```text
-Modbus:Enabled = false
+Device
+UnitId
+Address
+Writable
 ```
+
+Web не может передать произвольный Modbus address.
 
 Причина:
 
-- Server уже должен уметь реально запускать protocol worker;
-- persistent configuration относится к следующему этапу S08;
-- временный config не должен требовать SQLite раньше дорожной карты;
-- стандартная configuration system позволяет использовать `appsettings.json` и environment variables без собственного loader.
+- сохраняется граница `Protocol → Tag → Application`;
+- server-side configuration остаётся authority для write target;
+- read-only tags нельзя сделать writable подменой HTTP payload;
+- будущий Web не зависит от protocol-specific addressing.
 
-Поддержка нескольких persistent devices, CRUD и применение изменённой конфигурации остаются S08/S09.
+---
+
+## D-019 — Writable является configuration metadata, а не частью TagService
+
+**Status:** Accepted
+
+`TagService` продолжает хранить только:
+
+```text
+TagId
+Value
+Timestamp
+```
+
+`Writable` берётся из текущей configuration и добавляется только в public `TagValueDto`.
+
+Причина:
+
+- configuration/runtime остаются разделены;
+- текущее значение не становится владельцем access policy;
+- S08 сможет перенести metadata в persistent model без миграции runtime store.
+
+---
+
+## D-020 — Phase 1 write ограничен UInt16 Holding Register FC06
+
+**Status:** Accepted
+
+S07B пишет только один Holding Register `UInt16` через Modbus Function Code 06.
+
+Допустимый диапазон:
+
+```text
+0..65535
+```
+
+После успешного Modbus response значение сразу записывается в `TagService`, поэтому Web получает подтверждённое новое состояние через существующий SignalR path.
+
+Другие data types, coils и multi-register write добавляются только вместе с соответствующей configuration model.

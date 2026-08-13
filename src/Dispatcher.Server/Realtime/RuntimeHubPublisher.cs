@@ -1,8 +1,10 @@
 using Dispatcher.Contracts.Realtime;
 using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
+using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Runtime;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace Dispatcher.Server.Realtime;
 
@@ -11,17 +13,20 @@ public sealed class RuntimeHubPublisher : IHostedService
     private readonly TagService _tagService;
     private readonly DeviceStateService _deviceStateService;
     private readonly IHubContext<RuntimeHub> _hubContext;
+    private readonly IOptions<ModbusRuntimeOptions> _modbusOptions;
     private readonly ILogger<RuntimeHubPublisher> _logger;
 
     public RuntimeHubPublisher(
         TagService tagService,
         DeviceStateService deviceStateService,
         IHubContext<RuntimeHub> hubContext,
+        IOptions<ModbusRuntimeOptions> modbusOptions,
         ILogger<RuntimeHubPublisher> logger)
     {
         _tagService = tagService;
         _deviceStateService = deviceStateService;
         _hubContext = hubContext;
+        _modbusOptions = modbusOptions;
         _logger = logger;
     }
 
@@ -47,7 +52,9 @@ public sealed class RuntimeHubPublisher : IHostedService
         {
             await _hubContext.Clients.All.SendAsync(
                 RuntimeHubContract.TagChanged,
-                RuntimeContractMapper.ToDto(tag));
+                RuntimeContractMapper.ToDto(
+                    tag,
+                    _modbusOptions.Value.IsTagWritable(tag.TagId)));
         }
         catch (Exception exception)
         {

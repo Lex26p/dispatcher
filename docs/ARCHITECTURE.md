@@ -1,45 +1,58 @@
 # Архитектура Dispatcher
 
-## 1. Назначение
+## 1. Состояние после Phase 1
 
-Dispatcher строится как расширяемая система диспетчеризации, способная получать текущие значения, хранить runtime-состояние, передавать изменения в Web и выполнять команды управления.
+Первый вертикальный срез работает в обоих направлениях:
 
-На ранних этапах система остаётся простой и выполняется в одном ASP.NET Core процессе.
+```text
+                 read / write
+Browser  ↔  Server  ↔  Core  ↔  Modbus  ↔  Device
+```
 
-## 2. Логическая схема S07A
+Система остаётся одним ASP.NET Core host с логически разделёнными проектами.
+
+## 2. Логическая схема
 
 ```text
 ┌──────────────────────────────────────────────────────┐
 │ Browser                                               │
 │ Dispatcher.Web — Blazor WebAssembly                  │
-│ REST snapshot + SignalR updates                      │
+│ REST commands/snapshot + SignalR updates             │
 └───────────────────────┬──────────────────────────────┘
                         │ same origin
 ┌───────────────────────▼──────────────────────────────┐
 │ Dispatcher.Server — ASP.NET Core                     │
 │                                                      │
-│ REST / SignalR                                       │
-│       ▲                                              │
-│       │                                              │
-│ TagService + DeviceStateService                      │
-│       ▲                                              │
-│       │                                              │
+│ GET /api/tags                                        │
+│ GET /api/devices                                     │
+│ POST /api/tags/{tagId}/write                         │
+│ SignalR /hubs/runtime                                │
+│                                                      │
 │ ModbusRuntimeHostedService                           │
-│       │                                              │
-│ ModbusPollingService                                 │
-└───────┼──────────────────────────────────────────────┘
-        │
-        ▼
- Modbus TCP device
+└───────────────┬──────────────────────────────────────┘
+                │
+      ┌─────────┴─────────┐
+      │                   │
+┌─────▼──────┐     ┌──────▼──────────┐
+│ TagService │     │ DeviceState     │
+│            │     │ Service         │
+└─────▲──────┘     └──────▲──────────┘
+      │                   │
+      └─────────┬─────────┘
+                │
+       Dispatcher.Modbus
+       ├── polling FC03
+       └── write FC06
+                │
+                ▼
+        Modbus TCP device
 ```
 
-`Dispatcher.Contracts` задаёт DTO и имена SignalR-событий между Server и Web.
-
-## 3. Runtime services Core
+## 3. Core runtime
 
 ### TagService
 
-Хранит текущие значения:
+Хранит текущее runtime-значение:
 
 ```text
 TagId
@@ -47,11 +60,13 @@ Value
 Timestamp
 ```
 
-После `Set` публикуется in-process `Changed`.
+После `Set` публикует in-process `Changed`.
+
+`Writable` не хранится в `TagService`: это configuration metadata, а не runtime value.
 
 ### DeviceStateService
 
-Хранит protocol-neutral состояние:
+Хранит:
 
 ```text
 DeviceId
@@ -61,51 +76,88 @@ LastSuccessfulPollAt
 Error
 ```
 
-После изменения публикуется in-process `Changed`.
+Core не знает Modbus address, Unit ID, ASP.NET или SignalR.
 
-Core не зависит от ASP.NET, SignalR или Modbus-конфигурации.
+## 4. Modbus read
 
-## 4. Modbus
-
-`Dispatcher.Modbus` отвечает за protocol-specific работу.
-
-Текущий scope:
+Текущий read scope:
 
 - Modbus TCP;
-- Function Code 03;
-- несколько Holding Register `UInt16`;
-- polling interval;
-- request/connect timeout;
-- reconnect через новое соединение каждого poll-cycle;
-- обновление `TagService` и `DeviceStateService`.
+- FC03;
+- Holding Register;
+- `UInt16`;
+- несколько points;
+- timeout;
+- новое соединение каждого poll-cycle.
 
-Один poll-cycle открывает соединение, читает весь набор точек, публикует значения только после успешного чтения полного набора и закрывает соединение.
-
-## 5. Hosted runtime S07A
-
-`Dispatcher.Server` с S07A ссылается на `Dispatcher.Modbus`.
-
-Запуск polling выполняет:
+Путь:
 
 ```text
-ModbusRuntimeHostedService : BackgroundService
-```
-
-Зависимости:
-
-```text
-ModbusRuntimeHostedService
-        ↓
 ModbusPollingService
+        ↓
+ModbusTcpRegisterReader
+        ↓ FC03
+Device
         ↓
 TagService + DeviceStateService
 ```
 
-Hosted service не содержит Modbus protocol implementation. Он только преобразует Server-конфигурацию в `ModbusPollingPlan` и запускает уже существующий polling service.
+Новый poll публикует значения только после успешного чтения всего настроенного набора.
 
-### Временная конфигурация
+## 5. Modbus write
 
-До S08 конфигурация одного устройства задаётся strongly typed секцией:
+Текущий write scope:
+
+- только настроенный `Writable = true` tag;
+- Holding Register;
+- `UInt16`;
+- FC06 Write Single Register;
+- значение `0…65535`.
+
+Публичная команда не содержит protocol address:
+
+```text
+POST /api/tags/{tagId}/write
+{
+  "value": 3456
+}
+```
+
+Server:
+
+1. проверяет, что Modbus runtime включён;
+2. находит `TagId` в текущей configuration;
+3. проверяет `Writable`;
+4. проверяет `UInt16`;
+5. преобразует configuration в Modbus write target;
+6. вызывает `ModbusWriteService`;
+7. после успешного FC06 обновляет `TagService`.
+
+```text
+TagId + value
+      ↓
+Server validation / routing
+      ↓
+configured Device + Address
+      ↓
+ModbusWriteService
+      ↓
+ModbusTcpRegisterWriter
+      ↓ FC06
+Device
+      ↓ success
+TagService.Set
+      ↓
+SignalR
+      ↓
+Web
+```
+
+На этом этапе отдельный generic command bus не вводится.
+
+## 6. Configuration
+
+До S08 один Modbus device задаётся стандартной ASP.NET Core configuration:
 
 ```text
 Modbus
@@ -119,87 +171,80 @@ Modbus
     ├── RequestTimeoutMilliseconds
     └── Points
         ├── TagId
-        └── Address
+        ├── Address
+        └── Writable
 ```
 
-Источник — стандартная ASP.NET Core configuration system (`appsettings.json`, environment variables и другие стандартные providers).
+`Writable` по умолчанию `false`.
 
-По умолчанию `Enabled = false`, поэтому чистый запуск проекта не делает сетевых подключений.
+В S08 эта bootstrap-конфигурация заменяется persistent configuration.
 
-На S08 этот bootstrap-механизм заменяется постоянной конфигурацией.
+## 7. Public contracts
 
-## 6. Dispatcher.Contracts
+`Dispatcher.Contracts` не зависит от Core/Modbus/Server/Web.
 
-Проект не зависит от Core, Server, Modbus или Web.
-
-Публичный runtime-контракт:
+`TagValueDto`:
 
 ```text
-TagValueDto
-DeviceStateDto
-DeviceConnectionStatusDto
-RuntimeHubContract
+TagId
+Value
+Timestamp
+Writable
 ```
 
-## 7. Server/API/realtime
+`Writable` нужен Web для отображения разрешённого действия, но адрес протокола наружу не публикуется.
 
-Server предоставляет:
+## 8. REST + SignalR
+
+REST:
 
 ```text
-GET /health
-GET /api/tags
-GET /api/devices
-SignalR /hubs/runtime
+GET  /api/tags
+GET  /api/devices
+POST /api/tags/{tagId}/write
 ```
 
-`RuntimeHubPublisher` преобразует Core `Changed` events в SignalR DTO.
-
-С S07A данные для этих endpoints/events могут поступать от реально запущенного hosted Modbus polling.
-
-## 8. Web
-
-`Dispatcher.Web` — Blazor WebAssembly и не ссылается на Core или Modbus.
-
-Синхронизация:
+SignalR:
 
 ```text
-REST snapshot
-    ↓
-SignalR changes
+/hubs/runtime
+TagChanged
+DeviceStateChanged
 ```
 
-После reconnect выполняется повторный REST snapshot.
+REST используется для snapshot и command request. SignalR — для realtime state changes.
 
-Экран мониторинга автоматически показывает теги и состояние устройства, полученные от hosted Modbus runtime. Дополнительной protocol-specific логики в Web не требуется.
+Успешная write-команда возвращает обновлённый `TagValueDto` и одновременно приводит к `TagChanged` через `TagService`.
 
-## 9. Configuration и runtime
+## 9. Web
 
-Configuration и runtime остаются разными слоями.
+`Dispatcher.Web` зависит только от `Dispatcher.Contracts`.
 
-S07A:
+Monitoring screen остаётся плотным:
 
-```text
-configuration → appsettings/environment
-runtime       → in-memory Core services
-```
+- локальная навигация слева;
+- таблица тегов в центре;
+- status устройства и SignalR видимы;
+- writable row содержит компактный input и кнопку;
+- read-only row явно маркируется;
+- во время write кнопка блокируется;
+- server/device error показывается в строке команды.
 
-S08:
+Web никогда не получает `Address`, `UnitId` или NModbus types.
 
-```text
-configuration → persistent storage
-runtime       → in-memory Core services
-```
+## 10. Ограничения после Phase 1
 
-## 10. Не входит в S07A
+Пока нет:
 
-Не добавляются:
-
-- Modbus write;
-- writable metadata;
-- device editor;
-- SQLite;
-- alarms/events/history;
+- persistent device/tag configuration;
+- нескольких управляемых конфигурацией устройств;
+- coils/input registers/discrete inputs;
+- Int16/Int32/UInt32/Float32 conversion;
+- grouped register reads;
+- historian;
+- alarms/events;
 - users/roles;
-- message broker.
+- generic plugin runtime;
+- distributed message broker.
 
-Write path вынесен в S07B.
+Следующий шаг — S08, persistent configuration.

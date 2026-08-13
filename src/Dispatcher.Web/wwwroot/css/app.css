@@ -323,7 +323,8 @@ button {
     white-space: nowrap;
 }
 
-.toolbar-button {
+.toolbar-button,
+.write-button {
     height: 28px;
     padding: 0 9px;
     border: 1px solid #bfc6d0;
@@ -332,11 +333,14 @@ button {
     cursor: pointer;
 }
 
-.toolbar-button:hover:not(:disabled) {
+.toolbar-button:hover:not(:disabled),
+.write-button:hover:not(:disabled) {
     background: var(--surface-hover);
 }
 
-.toolbar-button:disabled {
+.toolbar-button:disabled,
+.write-button:disabled,
+.write-input:disabled {
     opacity: 0.6;
     cursor: default;
 }
@@ -387,15 +391,19 @@ button {
 }
 
 .data-table th:nth-child(1) {
-    width: 48%;
+    width: 37%;
 }
 
 .data-table th:nth-child(2) {
-    width: 32%;
+    width: 18%;
 }
 
 .data-table th:nth-child(3) {
-    width: 20%;
+    width: 17%;
+}
+
+.data-table th:nth-child(4) {
+    width: 28%;
 }
 
 .data-table tbody tr:hover {
@@ -426,6 +434,51 @@ button {
 .timestamp {
     color: var(--text-muted);
     font-size: 12px;
+}
+
+.write-control {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.write-input {
+    width: 88px;
+    height: 26px;
+    min-width: 0;
+    padding: 2px 6px;
+    border: 1px solid #bfc6d0;
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.write-input:focus {
+    outline: 1px solid var(--accent);
+    border-color: var(--accent);
+}
+
+.write-button {
+    height: 26px;
+    padding: 0 7px;
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+.write-error {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--offline);
+    font-size: 11px;
+}
+
+.read-only-marker {
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 .table-empty {
@@ -474,11 +527,19 @@ button {
     }
 
     .data-table th:nth-child(1) {
-        width: 52%;
+        width: 34%;
     }
 
     .data-table th:nth-child(2) {
-        width: 28%;
+        width: 18%;
+    }
+
+    .data-table th:nth-child(3) {
+        width: 18%;
+    }
+
+    .data-table th:nth-child(4) {
+        width: 30%;
     }
 }
 
@@ -492,15 +553,23 @@ button {
     }
 
     .data-table th:nth-child(1) {
-        width: 58%;
+        width: 44%;
     }
 
     .data-table th:nth-child(2) {
-        width: 42%;
+        width: 22%;
+    }
+
+    .data-table th:nth-child(4) {
+        width: 34%;
     }
 
     .data-table th:nth-child(3),
     .data-table td:nth-child(3) {
         display: none;
+    }
+
+    .write-input {
+        width: 72px;
     }
 }

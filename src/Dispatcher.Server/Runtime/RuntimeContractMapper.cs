@@ -7,12 +7,15 @@ namespace Dispatcher.Server.Runtime;
 
 internal static class RuntimeContractMapper
 {
-    public static TagValueDto ToDto(TagValue tag)
+    public static TagValueDto ToDto(
+        TagValue tag,
+        bool writable = false)
     {
         return new TagValueDto(
             tag.TagId,
             tag.Value,
-            tag.Timestamp);
+            tag.Timestamp,
+            writable);
     }
 
     public static DeviceStateDto ToDto(DeviceRuntimeState state)

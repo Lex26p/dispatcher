@@ -22,62 +22,63 @@
 ## Phase 1 — Первый вертикальный срез: Modbus → Web
 
 - [x] **S01 — Минимальный .NET solution**
-  - создать solution;
-  - создать базовые проекты;
-  - зафиксировать версию .NET;
-  - настроить зависимости между проектами;
-  - добавить минимальный автоматический тест;
-  - добиться чистой сборки.
+  - solution;
+  - базовые проекты;
+  - версия .NET;
+  - зависимости;
+  - минимальный automated test;
+  - clean build.
 
 - [x] **S02 — Core и TagService**
   - минимальная модель тега;
-  - in-memory хранение текущих значений;
-  - read/set API внутри Core;
+  - in-memory current values;
+  - read/set API;
   - unit-тесты.
 
 - [x] **S03 — Минимальный Modbus TCP read**
-  - подключение к одному Modbus TCP устройству;
-  - чтение одного простого значения;
-  - преобразование в значение тега;
-  - тестируемая граница Modbus-компонента.
+  - одно устройство;
+  - один Holding Register;
+  - преобразование в tag value;
+  - тестируемая Modbus-граница.
 
 - [x] **S04 — Polling и состояние устройства**
   - периодический опрос;
   - несколько тегов;
-  - timeout/reconnect только в необходимом минимуме;
+  - timeout/reconnect;
   - connection state;
   - передача результатов в TagService.
 
 - [x] **S05 — ASP.NET Core API**
-  - получить список текущих тегов;
-  - получить состояние устройства;
-  - минимальные интеграционные тесты API.
+  - snapshot текущих тегов;
+  - состояние устройства;
+  - integration tests API.
 
 - [x] **S06 — Blazor WebAssembly read UI**
-  - страница текущих значений;
-  - REST-загрузка первоначального состояния;
-  - SignalR realtime-обновления;
-  - отображение connection state;
-  - базовый application shell по правилам `docs/WEB_UI.md`.
+  - таблица текущих значений;
+  - REST initial snapshot;
+  - SignalR realtime;
+  - connection state;
+  - базовый application shell.
 
 - [x] **S07A — Hosted Modbus polling**
-  - подключить `Dispatcher.Modbus` к runtime host;
-  - временная strongly typed конфигурация одного устройства;
-  - запуск polling как background service;
-  - интеграционный тест `Modbus TCP → Core → REST`;
-  - данные автоматически становятся доступны Web через существующий REST/SignalR контур.
+  - `Dispatcher.Modbus` подключён к runtime host;
+  - временная strongly typed config одного устройства;
+  - polling как background service;
+  - integration test `Modbus TCP → Core → REST`;
+  - автоматическое поступление данных в Web.
 
-- [ ] **S07B — Write path Web → Modbus**
-  - writable-tag;
-  - команда из Web;
+- [x] **S07B — Write path Web → Modbus**
+  - writable metadata;
+  - команда из Web по `TagId`;
   - server-side validation;
-  - запись через Modbus;
-  - обновление отображаемого состояния;
-  - end-to-end проверка Web → Modbus и Modbus → Web.
+  - FC06 запись Holding Register `UInt16`;
+  - обновление TagService после успешной записи;
+  - компактное отображение command state в Web;
+  - end-to-end integration test Web/API → Modbus protocol boundary.
 
 ### Результат Phase 1
 
-Рабочая система умеет подключиться к Modbus TCP устройству, читать настроенный набор точек, показывать их в браузере в реальном времени и записывать разрешённые значения обратно.
+Рабочая система умеет подключиться к одному настроенному Modbus TCP устройству, читать набор `UInt16` Holding Registers, показывать их в браузере в реальном времени и записывать явно разрешённые значения обратно.
 
 ## Phase 2 — Редактор устройств
 
@@ -144,7 +145,7 @@ Modbus-устройство и его точки можно полностью �
 
 Не детализируется заранее.
 
-После S12 принимается новая архитектурная точка и при необходимости планируются:
+После S12 при необходимости планируются:
 
 - historian и тренды;
 - alarms/events;
@@ -157,4 +158,4 @@ Modbus-устройство и его точки можно полностью �
 - резервирование;
 - распределённое исполнение.
 
-Новый функционал добавляется по фактической необходимости, а не только ради потенциального будущего использования.
+Новый функционал добавляется по фактической необходимости.

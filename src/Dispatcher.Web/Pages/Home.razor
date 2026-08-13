@@ -78,13 +78,14 @@
                         <th>Tag ID</th>
                         <th>Значение</th>
                         <th>Время</th>
+                        <th>Запись</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (RuntimeState.Tags.Count == 0)
                     {
                         <tr>
-                            <td colspan="3" class="table-empty">
+                            <td colspan="4" class="table-empty">
                                 Текущих значений пока нет.
                             </td>
                         </tr>
@@ -99,6 +100,42 @@
                                 <td class="timestamp">
                                     @tag.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")
                                 </td>
+                                <td class="write-cell">
+                                    @if (tag.Writable)
+                                    {
+                                        <div class="write-control">
+                                            <input type="number"
+                                                   min="0"
+                                                   max="65535"
+                                                   step="1"
+                                                   class="write-input"
+                                                   value="@GetWriteValue(tag)"
+                                                   disabled="@IsWriting(tag.TagId)"
+                                                   @oninput="(ChangeEventArgs args) => SetWriteValue(tag.TagId, args.Value?.ToString())" />
+
+                                            <button type="button"
+                                                    class="write-button"
+                                                    disabled="@IsWriting(tag.TagId)"
+                                                    @onclick="() => WriteTagAsync(tag)">
+                                                @(IsWriting(tag.TagId) ? "Запись…" : "Записать")
+                                            </button>
+
+                                            @if (_writeErrors.TryGetValue(tag.TagId, out var error))
+                                            {
+                                                <span class="write-error"
+                                                      title="@error">
+                                                    @error
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="read-only-marker">
+                                            только чтение
+                                        </span>
+                                    }
+                                </td>
                             </tr>
                         }
                     }
@@ -109,6 +146,13 @@
 </div>
 
 @code {
+    private readonly Dictionary<string, string> _writeValues =
+        new(StringComparer.Ordinal);
+    private readonly HashSet<string> _writingTags =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _writeErrors =
+        new(StringComparer.Ordinal);
+
     private bool _refreshing;
 
     protected override async Task OnInitializedAsync()
@@ -129,6 +173,65 @@
         {
             _refreshing = false;
         }
+    }
+
+    private async Task WriteTagAsync(TagValueDto tag)
+    {
+        var text = GetWriteValue(tag);
+
+        if (!ushort.TryParse(text, out var value))
+        {
+            _writeErrors[tag.TagId] =
+                "Введите целое число от 0 до 65535.";
+            return;
+        }
+
+        _writingTags.Add(tag.TagId);
+        _writeErrors.Remove(tag.TagId);
+        StateHasChanged();
+
+        try
+        {
+            var error = await RuntimeState.WriteTagAsync(
+                tag.TagId,
+                value);
+
+            if (error is null)
+            {
+                _writeValues.Remove(tag.TagId);
+                _writeErrors.Remove(tag.TagId);
+            }
+            else
+            {
+                _writeErrors[tag.TagId] = error;
+            }
+        }
+        finally
+        {
+            _writingTags.Remove(tag.TagId);
+        }
+    }
+
+    private string GetWriteValue(TagValueDto tag)
+    {
+        return _writeValues.TryGetValue(
+            tag.TagId,
+            out var value)
+            ? value
+            : FormatValue(tag.Value);
+    }
+
+    private void SetWriteValue(
+        string tagId,
+        string? value)
+    {
+        _writeValues[tagId] = value ?? string.Empty;
+        _writeErrors.Remove(tagId);
+    }
+
+    private bool IsWriting(string tagId)
+    {
+        return _writingTags.Contains(tagId);
     }
 
     private void OnRuntimeChanged()

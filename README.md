@@ -2,39 +2,32 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Проект развивается небольшими проверяемыми шагами. Сначала создаётся минимальный рабочий контур от устройства до Web, после чего добавляются редактор устройств, новые протоколы и мнемосхемы.
+Проект развивается небольшими проверяемыми шагами. Первый вертикальный срез Modbus → Web завершён; далее добавляются постоянная конфигурация, редактор устройств, SNMP и мнемосхемы.
 
-## Цель первой версии
-
-Первый законченный вертикальный срез:
+## Первый вертикальный срез
 
 ```text
 Modbus TCP device
-        ↓
+        ↕
    Modbus service
-        ↓
+        ↕
      Tag service
-        ↓
+        ↕
  ASP.NET Core server
-        ↓
+        ↕
  REST + SignalR
-        ↓
+        ↕
  Blazor WebAssembly
 ```
 
-Пользователь должен иметь возможность:
+Текущая Phase 1 умеет:
 
-1. Подключить Modbus TCP устройство.
-2. Читать заданные точки.
-3. Видеть текущие значения в Web.
-4. Записывать разрешённые значения из Web обратно в устройство.
-
-После этого развитие идёт последовательно:
-
-1. Редактор устройств и тегов.
-2. SNMP.
-3. Простая мнемосхема.
-4. Дальнейшее расширение по фактическим требованиям.
+1. Запускать polling одного настроенного Modbus TCP устройства.
+2. Читать несколько Holding Register `UInt16` через FC03.
+3. Хранить текущие значения и Online/Offline state.
+4. Показывать значения в Web через REST + SignalR.
+5. Разрешать запись только явно помеченных writable-тегов.
+6. Записывать `UInt16` в Holding Register через FC06 из Web.
 
 ## Базовый стек
 
@@ -46,7 +39,7 @@ Modbus TCP device
 - Modbus: NModbus 3.0.83.
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
-- Постоянное хранение конфигурации будет добавлено на этапе редактора устройств.
+- Постоянное хранение конфигурации добавляется на этапе S08.
 
 Target framework проекта централизованно зафиксирован как `net10.0` в `Directory.Build.props`.
 
@@ -54,9 +47,9 @@ Target framework проекта централизованно зафиксир�
 
 - минимальная версия SDK: `10.0.100`;
 - `rollForward: latestFeature`;
-- prerelease SDK разрешены, чтобы проект мог собираться установленными preview feature band SDK .NET 10.
+- prerelease SDK разрешены для установленного preview feature band SDK .NET 10.
 
-## Текущая структура solution
+## Структура solution
 
 ```text
 Dispatcher.slnx
@@ -79,20 +72,26 @@ Dispatcher.slnx
 ASP.NET Core публикует:
 
 ```text
-GET /health
-GET /api/tags
-GET /api/devices
+GET  /health
+GET  /api/tags
+GET  /api/devices
+POST /api/tags/{tagId}/write
 
 SignalR /hubs/runtime
 ```
 
-Web сначала получает snapshot через REST, затем применяет realtime-изменения SignalR.
+`TagValueDto` содержит:
 
-После восстановления SignalR-соединения Web повторно загружает REST snapshot.
+```text
+TagId
+Value
+Timestamp
+Writable
+```
+
+Web сначала получает snapshot через REST, затем применяет SignalR updates. После reconnect выполняется новый REST snapshot.
 
 ## Hosted Modbus runtime
-
-С S07A `Dispatcher.Server` может запускать polling одного Modbus TCP устройства как `BackgroundService`.
 
 Временная конфигурация находится в:
 
@@ -106,7 +105,7 @@ src/Dispatcher.Server/appsettings.json
 Modbus:Enabled = false
 ```
 
-При включении конфигурация задаёт:
+Конфигурация одного устройства:
 
 ```text
 DeviceId
@@ -118,68 +117,70 @@ RequestTimeoutMilliseconds
 Points[]
   TagId
   Address
+  Writable
 ```
 
-Путь выполнения:
+`Writable` по умолчанию `false`. Только явно writable-точка принимает команду из Web.
+
+Путь чтения:
 
 ```text
-appsettings / environment
-        ↓
-ModbusRuntimeHostedService
-        ↓
+Modbus TCP
+    ↓ FC03
 ModbusPollingService
-        ↓
-Modbus TCP device
-        ↓
+    ↓
 TagService + DeviceStateService
-        ↓
-REST + SignalR
-        ↓
-Blazor WebAssembly
+    ↓
+REST / SignalR
+    ↓
+Web
 ```
 
-`Address` пока остаётся raw 0-based Modbus address.
+Путь записи:
 
-Файловая конфигурация S07A является временным bootstrap-механизмом. Постоянная конфигурация и редактор устройств появятся в S08/S09.
+```text
+Web
+  ↓ TagId + value
+POST /api/tags/{tagId}/write
+  ↓ server-side validation
+TagId → configured Modbus point
+  ↓
+ModbusWriteService
+  ↓ FC06
+Modbus TCP device
+  ↓ success
+TagService.Set(...)
+  ↓
+SignalR / Web
+```
+
+Web не передаёт register address, Unit ID или другие Modbus-specific параметры.
+
+Текущая запись ограничена одним Holding Register `UInt16`, значение должно быть целым числом `0…65535`.
+
+Файловая конфигурация Phase 1 — bootstrap-механизм. В S08 она заменяется persistent configuration.
 
 ## Web UI
 
 Первый экран — `Мониторинг`.
 
-Глобальная навигация открывается поверх рабочей области по `☰`, локальная навигация постоянно находится слева, а центральная таблица занимает основную рабочую площадь.
-
-Панель свойств справа на мониторинге не показывается, потому что это не редактор.
-
-Blazor WebAssembly исполняется в браузере. Его static assets, REST и SignalR раздаёт тот же `Dispatcher.Server`.
-
-Для .NET 10 bootstrap-файл Blazor WebAssembly fingerprinted; `index.html` содержит import map и placeholder `blazor.webassembly#[.{fingerprint}].js`, а Server использует `MapStaticAssets()`.
-
-## Текущий Modbus scope
-
-Поддерживается:
-
-- Modbus TCP;
-- Function Code 03;
-- несколько Holding Register `UInt16`;
-- polling interval;
-- timeout;
-- reconnect через новое соединение каждого cycle;
-- protocol-neutral `Online/Offline`;
-- запуск polling из ASP.NET Core host для одного настроенного устройства.
-
-Write path ещё не реализован. Он составляет S07B и завершит Phase 1.
+- `☰` открывает глобальную навигацию поверх рабочей области.
+- локальная навигация находится слева;
+- таблица текущих значений занимает основную площадь;
+- Online/Offline и SignalR state видимы постоянно;
+- writable-теги получают компактный input + `Записать` прямо в таблице;
+- read-only теги явно помечены;
+- во время команды кнопка блокируется, ошибка отображается в строке.
 
 ## Основные принципы
 
 - Репозиторий — единственный источник истины.
 - Разработка идёт маленькими законченными шагами.
-- Не реализуем функции «на будущее», пока они не нужны текущему этапу.
-- Web и мнемосхемы работают с логическими тегами, а не с адресами конкретных протоколов.
-- Протокольные детали изолируются от Core и Web.
-- Текущее runtime-состояние и постоянная конфигурация — разные виды данных.
-- Архитектурные границы закладываются сразу, но преждевременная микросервисная инфраструктура не вводится.
-- Web проектируется как плотный инженерный интерфейс с приоритетом рабочей области.
-- Перед каждым изменением сначала читается актуальное состояние репозитория.
+- Web работает с логическими `TagId`, а не с Modbus-адресами.
+- Протокольные детали изолированы от Core и Web.
+- Configuration и runtime state разделены.
+- Не вводим преждевременно alarms, historian, roles, brokers или distributed services.
+- Web проектируется как плотный инженерный интерфейс.
 
 ## Документы
 

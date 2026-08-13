@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Dispatcher.Contracts.Devices;
 using Dispatcher.Contracts.Realtime;
 using Dispatcher.Contracts.Tags;
@@ -58,6 +59,38 @@ public sealed class RuntimeStateClient : IAsyncDisposable
         if (_hubConnection?.State == HubConnectionState.Disconnected)
         {
             await TryStartHubAsync();
+        }
+    }
+
+    public async Task<string?> WriteTagAsync(
+        string tagId,
+        ushort value)
+    {
+        try
+        {
+            using var response = await _httpClient.PostAsJsonAsync(
+                $"/api/tags/{Uri.EscapeDataString(tagId)}/write",
+                new TagWriteRequest(value));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return await ReadProblemAsync(response);
+            }
+
+            var updated = await response.Content
+                .ReadFromJsonAsync<TagValueDto>();
+
+            if (updated is not null)
+            {
+                _tags[updated.TagId] = updated;
+                NotifyChanged();
+            }
+
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception.Message;
         }
     }
 
@@ -180,6 +213,44 @@ public sealed class RuntimeStateClient : IAsyncDisposable
         }
 
         NotifyChanged();
+    }
+
+    private static async Task<string> ReadProblemAsync(
+        HttpResponseMessage response)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(content);
+                var root = document.RootElement;
+
+                if (root.TryGetProperty(
+                        "detail",
+                        out var detail)
+                    && detail.ValueKind == JsonValueKind.String)
+                {
+                    return detail.GetString() ?? content;
+                }
+
+                if (root.TryGetProperty(
+                        "title",
+                        out var title)
+                    && title.ValueKind == JsonValueKind.String)
+                {
+                    return title.GetString() ?? content;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+
+            return content;
+        }
+
+        return $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
     }
 
     private void OnTagChanged(TagValueDto tag)
