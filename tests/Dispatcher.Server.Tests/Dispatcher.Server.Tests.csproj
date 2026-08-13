@@ -1,0 +1,15 @@
+<Project Sdk="MSTest.Sdk/4.3.2">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Dispatcher.Contracts\Dispatcher.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Dispatcher.Core\Dispatcher.Core.csproj" />
+    <ProjectReference Include="..\..\src\Dispatcher.Server\Dispatcher.Server.csproj" />
+  </ItemGroup>
+</Project>

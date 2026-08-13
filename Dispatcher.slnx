@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Dispatcher.Contracts/Dispatcher.Contracts.csproj" />
     <Project Path="src/Dispatcher.Core/Dispatcher.Core.csproj" />
     <Project Path="src/Dispatcher.Modbus/Dispatcher.Modbus.csproj" />
     <Project Path="src/Dispatcher.Server/Dispatcher.Server.csproj" />
@@ -7,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Dispatcher.Core.Tests/Dispatcher.Core.Tests.csproj" />
     <Project Path="tests/Dispatcher.Modbus.Tests/Dispatcher.Modbus.Tests.csproj" />
+    <Project Path="tests/Dispatcher.Server.Tests/Dispatcher.Server.Tests.csproj" />
   </Folder>
 </Solution>

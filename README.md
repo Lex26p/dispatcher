@@ -62,15 +62,49 @@ Target framework проекта централизованно зафиксир�
 ```text
 Dispatcher.slnx
 ├── src/
+│   ├── Dispatcher.Contracts/
 │   ├── Dispatcher.Core/
 │   ├── Dispatcher.Modbus/
 │   └── Dispatcher.Server/
 └── tests/
     ├── Dispatcher.Core.Tests/
-    └── Dispatcher.Modbus.Tests/
+    ├── Dispatcher.Modbus.Tests/
+    └── Dispatcher.Server.Tests/
 ```
 
-Новые проекты добавляются только в тот момент, когда они нужны соответствующему этапу дорожной карты.
+`Dispatcher.Contracts` содержит публичные DTO границы Server ↔ Web и не зависит от Core или Modbus.
+
+## Runtime API
+
+Начиная с S05 ASP.NET Core публикует snapshot текущего runtime-состояния:
+
+```text
+GET /health
+GET /api/tags
+GET /api/devices
+```
+
+`GET /api/tags` возвращает логические теги:
+
+```text
+TagId
+Value
+Timestamp
+```
+
+`GET /api/devices` возвращает protocol-neutral состояние устройств:
+
+```text
+DeviceId
+Status
+UpdatedAt
+LastSuccessfulPollAt
+Error
+```
+
+API не публикует Modbus register address, Unit ID и другие protocol-specific данные.
+
+На S05 Server регистрирует `TagService` и `DeviceStateService` как singleton runtime services. Автоматический запуск Modbus polling из Server пока не добавлен: API уже читает те же runtime-сервисы, которые будут наполняться protocol workers.
 
 ## Текущий Modbus scope
 

@@ -203,3 +203,34 @@ Dispatcher — инженерный рабочий инструмент. Про�
 Это сознательно простой вариант для первой рабочей реализации.
 
 Persistent connection, backoff и отдельная reconnect state machine рассматриваются только после появления реальной необходимости или измеримой проблемы производительности.
+
+---
+
+## D-014 — Public API contracts отделены от Core
+
+**Status:** Accepted
+
+Начиная с S05 публичные DTO REST/API находятся в отдельном проекте `Dispatcher.Contracts`.
+
+Зависимости:
+
+```text
+Dispatcher.Contracts
+    └── не зависит от Core / Modbus / Server
+
+Dispatcher.Server
+    ├── Dispatcher.Contracts
+    └── Dispatcher.Core
+
+Future Dispatcher.Web
+    └── Dispatcher.Contracts
+```
+
+Причина:
+
+- Web не должен ссылаться на Core;
+- изменение внутренней runtime-модели не обязано автоматически менять HTTP-контракт;
+- общие DTO реально нужны уже на границе Server и на следующем шаге Blazor;
+- это позволяет избежать дублирования C# моделей между Server и Web.
+
+На S05 в Contracts находятся только фактически используемые DTO тегов и состояния устройства.

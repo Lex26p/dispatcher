@@ -28,6 +28,8 @@ Dispatcher строится как расширяемая система дис�
                          │      Server         │
                          └──────────┬──────────┘
                                     │
+                    Dispatcher.Contracts
+                                    │
                     ┌───────────────┴───────────────┐
                     │                               │
           ┌─────────▼─────────┐           ┌────────▼────────┐
@@ -72,7 +74,7 @@ OID 1.3.6.1....
 
 ### Runtime-значение тега
 
-Начиная с S02 текущее значение представлено минимальным контрактом `TagValue`:
+Текущее значение внутри Core представлено `TagValue`:
 
 ```text
 TagId
@@ -80,9 +82,7 @@ Value
 Timestamp
 ```
 
-`TagId` сравнивается как регистрозависимая строка. `Timestamp` хранится как `DateTimeOffset`.
-
-На S04 connection state устройства хранится отдельно от значения тега. `Quality` конкретного тега пока не добавляется: последнее успешно прочитанное значение остаётся в `TagService`, а доступность источника определяется через `DeviceStateService`.
+Connection state устройства хранится отдельно от значения тега. `Quality` конкретного тега пока не добавляется: последнее успешно прочитанное значение остаётся в `TagService`, а доступность источника определяется через `DeviceStateService`.
 
 ## 4. Runtime services Core
 
@@ -90,7 +90,7 @@ Timestamp
 
 `TagService` — владелец текущих значений тегов.
 
-Он предоставляет минимальный API:
+Он предоставляет:
 
 ```text
 Set(tagId, value)
@@ -99,11 +99,9 @@ Get(tagId)
 GetAll()
 ```
 
-Текущие значения хранятся только в памяти. Повторный `Set` одного `TagId` заменяет его текущее значение.
-
 ### DeviceStateService
 
-Начиная с S04 connection state хранится в protocol-neutral `DeviceStateService`.
+Connection state хранится в protocol-neutral `DeviceStateService`.
 
 Минимальное состояние:
 
@@ -115,11 +113,7 @@ LastSuccessfulPollAt
 Error
 ```
 
-Modbus сообщает в Core только логический `DeviceId` и результат poll-cycle. Core не хранит Modbus address, Unit ID или другие protocol-specific данные.
-
-При успешном полном cycle устройство становится `Online`.
-
-При ошибке соединения или чтения устройство становится `Offline`, текст ошибки сохраняется, а время последнего успешного poll сохраняется.
+Core не хранит Modbus address, Unit ID или другие protocol-specific данные состояния.
 
 ## 5. Modbus
 
@@ -149,7 +143,7 @@ ModbusHoldingRegisterPoint
 
 ### Poll cycle
 
-В S04 один poll-cycle:
+Один poll-cycle:
 
 1. открывает одно TCP-соединение;
 2. последовательно читает все Holding Register points;
@@ -157,79 +151,51 @@ ModbusHoldingRegisterPoint
 4. переводит устройство в `Online`;
 5. закрывает соединение.
 
-При любой ошибке cycle:
+При ошибке устройство переводится в `Offline`, а следующий cycle снова устанавливает соединение.
 
-1. значения этого cycle не публикуются;
-2. устройство переводится в `Offline`;
-3. следующий cycle снова открывает TCP-соединение и автоматически делает новую попытку.
+## 6. Server и API
 
-Таким образом reconnect пока не является отдельной state machine. Это повторное подключение на каждом cycle.
-
-### Ограничения текущего Modbus scope
-
-Поддерживается:
-
-- Modbus TCP;
-- Function Code 03;
-- один `UInt16` на точку;
-- несколько точек на устройство;
-- polling interval;
-- request/connect timeout;
-- Online/Offline state.
-
-Пока не реализованы:
-
-- группировка соседних регистров в один запрос;
-- persistent TCP connection между cycles;
-- coils;
-- discrete inputs;
-- input registers;
-- Int16/Int32/UInt32/Float32 и другие преобразования;
-- write path.
-
-## 6. Поток данных
-
-Успешное чтение:
+Начиная с S05 `Dispatcher.Server` регистрирует:
 
 ```text
-Device
-  ↓
-ModbusPollingService
-  ├──────────→ TagService
-  └──────────→ DeviceStateService (Online)
+TagService          Singleton
+DeviceStateService  Singleton
 ```
 
-Ошибка:
+REST snapshot endpoints:
 
 ```text
-Device / network error
-        ↓
-ModbusPollingService
-        ↓
-DeviceStateService (Offline)
+GET /health
+GET /api/tags
+GET /api/devices
 ```
 
-Получение начального состояния Web будет добавлено в S05 через ASP.NET Core API.
+Server не отдаёт Core-типы напрямую наружу. На HTTP-границе они преобразуются в DTO из dependency-free проекта `Dispatcher.Contracts`.
+
+```text
+Core runtime model
+       ↓
+Dispatcher.Server
+       ↓ mapping
+Dispatcher.Contracts
+       ↓ JSON
+Web / external client
+```
+
+`Dispatcher.Contracts` не зависит от Core, Modbus или Server. На S06 этот же проект может использовать Blazor-клиент.
+
+На S05 Server ещё не владеет конфигурацией Modbus и не запускает polling worker автоматически. Его задача на этом шаге — предоставить корректную REST-границу над runtime state.
 
 ## 7. Web
 
 Web реализуется на Blazor WebAssembly.
 
-Web отвечает за:
-
-- отображение устройств;
-- отображение текущих тегов;
-- состояние связи;
-- команды управления;
-- позднее — редактор устройств;
-- позднее — мнемосхемы.
-
-Web не должен ссылаться на внутренние реализации Modbus/SNMP.
+Web не должен ссылаться на Core или Modbus. Он работает через HTTP/SignalR и DTO из `Dispatcher.Contracts`.
 
 Для связи:
 
-- REST — получение состояния и выполнение команд;
-- SignalR — realtime-изменения.
+- REST — получение snapshot и выполнение будущих команд;
+- SignalR — realtime-изменения, начиная с S06.
 
 ### Базовая компоновка Web
 
@@ -249,25 +215,13 @@ Web проектируется как инженерный рабочий инс
 └──────────────┴──────────────────────────────────┴────────────────┘
 ```
 
-Обязательные принципы:
-
-- глобальный header компактный;
-- кнопка `☰` слева открывает глобальную навигацию между сервисами;
-- глобальная навигация по умолчанию не занимает постоянную ширину;
-- внутри сервиса локальная навигация постоянно расположена слева;
-- основная рабочая область занимает центр и максимум доступного пространства;
-- свойства выбранного объекта расположены справа;
-- второй header/toolbar используется только при необходимости;
-- списки устройств и других сущностей предпочтительнее крупных карточек;
-- состояния связи и другие важные operational-данные должны быть видимыми.
-
 Полные правила находятся в `docs/WEB_UI.md`.
 
-## 8. Конфигурация и runtime-состояние
+## 8. Configuration и runtime
 
-Это разные слои.
+Постоянная конфигурация и runtime state разделены.
 
-### Конфигурация
+### Configuration
 
 Примеры:
 
@@ -282,7 +236,7 @@ Web проектируется как инженерный рабочий инс
 - polling interval;
 - writable.
 
-Конфигурация позднее хранится постоянно.
+Постоянное хранилище конфигурации добавляется на этапе редактора устройств.
 
 ### Runtime
 
@@ -308,12 +262,10 @@ Browser
 ASP.NET Core process
    ├── Server
    ├── Core runtime services
-   └── Modbus component
+   └── protocol workers
 ```
 
 Это уменьшает инфраструктурную сложность.
-
-Если развитие проекта потребует разнесения процессов, границы компонентов и контракты должны позволить это сделать без переписывания предметной модели.
 
 ## 10. Не входит в первые этапы
 
