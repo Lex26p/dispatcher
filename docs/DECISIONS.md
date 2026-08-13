@@ -267,3 +267,32 @@ Runtime application API остаётся protocol-neutral, но Device Editor д
 и Modbus-specific DTO.
 
 Это не нарушает `Protocol → logical Tag → Application`, потому что protocol details видит только configuration/editor service, а monitoring/mimic runtime продолжает работать через logical tags.
+
+---
+
+## D-028 — Device Editor использует explicit Save поверх client-side draft
+
+**Status:** Accepted
+
+Редактирование свойств в S09B не вызывает server mutation автоматически.
+
+```text
+configuration snapshot
+       ↓
+client-side draft
+       ↓
+explicit Save
+       ↓
+REST mutation
+       ↓
+live apply
+```
+
+Причина:
+
+- каждая configuration mutation приводит к runtime reconfiguration;
+- auto-save на каждом вводимом символе создавал бы лишние stop/start polling cycles;
+- инженер должен явно видеть момент применения configuration;
+- Server остаётся authority по validation.
+
+Dirty draft явно обозначается, а смена выбранного объекта или refresh требует подтверждения потери несохранённых изменений.

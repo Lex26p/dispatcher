@@ -2,9 +2,9 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Первый вертикальный срез Modbus → Web завершён. Phase 2 переводит конфигурацию устройств и тегов в постоянное хранилище и Web-редактор.
+Phase 1 Modbus → Web завершена. Phase 2 завершена первым полноценным Device Editor: Modbus-устройства и теги сохраняются в SQLite, применяются к работающему polling runtime и редактируются через Blazor WebAssembly.
 
-## Рабочий вертикальный срез
+## Рабочая цепочка
 
 ```text
 Modbus TCP device
@@ -29,6 +29,7 @@ Modbus TCP device
 5. Хранить device/tag configuration в SQLite.
 6. CRUD-ить Modbus configuration через REST.
 7. Применять изменённую configuration к polling без перезапуска Server.
+8. Создавать, редактировать и удалять Modbus devices/tags через Web Device Editor.
 
 ## Базовый стек
 
@@ -42,36 +43,66 @@ Modbus TCP device
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
 
-Target framework централизованно зафиксирован как `net10.0` в `Directory.Build.props`.
-
 ## Configuration и Runtime
 
 ```text
-Persistent configuration
 SQLite
   ↓
 ConfigurationCatalog
   ↓
 Modbus runtime
 
-Runtime state
 TagService + DeviceStateService
   ↓
 REST / SignalR
+  ↓
+Monitoring
 ```
 
-`TagService` не хранит IP, Unit ID, Address, Writable или другие configuration fields.
+Configuration и runtime current state остаются разными слоями.
 
-## SQLite configuration
+## Web
 
-Server использует:
+Глобальная навигация:
 
 ```text
-modbus_devices
-modbus_tags
+☰
+├── Мониторинг
+└── Редактор устройств
 ```
 
-`modbus_devices`:
+### Мониторинг
+
+Показывает current tag values, Online/Offline, SignalR state и write controls для writable tags.
+
+### Редактор устройств
+
+URL:
+
+```text
+/devices
+```
+
+Компоновка:
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ ☰ Dispatcher   Редактор устройств                                  │
+├──────────────┬──────────────────────────────────────┬───────────────┤
+│ Devices      │ +Device +Tag Save Delete Refresh   │ Свойства      │
+│ ├─ PLC-01    ├──────────────────────────────────────┤ выбранного    │
+│ │  └─ Tags   │                                      │ объекта       │
+│ └─ PLC-02    │      таблица тегов устройства        │               │
+└──────────────┴──────────────────────────────────────┴───────────────┘
+```
+
+Редактор использует S09A configuration API.
+
+Изменения редактируются как локальный draft и применяются только по `Сохранить`. Это важно: ввод одного символа не должен перезапускать Modbus polling. При наличии несохранённого draft UI предупреждает перед сменой объекта или refresh.
+
+Server-side validation остаётся окончательной. Ошибка отображается непосредственно в редакторе.
+
+Текущие свойства device:
 
 ```text
 DeviceId
@@ -84,25 +115,17 @@ PollIntervalMilliseconds
 RequestTimeoutMilliseconds
 ```
 
-`modbus_tags`:
+Tag:
 
 ```text
 TagId
-DeviceId
 Name
-Address
+Holding Register UInt16
+Raw Address
 Writable
 ```
 
-Schema version = `1` через SQLite `PRAGMA user_version`.
-
-Если `ConfigurationDatabase:Path` пустой, Windows-разработка использует:
-
-```text
-%LOCALAPPDATA%\Dispatcher\dispatcher.db
-```
-
-## Configuration API S09A
+## Configuration API
 
 ```text
 GET    /api/configuration/modbus/devices
@@ -116,29 +139,7 @@ PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 ```
 
-API работает с Modbus configuration DTO, потому что это configuration/editor boundary. Runtime Web по-прежнему работает с protocol-neutral `TagId`/`DeviceId`.
-
-Каждая успешная mutation выполняет:
-
-```text
-build new snapshot
-      ↓
-validate
-      ↓
-SQLite ReplaceAsync transaction
-      ↓
-ConfigurationCatalog.Replace
-      ↓
-stop old polling loops
-      ↓
-clear old runtime current state
-      ↓
-start polling from new snapshot
-      ↓
-SignalR ConfigurationChanged
-```
-
-`ConfigurationChanged` заставляет уже открытый monitoring-клиент перечитать `/api/tags` и `/api/devices`, поэтому удалённые или переименованные объекты не остаются на экране как stale runtime state.
+Каждая успешная mutation сохраняется в SQLite и live-применяется к polling runtime.
 
 ## Runtime API
 
@@ -165,23 +166,13 @@ ConfigurationChanged
 - FC03 read.
 - FC06 write.
 - Holding Register `UInt16`.
-- несколько тегов на устройство;
-- несколько persisted устройств;
-- live restart polling при изменении configuration;
+- несколько tags/devices.
+- live restart polling после configuration changes.
 - Writable — configuration metadata.
 
-## Следующий шаг
+## Следующий этап
 
-**S09B** добавит сам Blazor Device Editor:
-
-```text
-слева  → список устройств/тегов
-центр  → рабочая таблица/структура
-справа → свойства выбранного объекта
-сверху → Create/Delete/Save actions
-```
-
-Он будет использовать уже готовый S09A configuration API.
+S10 добавляет SNMP как второй protocol service и интегрирует его configuration в общий Device Editor без изменения runtime Web-модели logical tags.
 
 ## Документы
 

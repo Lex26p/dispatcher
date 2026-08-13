@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager NavigationManager
 
 <div class="application-shell">
     <header class="global-header">
@@ -10,7 +12,7 @@
         </button>
 
         <div class="brand">Dispatcher</div>
-        <div class="global-section">Мониторинг</div>
+        <div class="global-section">@CurrentSection</div>
     </header>
 
     @if (_globalNavigationOpen)
@@ -30,10 +32,12 @@
                     Мониторинг
                 </NavLink>
 
-                <div class="global-nav-link disabled">
-                    <span>Редактор устройств</span>
-                    <span class="nav-note">позже</span>
-                </div>
+                <NavLink class="global-nav-link"
+                         ActiveClass="active"
+                         href="devices"
+                         @onclick="CloseGlobalNavigation">
+                    Редактор устройств
+                </NavLink>
 
                 <div class="global-nav-link disabled">
                     <span>Мнемосхемы</span>
@@ -51,6 +55,26 @@
 @code {
     private bool _globalNavigationOpen;
 
+    private string CurrentSection
+    {
+        get
+        {
+            var path = NavigationManager.ToBaseRelativePath(
+                NavigationManager.Uri);
+
+            return path.StartsWith(
+                "devices",
+                StringComparison.OrdinalIgnoreCase)
+                ? "Редактор устройств"
+                : "Мониторинг";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
     private void ToggleGlobalNavigation()
     {
         _globalNavigationOpen = !_globalNavigationOpen;
@@ -59,5 +83,17 @@
     private void CloseGlobalNavigation()
     {
         _globalNavigationOpen = false;
+    }
+
+    private void OnLocationChanged(
+        object? sender,
+        LocationChangedEventArgs args)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }

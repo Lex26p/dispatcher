@@ -1,0 +1,889 @@
+@page "/devices"
+@inject ConfigurationClient Configuration
+@inject IJSRuntime JavaScript
+
+<PageTitle>Dispatcher — Редактор устройств</PageTitle>
+
+<div class="device-editor-shell">
+    <aside class="editor-local-navigation">
+        <div class="editor-panel-heading">
+            <span>Устройства</span>
+            <span class="item-count">@_devices.Count</span>
+        </div>
+
+        <div class="editor-tree">
+            @if (_loading)
+            {
+                <div class="compact-empty">Загрузка…</div>
+            }
+            else if (_devices.Count == 0)
+            {
+                <div class="compact-empty">
+                    Устройств пока нет.
+                </div>
+            }
+            else
+            {
+                @foreach (var device in _devices)
+                {
+                    <button type="button"
+                            class="editor-tree-device @DeviceSelectionClass(device)"
+                            @onclick="() => SelectDeviceAsync(device)">
+                        <span class="status-dot @(device.Enabled ? "online" : "unknown")"
+                              aria-hidden="true"></span>
+
+                        <span class="editor-tree-main">
+                            <span class="editor-tree-name">@device.Name</span>
+                            <span class="editor-tree-id">@device.DeviceId</span>
+                        </span>
+
+                        <span class="editor-tree-count">@device.Tags.Count</span>
+                    </button>
+
+                    <div class="editor-tree-tags">
+                        @foreach (var tag in device.Tags)
+                        {
+                            <button type="button"
+                                    class="editor-tree-tag @TagSelectionClass(device, tag)"
+                                    @onclick="() => SelectTagAsync(device, tag)">
+                                <span class="tree-branch" aria-hidden="true">└</span>
+                                <span class="editor-tree-main">
+                                    <span class="editor-tree-name">@tag.Name</span>
+                                    <span class="editor-tree-id">@tag.TagId</span>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="editor-workspace">
+        <div class="editor-toolbar">
+            <div class="editor-toolbar-left">
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_busy"
+                        @onclick="CreateDeviceAsync">
+                    + Устройство
+                </button>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!CanCreateTag || _busy)"
+                        @onclick="CreateTagAsync">
+                    + Тег
+                </button>
+
+                <span class="editor-toolbar-divider"></span>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@(!CanSave || _busy)"
+                        @onclick="SaveAsync">
+                    @(_busy ? "Сохранение…" : "Сохранить")
+                </button>
+
+                <button type="button"
+                        class="toolbar-button danger"
+                        disabled="@(!CanDelete || _busy)"
+                        @onclick="DeleteAsync">
+                    @DeleteButtonText
+                </button>
+            </div>
+
+            <div class="editor-toolbar-right">
+                @if (_dirty)
+                {
+                    <span class="unsaved-indicator">
+                        несохранено
+                    </span>
+                }
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_busy"
+                        @onclick="RefreshAsync">
+                    Обновить
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="editor-error">
+                @_error
+            </div>
+        }
+
+        <div class="editor-work-content">
+            @if (_selectionKind == SelectionKind.None)
+            {
+                <div class="editor-empty-state">
+                    <div class="editor-empty-title">
+                        Выберите устройство
+                    </div>
+                    <div class="editor-empty-text">
+                        Или создайте новое устройство через toolbar.
+                    </div>
+                </div>
+            }
+            else if (_selectionKind == SelectionKind.Device
+                     && _isNewDevice)
+            {
+                <div class="editor-empty-state">
+                    <div class="editor-empty-title">
+                        Новое устройство
+                    </div>
+                    <div class="editor-empty-text">
+                        Заполните свойства справа и сохраните устройство.
+                        После сохранения можно добавить теги.
+                    </div>
+                </div>
+            }
+            else if (SelectedDevice is not null)
+            {
+                <div class="editor-device-summary">
+                    <div>
+                        <div class="editor-work-title">
+                            @SelectedDevice.Name
+                        </div>
+                        <div class="editor-work-subtitle">
+                            @SelectedDevice.DeviceId ·
+                            @SelectedDevice.Host:@SelectedDevice.Port ·
+                            Unit @SelectedDevice.UnitId
+                        </div>
+                    </div>
+
+                    <span class="editor-device-enabled @(SelectedDevice.Enabled ? "enabled" : "disabled")">
+                        @(SelectedDevice.Enabled ? "Enabled" : "Disabled")
+                    </span>
+                </div>
+
+                <div class="editor-table-area">
+                    <table class="editor-data-table">
+                        <thead>
+                            <tr>
+                                <th>Tag ID</th>
+                                <th>Имя</th>
+                                <th>Тип</th>
+                                <th>Address</th>
+                                <th>Write</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (SelectedDevice.Tags.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="5"
+                                        class="table-empty">
+                                        У устройства пока нет тегов.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var tag in SelectedDevice.Tags)
+                                {
+                                    <tr class="@TagRowClass(tag)"
+                                        @onclick="() => SelectTagAsync(SelectedDevice, tag)">
+                                        <td class="tag-id">@tag.TagId</td>
+                                        <td>@tag.Name</td>
+                                        <td>HR UInt16</td>
+                                        <td class="numeric-cell">@tag.Address</td>
+                                        <td>
+                                            @(tag.Writable ? "Да" : "Нет")
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </main>
+
+    <aside class="editor-properties">
+        <div class="editor-panel-heading">
+            @PropertiesHeading
+        </div>
+
+        @if (_selectionKind == SelectionKind.None)
+        {
+            <div class="editor-properties-empty">
+                Выберите устройство или тег.
+            </div>
+        }
+        else if (_selectionKind == SelectionKind.Device)
+        {
+            <div class="property-form">
+                <label class="property-field">
+                    <span>Device ID</span>
+                    <input type="text"
+                           @bind="_deviceDraft.DeviceId"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-field">
+                    <span>Имя</span>
+                    <input type="text"
+                           @bind="_deviceDraft.Name"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-checkbox">
+                    <input type="checkbox"
+                           @bind="_deviceDraft.Enabled"
+                           @bind:after="MarkDirty" />
+                    <span>Устройство включено</span>
+                </label>
+
+                <div class="property-section-title">Modbus TCP</div>
+
+                <label class="property-field">
+                    <span>Host</span>
+                    <input type="text"
+                           @bind="_deviceDraft.Host"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <div class="property-grid-two">
+                    <label class="property-field">
+                        <span>Port</span>
+                        <input type="number"
+                               min="1"
+                               max="65535"
+                               @bind="_deviceDraft.Port"
+                               @bind:after="MarkDirty" />
+                    </label>
+
+                    <label class="property-field">
+                        <span>Unit ID</span>
+                        <input type="number"
+                               min="0"
+                               max="255"
+                               @bind="_deviceDraft.UnitId"
+                               @bind:after="MarkDirty" />
+                    </label>
+                </div>
+
+                <div class="property-section-title">Polling</div>
+
+                <label class="property-field">
+                    <span>Интервал, мс</span>
+                    <input type="number"
+                           min="1"
+                           @bind="_deviceDraft.PollIntervalMilliseconds"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-field">
+                    <span>Timeout, мс</span>
+                    <input type="number"
+                           min="1"
+                           @bind="_deviceDraft.RequestTimeoutMilliseconds"
+                           @bind:after="MarkDirty" />
+                </label>
+            </div>
+        }
+        else
+        {
+            <div class="property-form">
+                <label class="property-field">
+                    <span>Tag ID</span>
+                    <input type="text"
+                           @bind="_tagDraft.TagId"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-field">
+                    <span>Имя</span>
+                    <input type="text"
+                           @bind="_tagDraft.Name"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <div class="property-section-title">Modbus</div>
+
+                <label class="property-field">
+                    <span>Area / type</span>
+                    <input type="text"
+                           value="Holding Register / UInt16"
+                           disabled />
+                </label>
+
+                <label class="property-field">
+                    <span>Raw address</span>
+                    <input type="number"
+                           min="0"
+                           max="65535"
+                           @bind="_tagDraft.Address"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-checkbox">
+                    <input type="checkbox"
+                           @bind="_tagDraft.Writable"
+                           @bind:after="MarkDirty" />
+                    <span>Разрешить запись FC06</span>
+                </label>
+
+                <div class="property-help">
+                    Address — raw 0-based protocol address,
+                    передаваемый в Modbus-запрос.
+                </div>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private IReadOnlyList<ModbusDeviceConfigurationDto> _devices =
+        Array.Empty<ModbusDeviceConfigurationDto>();
+
+    private SelectionKind _selectionKind;
+    private string? _selectedDeviceId;
+    private string? _selectedTagId;
+
+    private DeviceDraft _deviceDraft = new();
+    private TagDraft _tagDraft = new();
+
+    private bool _isNewDevice;
+    private bool _isNewTag;
+    private bool _dirty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+
+    private ModbusDeviceConfigurationDto? SelectedDevice =>
+        _selectedDeviceId is null
+            ? null
+            : _devices.FirstOrDefault(device =>
+                string.Equals(
+                    device.DeviceId,
+                    _selectedDeviceId,
+                    StringComparison.Ordinal));
+
+    private bool CanCreateTag =>
+        SelectedDevice is not null
+        && !_isNewDevice;
+
+    private bool CanSave =>
+        _selectionKind != SelectionKind.None;
+
+    private bool CanDelete =>
+        _selectionKind != SelectionKind.None;
+
+    private string DeleteButtonText =>
+        _isNewDevice || _isNewTag
+            ? "Отменить"
+            : "Удалить";
+
+    private string PropertiesHeading =>
+        _selectionKind switch
+        {
+            SelectionKind.Device =>
+                _isNewDevice
+                    ? "Новое устройство"
+                    : "Свойства устройства",
+            SelectionKind.Tag =>
+                _isNewTag
+                    ? "Новый тег"
+                    : "Свойства тега",
+            _ => "Свойства"
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task CreateDeviceAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _selectionKind = SelectionKind.Device;
+        _selectedDeviceId = null;
+        _selectedTagId = null;
+        _isNewDevice = true;
+        _isNewTag = false;
+        _deviceDraft = new DeviceDraft
+        {
+            Host = "127.0.0.1",
+            Port = 502,
+            UnitId = 1,
+            PollIntervalMilliseconds = 1000,
+            RequestTimeoutMilliseconds = 1000
+        };
+        _dirty = true;
+        _error = null;
+    }
+
+    private async Task CreateTagAsync()
+    {
+        if (SelectedDevice is null
+            || !await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _selectionKind = SelectionKind.Tag;
+        _selectedTagId = null;
+        _isNewDevice = false;
+        _isNewTag = true;
+        _tagDraft = new TagDraft();
+        _dirty = true;
+        _error = null;
+    }
+
+    private async Task SelectDeviceAsync(
+        ModbusDeviceConfigurationDto device)
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        ApplyDeviceSelection(device);
+    }
+
+    private async Task SelectTagAsync(
+        ModbusDeviceConfigurationDto device,
+        ModbusTagConfigurationDto tag)
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        ApplyTagSelection(
+            device,
+            tag);
+    }
+
+    private void ApplyDeviceSelection(
+        ModbusDeviceConfigurationDto device)
+    {
+        _selectionKind = SelectionKind.Device;
+        _selectedDeviceId = device.DeviceId;
+        _selectedTagId = null;
+        _isNewDevice = false;
+        _isNewTag = false;
+        _deviceDraft = DeviceDraft.From(device);
+        _dirty = false;
+        _error = null;
+    }
+
+    private void ApplyTagSelection(
+        ModbusDeviceConfigurationDto device,
+        ModbusTagConfigurationDto tag)
+    {
+        _selectionKind = SelectionKind.Tag;
+        _selectedDeviceId = device.DeviceId;
+        _selectedTagId = tag.TagId;
+        _isNewDevice = false;
+        _isNewTag = false;
+        _tagDraft = TagDraft.From(tag);
+        _dirty = false;
+        _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            if (_selectionKind == SelectionKind.Device)
+            {
+                await SaveDeviceAsync();
+            }
+            else if (_selectionKind == SelectionKind.Tag)
+            {
+                await SaveTagAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveDeviceAsync()
+    {
+        var request =
+            new ModbusDeviceUpsertRequest(
+                _deviceDraft.DeviceId,
+                _deviceDraft.Name,
+                _deviceDraft.Enabled,
+                _deviceDraft.Host,
+                _deviceDraft.Port,
+                _deviceDraft.UnitId,
+                _deviceDraft.PollIntervalMilliseconds,
+                _deviceDraft.RequestTimeoutMilliseconds);
+
+        ModbusDeviceConfigurationDto saved;
+
+        if (_isNewDevice)
+        {
+            saved =
+                await Configuration.CreateDeviceAsync(
+                    request);
+        }
+        else
+        {
+            saved =
+                await Configuration.UpdateDeviceAsync(
+                    _selectedDeviceId!,
+                    request);
+        }
+
+        _dirty = false;
+        _isNewDevice = false;
+
+        await ReloadAsync(
+            saved.DeviceId,
+            tagId: null);
+    }
+
+    private async Task SaveTagAsync()
+    {
+        if (SelectedDevice is null)
+        {
+            throw new InvalidOperationException(
+                "Сначала выберите сохранённое устройство.");
+        }
+
+        var request =
+            new ModbusTagUpsertRequest(
+                _tagDraft.TagId,
+                _tagDraft.Name,
+                _tagDraft.Address,
+                _tagDraft.Writable);
+
+        ModbusTagConfigurationDto saved;
+
+        if (_isNewTag)
+        {
+            saved =
+                await Configuration.CreateTagAsync(
+                    SelectedDevice.DeviceId,
+                    request);
+        }
+        else
+        {
+            saved =
+                await Configuration.UpdateTagAsync(
+                    SelectedDevice.DeviceId,
+                    _selectedTagId!,
+                    request);
+        }
+
+        _dirty = false;
+        _isNewTag = false;
+
+        await ReloadAsync(
+            SelectedDevice.DeviceId,
+            saved.TagId);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_isNewDevice || _isNewTag)
+        {
+            CancelNewObject();
+            return;
+        }
+
+        if (_selectionKind == SelectionKind.None)
+        {
+            return;
+        }
+
+        var description =
+            _selectionKind == SelectionKind.Device
+                ? $"устройство '{_selectedDeviceId}' и все его теги"
+                : $"тег '{_selectedTagId}'";
+
+        var confirmed =
+            await JavaScript.InvokeAsync<bool>(
+                "confirm",
+                $"Удалить {description}?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            if (_selectionKind == SelectionKind.Device)
+            {
+                await Configuration.DeleteDeviceAsync(
+                    _selectedDeviceId!);
+            }
+            else
+            {
+                await Configuration.DeleteTagAsync(
+                    _selectedDeviceId!,
+                    _selectedTagId!);
+            }
+
+            ClearSelection();
+            await ReloadAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        await ReloadAsync(
+            _selectedDeviceId,
+            _selectedTagId);
+    }
+
+    private async Task ReloadAsync(
+        string? deviceId = null,
+        string? tagId = null)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _devices =
+                await Configuration.GetDevicesAsync();
+
+            if (deviceId is null)
+            {
+                if (_selectionKind != SelectionKind.None)
+                {
+                    ClearSelection();
+                }
+
+                return;
+            }
+
+            var device =
+                _devices.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate.DeviceId,
+                        deviceId,
+                        StringComparison.Ordinal));
+
+            if (device is null)
+            {
+                ClearSelection();
+                return;
+            }
+
+            if (tagId is null)
+            {
+                ApplyDeviceSelection(device);
+                return;
+            }
+
+            var tag =
+                device.Tags.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate.TagId,
+                        tagId,
+                        StringComparison.Ordinal));
+
+            if (tag is null)
+            {
+                ApplyDeviceSelection(device);
+                return;
+            }
+
+            ApplyTagSelection(
+                device,
+                tag);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CancelNewObject()
+    {
+        if (_isNewTag
+            && SelectedDevice is not null)
+        {
+            ApplyDeviceSelection(
+                SelectedDevice);
+            return;
+        }
+
+        ClearSelection();
+    }
+
+    private void ClearSelection()
+    {
+        _selectionKind = SelectionKind.None;
+        _selectedDeviceId = null;
+        _selectedTagId = null;
+        _isNewDevice = false;
+        _isNewTag = false;
+        _dirty = false;
+        _deviceDraft = new DeviceDraft();
+        _tagDraft = new TagDraft();
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!_dirty)
+        {
+            return true;
+        }
+
+        return await JavaScript.InvokeAsync<bool>(
+            "confirm",
+            "Есть несохранённые изменения. Отбросить их?");
+    }
+
+    private void MarkDirty()
+    {
+        _dirty = true;
+        _error = null;
+    }
+
+    private string DeviceSelectionClass(
+        ModbusDeviceConfigurationDto device)
+    {
+        return _selectionKind == SelectionKind.Device
+               && !_isNewDevice
+               && string.Equals(
+                   device.DeviceId,
+                   _selectedDeviceId,
+                   StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private string TagSelectionClass(
+        ModbusDeviceConfigurationDto device,
+        ModbusTagConfigurationDto tag)
+    {
+        return _selectionKind == SelectionKind.Tag
+               && string.Equals(
+                   device.DeviceId,
+                   _selectedDeviceId,
+                   StringComparison.Ordinal)
+               && string.Equals(
+                   tag.TagId,
+                   _selectedTagId,
+                   StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private string TagRowClass(
+        ModbusTagConfigurationDto tag)
+    {
+        return _selectionKind == SelectionKind.Tag
+               && string.Equals(
+                   tag.TagId,
+                   _selectedTagId,
+                   StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private enum SelectionKind
+    {
+        None,
+        Device,
+        Tag
+    }
+
+    private sealed class DeviceDraft
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool Enabled { get; set; }
+        public string Host { get; set; } = string.Empty;
+        public int Port { get; set; } = 502;
+        public int UnitId { get; set; } = 1;
+        public int PollIntervalMilliseconds { get; set; } = 1000;
+        public int RequestTimeoutMilliseconds { get; set; } = 1000;
+
+        public static DeviceDraft From(
+            ModbusDeviceConfigurationDto device)
+        {
+            return new DeviceDraft
+            {
+                DeviceId = device.DeviceId,
+                Name = device.Name,
+                Enabled = device.Enabled,
+                Host = device.Host,
+                Port = device.Port,
+                UnitId = device.UnitId,
+                PollIntervalMilliseconds =
+                    device.PollIntervalMilliseconds,
+                RequestTimeoutMilliseconds =
+                    device.RequestTimeoutMilliseconds
+            };
+        }
+    }
+
+    private sealed class TagDraft
+    {
+        public string TagId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public int Address { get; set; }
+        public bool Writable { get; set; }
+
+        public static TagDraft From(
+            ModbusTagConfigurationDto tag)
+        {
+            return new TagDraft
+            {
+                TagId = tag.TagId,
+                Name = tag.Name,
+                Address = tag.Address,
+                Writable = tag.Writable
+            };
+        }
+    }
+}

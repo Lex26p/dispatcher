@@ -14,5 +14,6 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 
 builder.Services.AddScoped<RuntimeStateClient>();
+builder.Services.AddScoped<ConfigurationClient>();
 
 await builder.Build().RunAsync();

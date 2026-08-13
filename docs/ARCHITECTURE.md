@@ -1,185 +1,100 @@
 # Архитектура Dispatcher
 
-## 1. Состояние S09A
+## 1. Состояние после S09B
 
-Configuration теперь не только persistent, но и изменяется во время работы:
+Phase 2 завершает полный configuration path:
 
 ```text
-Blazor Device Editor (S09B)
-          ↓
-Configuration REST API (S09A)
-          ↓
+Blazor Device Editor
+        ↓
+Configuration REST API
+        ↓
 validate
-          ↓
+        ↓
 SQLite
-          ↓
+        ↓
 ConfigurationCatalog
-          ↓
-Modbus runtime reconfigure
+        ↓
+Modbus runtime live apply
 ```
 
 Runtime current state остаётся отдельным:
 
 ```text
+Protocol workers
+      ↓
 TagService / DeviceStateService
-          ↓
+      ↓
 REST / SignalR
-          ↓
+      ↓
+Monitoring / future mimics
+```
+
+## 2. Web services
+
+Глобальная навигация:
+
+```text
 Monitoring
+Device Editor
 ```
 
-## 2. Configuration API boundary
+Monitoring является runtime application UI.
 
-S09A добавляет protocol-specific editor API:
+Device Editor является configuration UI и поэтому может видеть protocol-specific Modbus fields.
+
+## 3. Device Editor layout
+
+Редактор реализует общий пространственный контракт:
 
 ```text
-/api/configuration/modbus/...
+слева  → devices/tags selection tree
+центр  → tags work table
+справа → selected object properties
+сверху → create/save/delete/refresh
 ```
 
-Это допустимо, потому что configuration editor редактирует именно Modbus-specific настройки.
+Правая панель всегда относится к выбранному object.
 
-Runtime application boundary остаётся protocol-neutral:
+Выбор device показывает его tags в центральной таблице. Выбор tag сохраняет ту же рабочую таблицу и выделяет строку, а справа показывает tag properties.
+
+## 4. Client-side draft
+
+Device Editor не отправляет mutation на каждый `input`.
 
 ```text
-/api/tags
-/api/devices
-/hubs/runtime
+server snapshot
+    ↓
+local editable draft
+    ↓
+explicit Save
+    ↓
+configuration API
 ```
 
-Web-monitoring и будущие мнемосхемы не получают Modbus Address/UnitId.
+Причина: каждая server mutation live-применяет configuration и перезапускает polling loops. Auto-save на каждом символе был бы неправильным runtime behaviour.
 
-## 3. Configuration contracts
+При переходе к другому object или refresh с dirty draft пользователь получает browser confirmation.
 
-Публичные DTO:
+## 5. ConfigurationClient
+
+`Dispatcher.Web.Services.ConfigurationClient` инкапсулирует HTTP-вызовы:
 
 ```text
-ModbusDeviceConfigurationDto
-ModbusTagConfigurationDto
-ModbusDeviceUpsertRequest
-ModbusTagUpsertRequest
+GET devices
+POST/PUT/DELETE device
+POST/PUT/DELETE tag
 ```
 
-Device:
+Он работает только с `Dispatcher.Contracts.Configuration`.
 
-```text
-DeviceId
-Name
-Enabled
-Host
-Port
-UnitId
-PollIntervalMilliseconds
-RequestTimeoutMilliseconds
-Tags[]
-```
+Web по-прежнему не ссылается на Server, Core или Modbus assemblies.
 
-Tag:
+Server validation errors извлекаются из Problem Details `detail/title` и показываются в editor.
 
-```text
-TagId
-Name
-Address
-Writable
-```
+## 6. Configuration API
 
-Data type пока не является выбираемым полем: текущий реализованный protocol scope всё ещё `Holding Register UInt16`.
-
-## 4. ConfigurationEditorService
-
-Все mutation-команды сериализуются через один `SemaphoreSlim`.
-
-Алгоритм:
-
-```text
-current ConfigurationCatalog snapshot
-          ↓ copy
-apply requested mutation
-          ↓
-ModbusConfigurationValidator
-          ↓
-SqliteConfigurationStore.ReplaceAsync
-          ↓
-ConfigurationCatalog.Replace
-          ↓
-ModbusRuntimeHostedService.ApplyAsync
-          ↓
-SignalR ConfigurationChanged
-```
-
-SQLite update выполняется транзакционно существующим `ReplaceAsync`.
-
-Duplicate `DeviceId`/`TagId` возвращаются как conflict. Неизвестные объекты — not found. Невалидные Modbus параметры — bad request.
-
-## 5. Dynamic Modbus runtime
-
-`ModbusRuntimeHostedService` теперь является управляемым `IHostedService`, зарегистрированным и как singleton, и как hosted service.
-
-При startup:
-
-```text
-ConfigurationInitializationHostedService
-          ↓
-ConfigurationCatalog
-          ↓
-ModbusRuntimeHostedService.StartAsync
-          ↓
-ApplyAsync(current snapshot)
-```
-
-При configuration mutation:
-
-```text
-ApplyAsync(new snapshot)
-          ↓
-cancel old polling loops
-          ↓
-await graceful completion
-          ↓
-clear TagService / DeviceStateService
-          ↓
-start one loop per enabled device with tags
-```
-
-Сброс current runtime state сознательный: после изменения IP, UnitId, Address или состава tags старое значение больше нельзя считать актуальным.
-
-Новые polling loops начинают poll немедленно, поэтому valid current state появляется заново через обычные `TagChanged`/`DeviceStateChanged`.
-
-## 6. ConfigurationChanged
-
-SignalR contract дополнен:
-
-```text
-ConfigurationChanged
-```
-
-Он не содержит configuration payload.
-
-Получив событие, monitoring Web повторно читает:
-
-```text
-GET /api/tags
-GET /api/devices
-```
-
-Это удаляет из UI runtime objects, которые исчезли из configuration или были сброшены при live apply.
-
-Configuration snapshot для Device Editor запрашивается отдельным configuration API.
-
-## 7. Persistent store
-
-SQLite остаётся durable source of truth:
-
-```text
-modbus_devices
-modbus_tags
-PRAGMA user_version = 1
-```
-
-`ConfigurationCatalog` остаётся активным in-memory snapshot.
-
-Protocol polling/write не выполняют SQLite query на каждом I/O cycle.
-
-## 8. REST endpoints S09A
+S09A endpoints не меняются:
 
 ```text
 GET    /api/configuration/modbus/devices
@@ -193,32 +108,58 @@ PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 ```
 
-## 9. Concurrency model
+## 7. Runtime reconfiguration
 
-На текущем этапе configuration mutations редкие и выполняются одним Server process.
-
-Поэтому один in-process mutation lock достаточен.
-
-Не вводятся:
-
-- optimistic concurrency tokens;
-- distributed locks;
-- change journal;
-- message broker.
-
-Если появится multi-writer/distributed configuration, решение пересматривается.
-
-## 10. S09B boundary
-
-S09A не меняет основную компоновку Web.
-
-S09B использует зафиксированные правила редакторов:
+После Save/Delete:
 
 ```text
-слева  → selection/structure
-центр  → work area
-справа → selected-object properties
-сверху → только необходимые actions
+SQLite ReplaceAsync
+      ↓
+ConfigurationCatalog.Replace
+      ↓
+cancel old polling
+      ↓
+clear old runtime current state
+      ↓
+start new polling
+      ↓
+ConfigurationChanged
 ```
 
-`docs/WEB_UI.md` остаётся источником UI-правил.
+Monitoring reloads current runtime snapshot.
+
+Device Editor после собственной mutation повторно читает configuration snapshot, поэтому отображает server-confirmed state.
+
+## 8. Protocol boundary
+
+Monitoring и будущие Mimics работают с logical tags.
+
+Device Editor редактирует:
+
+```text
+Host
+Port
+UnitId
+Holding Register Address
+Writable
+```
+
+Это protocol-specific configuration boundary и не переносит Modbus details в runtime application model.
+
+## 9. Current tag model
+
+На S09B поддержан только:
+
+```text
+Holding Register UInt16
+```
+
+Поэтому тип в редакторе показывается read-only.
+
+Появление второго data type должно расширять configuration schema и protocol conversion вместе, а не добавлять фиктивный UI selector.
+
+## 10. Следующий этап
+
+S10 добавляет второй protocol component — SNMP.
+
+Ключевая архитектурная проверка S10: Device Editor должен уметь редактировать Modbus и SNMP configuration, а Monitoring должен продолжать работать с общими `TagId` и `DeviceId`.
