@@ -32,7 +32,7 @@ Web-клиент реализуется на Blazor WebAssembly.
 
 **Status:** Accepted
 
-Web работает с `TagId`/`DeviceId`, а не protocol address.
+Monitoring, мнемосхемы и общая runtime-логика работают с `TagId`/`DeviceId`, а не protocol address.
 
 ---
 
@@ -168,22 +168,9 @@ Write поддерживает `UInt16` `0..65535` через FC06.
 
 **Status:** Accepted
 
-Начиная с S08 device/tag configuration хранится в SQLite.
+Начиная с S08 device/tag configuration хранится в SQLite через `Microsoft.Data.Sqlite`.
 
-Используется `Microsoft.Data.Sqlite`, без EF Core.
-
-Причина:
-
-- текущая схема мала и хорошо выражается двумя таблицами;
-- ADO.NET provider даёт явное управление schema/load/save;
-- не требуется отдельный migration CLI/tooling на текущем этапе;
-- при необходимости schema evolution можно реализовать по `PRAGMA user_version`.
-
-Текущая schema version:
-
-```text
-1
-```
+Schema version = `1`.
 
 ---
 
@@ -191,21 +178,7 @@ Write поддерживает `UInt16` `0..65535` через FC06.
 
 **Status:** Accepted
 
-SQLite является durable source of truth для конфигурации, но protocol runtime не читает БД на каждом poll/write.
-
-При startup:
-
-```text
-SQLite
-  ↓
-validate
-  ↓
-ConfigurationCatalog
-```
-
-Polling, Writable metadata и write routing используют один in-memory snapshot.
-
-S09 будет обновлять SQLite и затем заменять catalog snapshot.
+SQLite — durable source of truth, `ConfigurationCatalog` — активный in-memory snapshot для protocol runtime и write routing.
 
 ---
 
@@ -213,15 +186,7 @@ S09 будет обновлять SQLite и затем заменять catalog 
 
 **Status:** Accepted
 
-S08 не создаёт скрытые sample devices/tags.
-
-Причина:
-
-- sample device не должен выглядеть как реальная configuration;
-- disabled localhost-запись не несёт продуктовой ценности;
-- следующий S09 предоставляет штатный Web CRUD.
-
-Пустая configuration означает отсутствие protocol network connections.
+Не создаются скрытые sample devices/tags.
 
 ---
 
@@ -229,12 +194,76 @@ S08 не создаёт скрытые sample devices/tags.
 
 **Status:** Accepted
 
-Persistent tag model S08 соответствует реально работающему scope:
+Текущий persistent tag model соответствует реально работающему `Holding Register UInt16`.
+
+---
+
+## D-025 — Configuration mutations сохраняют и применяют целый snapshot
+
+**Status:** Accepted
+
+S09A CRUD не вводит отдельные SQL repositories для каждой сущности.
+
+Каждая mutation:
 
 ```text
-Holding Register UInt16
+copy current snapshot
+      ↓
+change one device/tag
+      ↓
+validate whole snapshot
+      ↓
+SQLite ReplaceAsync transaction
+      ↓
+ConfigurationCatalog.Replace
+      ↓
+runtime ApplyAsync
 ```
 
-Поэтому UI/configuration пока не хранит выбираемый `DataType`.
+Причина:
 
-Когда добавляется следующий поддерживаемый тип (`Int16`, `Int32`, `Float32` и т.д.), model/schema расширяются вместе с фактическим conversion path.
+- текущая configuration мала;
+- `ReplaceAsync` уже существует и транзакционен;
+- целый snapshot упрощает validation global uniqueness `DeviceId`/`TagId`;
+- не требуется преждевременная repository/unit-of-work hierarchy.
+
+Если объём configuration станет большим, storage mutation strategy пересматривается.
+
+---
+
+## D-026 — Live apply перезапускает polling loops и сбрасывает runtime current state
+
+**Status:** Accepted
+
+После успешного сохранения configuration Server отменяет текущие Modbus polling loops и запускает их заново из нового snapshot.
+
+Перед новым запуском очищаются:
+
+```text
+TagService
+DeviceStateService
+```
+
+Причина:
+
+после изменения Host, UnitId, Address или состава tags старое значение нельзя считать актуальным.
+
+После live apply Web получает `ConfigurationChanged` и перечитывает runtime snapshot.
+
+---
+
+## D-027 — Configuration API может быть protocol-specific
+
+**Status:** Accepted
+
+Runtime application API остаётся protocol-neutral, но Device Editor должен редактировать реальные настройки протокола.
+
+Поэтому S09A использует:
+
+```text
+/api/configuration/modbus/...
+```
+
+и Modbus-specific DTO.
+
+Это не нарушает `Protocol → logical Tag → Application`, потому что protocol details видит только configuration/editor service, а monitoring/mimic runtime продолжает работать через logical tags.

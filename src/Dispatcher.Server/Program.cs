@@ -26,9 +26,15 @@ builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
 builder.Services.AddSingleton<ModbusTcpRegisterWriter>();
 builder.Services.AddSingleton<ModbusWriteService>();
-builder.Services.AddHostedService<ModbusRuntimeHostedService>();
 
 builder.Services.AddSignalR();
+
+builder.Services.AddSingleton<ModbusRuntimeHostedService>();
+builder.Services.AddHostedService<ModbusRuntimeHostedService>(
+    services =>
+        services.GetRequiredService<ModbusRuntimeHostedService>());
+
+builder.Services.AddSingleton<ConfigurationEditorService>();
 builder.Services.AddHostedService<RuntimeHubPublisher>();
 
 var app = builder.Build();
@@ -76,6 +82,8 @@ app.MapPost(
             writeService,
             logger,
             cancellationToken));
+
+app.MapConfigurationEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
     RuntimeHubContract.Path);

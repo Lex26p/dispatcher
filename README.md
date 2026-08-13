@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Первый вертикальный срез Modbus → Web завершён. Phase 2 переводит конфигурацию устройств и тегов из bootstrap-файла в постоянное хранилище и затем добавляет Web-редактор.
+Первый вертикальный срез Modbus → Web завершён. Phase 2 переводит конфигурацию устройств и тегов в постоянное хранилище и Web-редактор.
 
 ## Рабочий вертикальный срез
 
@@ -26,7 +26,9 @@ Modbus TCP device
 2. Хранить текущие значения и Online/Offline state.
 3. Показывать значения в Web через REST + SignalR.
 4. Записывать явно разрешённые Holding Register через FC06.
-5. Загружать persistent device/tag configuration из SQLite при старте.
+5. Хранить device/tag configuration в SQLite.
+6. CRUD-ить Modbus configuration через REST.
+7. Применять изменённую configuration к polling без перезапуска Server.
 
 ## Базовый стек
 
@@ -35,7 +37,7 @@ Modbus TCP device
 - Web: Blazor WebAssembly.
 - Realtime: SignalR.
 - SQLite provider: Microsoft.Data.Sqlite 10.0.10.
-- SQLite native bundle: SQLitePCLRaw.bundle_e_sqlite3 2.1.12 (explicitly pinned to avoid the vulnerable 2.1.11 transitive resolution).
+- SQLite native bundle: SQLitePCLRaw.bundle_e_sqlite3 2.1.12.
 - Modbus: NModbus 3.0.83.
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
@@ -44,15 +46,13 @@ Target framework централизованно зафиксирован как 
 
 ## Configuration и Runtime
 
-С S08 эти два слоя явно разделены:
-
 ```text
 Persistent configuration
 SQLite
-  ↓ startup load
+  ↓
 ConfigurationCatalog
   ↓
-protocol runtime
+Modbus runtime
 
 Runtime state
 TagService + DeviceStateService
@@ -62,7 +62,7 @@ REST / SignalR
 
 `TagService` не хранит IP, Unit ID, Address, Writable или другие configuration fields.
 
-### SQLite configuration
+## SQLite configuration
 
 Server использует:
 
@@ -71,7 +71,7 @@ modbus_devices
 modbus_tags
 ```
 
-`modbus_devices` хранит:
+`modbus_devices`:
 
 ```text
 DeviceId
@@ -84,7 +84,7 @@ PollIntervalMilliseconds
 RequestTimeoutMilliseconds
 ```
 
-`modbus_tags` хранит:
+`modbus_tags`:
 
 ```text
 TagId
@@ -94,59 +94,51 @@ Address
 Writable
 ```
 
-Текущий schema version = `1` через SQLite `PRAGMA user_version`.
+Schema version = `1` через SQLite `PRAGMA user_version`.
 
-После загрузки БД данные копируются в in-memory `ConfigurationCatalog`. Polling, REST writable metadata, SignalR и write routing используют один и тот же catalog snapshot.
-
-`ConfigurationDatabase:Path` разрешается при создании `SqliteConfigurationStore` из финальной DI-конфигурации host. Это позволяет стандартным configuration providers, включая test overrides, корректно задавать путь к БД.
-
-На S08 catalog загружается один раз при старте. Live-применение изменений будет добавлено в S09 вместе с редактором.
-
-### Где находится БД
-
-Настройка:
-
-```text
-ConfigurationDatabase:Path
-```
-
-Если `Path` пустой, Server использует локальное application-data хранилище пользователя:
+Если `ConfigurationDatabase:Path` пустой, Windows-разработка использует:
 
 ```text
 %LOCALAPPDATA%\Dispatcher\dispatcher.db
 ```
 
-на Windows.
-
-Путь можно переопределить через `appsettings.json` или environment variable:
+## Configuration API S09A
 
 ```text
-ConfigurationDatabase__Path
+GET    /api/configuration/modbus/devices
+
+POST   /api/configuration/modbus/devices
+PUT    /api/configuration/modbus/devices/{deviceId}
+DELETE /api/configuration/modbus/devices/{deviceId}
+
+POST   /api/configuration/modbus/devices/{deviceId}/tags
+PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
+DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 ```
 
-Относительный явно заданный путь разрешается относительно content root `Dispatcher.Server`.
+API работает с Modbus configuration DTO, потому что это configuration/editor boundary. Runtime Web по-прежнему работает с protocol-neutral `TagId`/`DeviceId`.
 
-Новая БД создаётся пустой. Это намеренно: S08 не добавляет скрытую sample-конфигурацию. Создание/изменение устройств через Web относится к S09.
-
-## Startup
-
-Порядок:
+Каждая успешная mutation выполняет:
 
 ```text
-ConfigurationInitializationHostedService
-        ↓
-create/check SQLite schema
-        ↓
-load devices/tags
-        ↓
-ConfigurationCatalog
-        ↓
-ModbusRuntimeHostedService
-        ↓
-one polling loop per enabled device with tags
+build new snapshot
+      ↓
+validate
+      ↓
+SQLite ReplaceAsync transaction
+      ↓
+ConfigurationCatalog.Replace
+      ↓
+stop old polling loops
+      ↓
+clear old runtime current state
+      ↓
+start polling from new snapshot
+      ↓
+SignalR ConfigurationChanged
 ```
 
-Таким образом persistent configuration загружена до начала protocol runtime.
+`ConfigurationChanged` заставляет уже открытый monitoring-клиент перечитать `/api/tags` и `/api/devices`, поэтому удалённые или переименованные объекты не остаются на экране как stale runtime state.
 
 ## Runtime API
 
@@ -159,7 +151,13 @@ POST /api/tags/{tagId}/write
 SignalR /hubs/runtime
 ```
 
-Web по-прежнему работает только с logical `TagId`; SQLite/Modbus details в public runtime API не выходят.
+SignalR events:
+
+```text
+TagChanged
+DeviceStateChanged
+ConfigurationChanged
+```
 
 ## Текущий Modbus scope
 
@@ -167,20 +165,23 @@ Web по-прежнему работает только с logical `TagId`; SQLi
 - FC03 read.
 - FC06 write.
 - Holding Register `UInt16`.
-- несколько тегов на устройство.
-- несколько persisted устройств могут быть загружены при старте.
-- timeout/reconnect через новое соединение каждого polling cycle.
+- несколько тегов на устройство;
+- несколько persisted устройств;
+- live restart polling при изменении configuration;
 - Writable — configuration metadata.
 
 ## Следующий шаг
 
-S09 добавит Web-редактор:
+**S09B** добавит сам Blazor Device Editor:
 
-- список устройств;
-- CRUD устройств и тегов;
-- сохранение в SQLite;
-- применение изменённой configuration;
-- editor layout: слева выбор, центр работа, справа свойства.
+```text
+слева  → список устройств/тегов
+центр  → рабочая таблица/структура
+справа → свойства выбранного объекта
+сверху → Create/Delete/Save actions
+```
+
+Он будет использовать уже готовый S09A configuration API.
 
 ## Документы
 

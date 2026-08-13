@@ -42,6 +42,11 @@ public sealed class TagService
             .ToArray();
     }
 
+    public void Clear()
+    {
+        _values.Clear();
+    }
+
     private static void ValidateTagId(string tagId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tagId);

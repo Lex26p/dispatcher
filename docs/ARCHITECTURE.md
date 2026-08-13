@@ -1,60 +1,65 @@
 # Архитектура Dispatcher
 
-## 1. Состояние S08
+## 1. Состояние S09A
 
-После S08 система разделяет два принципиально разных состояния:
-
-```text
-Persistent configuration
-        SQLite
-          ↓
- ConfigurationCatalog
-          ↓
- protocol runtime
-
-Runtime current state
- TagService / DeviceStateService
-          ↓
-    REST / SignalR
-          ↓
-         Web
-```
-
-Первый слой переживает перезапуск процесса. Второй пересоздаётся при запуске и наполняется protocol workers.
-
-## 2. Общая схема
+Configuration теперь не только persistent, но и изменяется во время работы:
 
 ```text
-┌──────────────────────────────────────────────────────────┐
-│ Dispatcher.Web — Blazor WebAssembly                     │
-│ REST commands/snapshot + SignalR updates                │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────┐
-│ Dispatcher.Server                                        │
-│                                                          │
-│ SQLite ──load──> ConfigurationCatalog                    │
-│                     │                                    │
-│                     ├──> ModbusRuntimeHostedService      │
-│                     ├──> write routing                   │
-│                     └──> Writable metadata               │
-│                                                          │
-│ TagService + DeviceStateService                          │
-│          │                                               │
-│          └──> REST / SignalR                             │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                 Dispatcher.Modbus
-                  FC03 / FC06
-                         │
-                  Modbus devices
+Blazor Device Editor (S09B)
+          ↓
+Configuration REST API (S09A)
+          ↓
+validate
+          ↓
+SQLite
+          ↓
+ConfigurationCatalog
+          ↓
+Modbus runtime reconfigure
 ```
 
-## 3. Persistent configuration
+Runtime current state остаётся отдельным:
 
-Текущий persistent model намеренно соответствует реализованному Modbus scope.
+```text
+TagService / DeviceStateService
+          ↓
+REST / SignalR
+          ↓
+Monitoring
+```
 
-### ModbusDeviceConfiguration
+## 2. Configuration API boundary
+
+S09A добавляет protocol-specific editor API:
+
+```text
+/api/configuration/modbus/...
+```
+
+Это допустимо, потому что configuration editor редактирует именно Modbus-specific настройки.
+
+Runtime application boundary остаётся protocol-neutral:
+
+```text
+/api/tags
+/api/devices
+/hubs/runtime
+```
+
+Web-monitoring и будущие мнемосхемы не получают Modbus Address/UnitId.
+
+## 3. Configuration contracts
+
+Публичные DTO:
+
+```text
+ModbusDeviceConfigurationDto
+ModbusTagConfigurationDto
+ModbusDeviceUpsertRequest
+ModbusTagUpsertRequest
+```
+
+Device:
 
 ```text
 DeviceId
@@ -68,7 +73,7 @@ RequestTimeoutMilliseconds
 Tags[]
 ```
 
-### ModbusTagConfiguration
+Tag:
 
 ```text
 TagId
@@ -77,159 +82,143 @@ Address
 Writable
 ```
 
-`Address` — raw Modbus address текущего Holding Register.
+Data type пока не является выбираемым полем: текущий реализованный protocol scope всё ещё `Holding Register UInt16`.
 
-Data type пока не хранится как выбираемое поле, потому что Phase 1 реализует только `UInt16`. Когда появляется второй реально поддерживаемый data type, configuration model расширяется вместе с protocol conversion.
+## 4. ConfigurationEditorService
 
-## 4. SQLite store
+Все mutation-команды сериализуются через один `SemaphoreSlim`.
 
-`SqliteConfigurationStore` отвечает только за durable storage.
+Алгоритм:
 
-Таблицы:
+```text
+current ConfigurationCatalog snapshot
+          ↓ copy
+apply requested mutation
+          ↓
+ModbusConfigurationValidator
+          ↓
+SqliteConfigurationStore.ReplaceAsync
+          ↓
+ConfigurationCatalog.Replace
+          ↓
+ModbusRuntimeHostedService.ApplyAsync
+          ↓
+SignalR ConfigurationChanged
+```
+
+SQLite update выполняется транзакционно существующим `ReplaceAsync`.
+
+Duplicate `DeviceId`/`TagId` возвращаются как conflict. Неизвестные объекты — not found. Невалидные Modbus параметры — bad request.
+
+## 5. Dynamic Modbus runtime
+
+`ModbusRuntimeHostedService` теперь является управляемым `IHostedService`, зарегистрированным и как singleton, и как hosted service.
+
+При startup:
+
+```text
+ConfigurationInitializationHostedService
+          ↓
+ConfigurationCatalog
+          ↓
+ModbusRuntimeHostedService.StartAsync
+          ↓
+ApplyAsync(current snapshot)
+```
+
+При configuration mutation:
+
+```text
+ApplyAsync(new snapshot)
+          ↓
+cancel old polling loops
+          ↓
+await graceful completion
+          ↓
+clear TagService / DeviceStateService
+          ↓
+start one loop per enabled device with tags
+```
+
+Сброс current runtime state сознательный: после изменения IP, UnitId, Address или состава tags старое значение больше нельзя считать актуальным.
+
+Новые polling loops начинают poll немедленно, поэтому valid current state появляется заново через обычные `TagChanged`/`DeviceStateChanged`.
+
+## 6. ConfigurationChanged
+
+SignalR contract дополнен:
+
+```text
+ConfigurationChanged
+```
+
+Он не содержит configuration payload.
+
+Получив событие, monitoring Web повторно читает:
+
+```text
+GET /api/tags
+GET /api/devices
+```
+
+Это удаляет из UI runtime objects, которые исчезли из configuration или были сброшены при live apply.
+
+Configuration snapshot для Device Editor запрашивается отдельным configuration API.
+
+## 7. Persistent store
+
+SQLite остаётся durable source of truth:
 
 ```text
 modbus_devices
 modbus_tags
-```
-
-Схема имеет версию через:
-
-```text
 PRAGMA user_version = 1
 ```
 
-Если БД имеет неизвестную ненулевую schema version, Server завершает startup с понятной ошибкой вместо молчаливого чтения несовместимой схемы.
+`ConfigurationCatalog` остаётся активным in-memory snapshot.
 
-Store предоставляет:
+Protocol polling/write не выполняют SQLite query на каждом I/O cycle.
 
-```text
-InitializeAsync
-LoadAsync
-ReplaceAsync
-```
-
-`ReplaceAsync` уже даёт минимальную persistence primitive для следующего S09, но S08 не публикует CRUD API.
-
-## 5. ConfigurationCatalog
-
-`ConfigurationCatalog` — in-memory snapshot уже загруженной persistent configuration.
-
-Он нужен потому, что polling и HTTP write routing не должны выполнять SQLite query на каждом poll/write.
-
-Catalog предоставляет:
+## 8. REST endpoints S09A
 
 ```text
-Devices
-FindTag(TagId)
-IsTagWritable(TagId)
-Replace(...)
+GET    /api/configuration/modbus/devices
+
+POST   /api/configuration/modbus/devices
+PUT    /api/configuration/modbus/devices/{deviceId}
+DELETE /api/configuration/modbus/devices/{deviceId}
+
+POST   /api/configuration/modbus/devices/{deviceId}/tags
+PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
+DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
 ```
 
-Snapshot заменяется целиком. На S08 замена происходит только при startup. На S09 тот же механизм будет использован после сохранения изменений.
+## 9. Concurrency model
 
-## 6. Startup order
+На текущем этапе configuration mutations редкие и выполняются одним Server process.
 
-Hosted services регистрируются в порядке:
+Поэтому один in-process mutation lock достаточен.
+
+Не вводятся:
+
+- optimistic concurrency tokens;
+- distributed locks;
+- change journal;
+- message broker.
+
+Если появится multi-writer/distributed configuration, решение пересматривается.
+
+## 10. S09B boundary
+
+S09A не меняет основную компоновку Web.
+
+S09B использует зафиксированные правила редакторов:
 
 ```text
-1. ConfigurationInitializationHostedService
-2. ModbusRuntimeHostedService
-3. RuntimeHubPublisher
+слева  → selection/structure
+центр  → work area
+справа → selected-object properties
+сверху → только необходимые actions
 ```
 
-Initialization service синхронно относительно startup:
-
-1. создаёт/проверяет SQLite schema;
-2. загружает devices/tags;
-3. валидирует configuration;
-4. устанавливает snapshot в `ConfigurationCatalog`.
-
-Только затем запускается Modbus runtime.
-
-## 7. Modbus runtime
-
-`ModbusRuntimeHostedService` больше не читает `IOptions<ModbusRuntimeOptions>`.
-
-Он читает `ConfigurationCatalog` и запускает один polling loop на каждое:
-
-```text
-Enabled = true
-AND
-Tags.Count > 0
-```
-
-устройство.
-
-Disabled devices сохраняются в SQLite, но не инициируют network connection.
-
-## 8. Write routing
-
-Public write contract не изменился:
-
-```text
-POST /api/tags/{tagId}/write
-{
-  "value": 3456
-}
-```
-
-Routing:
-
-```text
-TagId
-  ↓
-ConfigurationCatalog.FindTag
-  ↓
-Device + Tag persistent metadata
-  ↓
-validation
-  ↓
-Modbus write target
-  ↓
-FC06
-```
-
-Web по-прежнему не знает Address/UnitId.
-
-## 9. Runtime state
-
-`TagService` по-прежнему хранит только:
-
-```text
-TagId
-Value
-Timestamp
-```
-
-`DeviceStateService` хранит connection state.
-
-Ни один из этих сервисов не является persistent configuration store.
-
-## 10. Database location
-
-Infrastructure setting:
-
-```text
-ConfigurationDatabase:Path
-```
-
-Если пусто, Windows-разработка использует:
-
-```text
-%LOCALAPPDATA%\Dispatcher\dispatcher.db
-```
-
-Можно задать абсолютный или content-root-relative путь.
-
-## 11. S09 boundary
-
-S08 не добавляет:
-
-- configuration REST DTO;
-- CRUD endpoints;
-- Web editor;
-- live restart/reload protocol workers;
-- data types сверх `UInt16`;
-- SNMP configuration.
-
-Это следующий шаг S09.
+`docs/WEB_UI.md` остаётся источником UI-правил.

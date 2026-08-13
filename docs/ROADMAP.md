@@ -36,20 +36,29 @@
   - schema version;
   - загрузка configuration при старте;
   - in-memory `ConfigurationCatalog`;
-  - запуск persisted enabled devices;
-  - persistent configuration отделена от runtime state;
-  - integration tests persistence/startup.
+  - persistent configuration отделена от runtime state.
 
-- [ ] **S09 — Web-редактор устройств и тегов**
-  - список устройств;
+- [x] **S09A — Configuration CRUD API и live apply**
+  - REST snapshot Modbus configuration;
   - создать/редактировать/удалить устройство;
   - создать/редактировать/удалить тег;
-  - Modbus-настройки;
-  - сохранение в SQLite;
-  - применение изменённой конфигурации;
-  - локальная навигация слева;
-  - рабочая область в центре;
-  - свойства выбранного объекта справа.
+  - server-side validation и duplicate checks;
+  - сохранение snapshot в SQLite;
+  - замена `ConfigurationCatalog`;
+  - остановка и перезапуск polling loops без перезапуска Server;
+  - сброс устаревшего runtime state;
+  - SignalR `ConfigurationChanged`;
+  - integration tests persistence/live apply.
+
+- [ ] **S09B — Blazor Device Editor**
+  - глобальная навигация `Device Editor`;
+  - локальный список устройств и тегов;
+  - создать/редактировать/удалить через S09A API;
+  - центральная рабочая область;
+  - свойства выбранного объекта справа;
+  - компактный toolbar;
+  - отображение validation/server errors;
+  - проверка полного сценария через Web.
 
 ### Результат Phase 2
 

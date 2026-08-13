@@ -71,6 +71,11 @@ public sealed class DeviceStateService
             .ToArray();
     }
 
+    public void Clear()
+    {
+        _states.Clear();
+    }
+
     private static void ValidateDeviceId(string deviceId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);

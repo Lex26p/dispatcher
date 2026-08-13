@@ -113,6 +113,10 @@ public sealed class RuntimeStateClient : IAsyncDisposable
             RuntimeHubContract.DeviceStateChanged,
             OnDeviceStateChanged);
 
+        _hubConnection.On(
+            RuntimeHubContract.ConfigurationChanged,
+            ReloadSnapshotAsync);
+
         _hubConnection.Reconnecting += exception =>
         {
             ConnectionState = RuntimeConnectionState.Reconnecting;
