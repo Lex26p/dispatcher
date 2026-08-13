@@ -60,14 +60,20 @@
   - отображение connection state;
   - базовый application shell по правилам `docs/WEB_UI.md`.
 
-- [ ] **S07 — Write path Web → Modbus**
-  - подключить Modbus polling к runtime host;
+- [x] **S07A — Hosted Modbus polling**
+  - подключить `Dispatcher.Modbus` к runtime host;
+  - временная strongly typed конфигурация одного устройства;
+  - запуск polling как background service;
+  - интеграционный тест `Modbus TCP → Core → REST`;
+  - данные автоматически становятся доступны Web через существующий REST/SignalR контур.
+
+- [ ] **S07B — Write path Web → Modbus**
   - writable-tag;
   - команда из Web;
   - server-side validation;
   - запись через Modbus;
   - обновление отображаемого состояния;
-  - end-to-end проверка Modbus → Web и Web → Modbus.
+  - end-to-end проверка Web → Modbus и Modbus → Web.
 
 ### Результат Phase 1
 

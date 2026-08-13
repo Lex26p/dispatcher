@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Dispatcher.Contracts\Dispatcher.Contracts.csproj" />
     <ProjectReference Include="..\Dispatcher.Core\Dispatcher.Core.csproj" />
+    <ProjectReference Include="..\Dispatcher.Modbus\Dispatcher.Modbus.csproj" />
     <ProjectReference Include="..\Dispatcher.Web\Dispatcher.Web.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

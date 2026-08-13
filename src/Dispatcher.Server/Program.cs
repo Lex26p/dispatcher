@@ -1,6 +1,8 @@
 using Dispatcher.Contracts.Realtime;
 using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
+using Dispatcher.Modbus;
+using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
 
@@ -8,6 +10,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<TagService>();
 builder.Services.AddSingleton<DeviceStateService>();
+
+builder.Services.Configure<ModbusRuntimeOptions>(
+    builder.Configuration.GetSection(
+        ModbusRuntimeOptions.SectionName));
+
+builder.Services.AddSingleton<ModbusTcpRegisterReader>();
+builder.Services.AddSingleton<ModbusPollingService>();
+builder.Services.AddHostedService<ModbusRuntimeHostedService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<RuntimeHubPublisher>();
@@ -35,7 +45,8 @@ app.MapGet("/api/devices", (DeviceStateService deviceStateService) =>
         .ToArray();
 });
 
-app.MapHub<RuntimeHub>(RuntimeHubContract.Path);
+app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
+    RuntimeHubContract.Path);
 
 app.MapStaticAssets();
 app.MapFallbackToFile("index.html");

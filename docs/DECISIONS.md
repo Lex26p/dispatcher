@@ -157,20 +157,11 @@ Dispatcher.Web
 
 **Status:** Accepted
 
-`Dispatcher.Web` остаётся client-side Blazor WebAssembly: компоненты выполняются в браузере.
+`Dispatcher.Web` остаётся client-side Blazor WebAssembly.
 
-На текущем этапе его статические assets раздаёт `Dispatcher.Server`.
+Статические assets раздаёт `Dispatcher.Server`, поэтому Web, REST и SignalR работают с одного origin.
 
-Причина:
-
-- один origin для Web, REST и SignalR;
-- не нужен CORS для локального/первого deployment;
-- один процесс запуска для пользователя;
-- Web по-прежнему не получает ссылку на Core или Modbus.
-
-Это deployment decision, а не переход на Blazor Server.
-
-Для .NET 10 Server использует `MapStaticAssets()`, а `index.html` ссылается на Blazor WASM bootstrap через fingerprint placeholder `blazor.webassembly#[.{fingerprint}].js`. Это необходимо, потому что framework JavaScript в .NET 10 публикуется с fingerprinted именами.
+Для .NET 10 Server использует `MapStaticAssets()`, а `index.html` использует fingerprinted Blazor bootstrap asset.
 
 ---
 
@@ -178,25 +169,38 @@ Dispatcher.Web
 
 **Status:** Accepted
 
-С S06 `TagService` и `DeviceStateService` публикуют простые in-process `Changed` события после изменения текущего состояния.
+`TagService` и `DeviceStateService` публикуют простые in-process `Changed` events.
 
-`Dispatcher.Server` подписывается на них через `RuntimeHubPublisher` и отправляет DTO в SignalR.
+`Dispatcher.Server` преобразует их в SignalR через `RuntimeHubPublisher`.
+
+Core не зависит от SignalR.
+
+---
+
+## D-017 — До persistent configuration Modbus host использует стандартную ASP.NET Core configuration
+
+**Status:** Accepted
+
+S07 разделён на два подшага:
 
 ```text
-Core Changed event
-      ↓
-Server bridge
-      ↓
-SignalR
-      ↓
-Web
+S07A hosted read runtime
+S07B write path
+```
+
+В S07A один Modbus TCP device конфигурируется через strongly typed секцию `Modbus` стандартной ASP.NET Core configuration system.
+
+По умолчанию polling выключен:
+
+```text
+Modbus:Enabled = false
 ```
 
 Причина:
 
-- realtime уже нужен S06;
-- Core не должен зависеть от SignalR;
-- внешний message broker пока не нужен;
-- event-механизм можно заменить позже без изменения публичного Web-контракта.
+- Server уже должен уметь реально запускать protocol worker;
+- persistent configuration относится к следующему этапу S08;
+- временный config не должен требовать SQLite раньше дорожной карты;
+- стандартная configuration system позволяет использовать `appsettings.json` и environment variables без собственного loader.
 
-Если подписчиков станет много или появятся требования к гарантированной доставке/очередям, это решение пересматривается.
+Поддержка нескольких persistent devices, CRUD и применение изменённой конфигурации остаются S08/S09.

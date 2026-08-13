@@ -86,57 +86,77 @@ GET /api/devices
 SignalR /hubs/runtime
 ```
 
-Web работает в два этапа:
+Web сначала получает snapshot через REST, затем применяет realtime-изменения SignalR.
+
+После восстановления SignalR-соединения Web повторно загружает REST snapshot.
+
+## Hosted Modbus runtime
+
+С S07A `Dispatcher.Server` может запускать polling одного Modbus TCP устройства как `BackgroundService`.
+
+Временная конфигурация находится в:
 
 ```text
-1. REST snapshot
-       ↓
-   текущее состояние
-
-2. SignalR
-       ↓
-   последующие изменения
+src/Dispatcher.Server/appsettings.json
 ```
 
-После восстановления SignalR-соединения Web повторно загружает REST snapshot, чтобы восстановить изменения, которые могли произойти во время разрыва.
-
-События SignalR:
+По умолчанию:
 
 ```text
-TagChanged
-DeviceStateChanged
+Modbus:Enabled = false
 ```
 
-## Web UI S06
+При включении конфигурация задаёт:
+
+```text
+DeviceId
+Host
+Port
+UnitId
+PollIntervalMilliseconds
+RequestTimeoutMilliseconds
+Points[]
+  TagId
+  Address
+```
+
+Путь выполнения:
+
+```text
+appsettings / environment
+        ↓
+ModbusRuntimeHostedService
+        ↓
+ModbusPollingService
+        ↓
+Modbus TCP device
+        ↓
+TagService + DeviceStateService
+        ↓
+REST + SignalR
+        ↓
+Blazor WebAssembly
+```
+
+`Address` пока остаётся raw 0-based Modbus address.
+
+Файловая конфигурация S07A является временным bootstrap-механизмом. Постоянная конфигурация и редактор устройств появятся в S08/S09.
+
+## Web UI
 
 Первый экран — `Мониторинг`.
 
-Компоновка:
+Глобальная навигация открывается поверх рабочей области по `☰`, локальная навигация постоянно находится слева, а центральная таблица занимает основную рабочую площадь.
 
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ ☰  Dispatcher   Мониторинг                                   │
-├──────────────────┬────────────────────────────────────────────┤
-│ Локальная        │ Текущие значения          SignalR / refresh│
-│ навигация        ├────────────────────────────────────────────┤
-│                  │                                            │
-│ Все данные       │                 Tag table                  │
-│ Устройства       │                                            │
-│                  │                                            │
-└──────────────────┴────────────────────────────────────────────┘
-```
+Панель свойств справа на мониторинге не показывается, потому что это не редактор.
 
-Глобальная навигация открывается поверх рабочей области по `☰` и не занимает постоянную ширину.
+Blazor WebAssembly исполняется в браузере. Его static assets, REST и SignalR раздаёт тот же `Dispatcher.Server`.
 
-Панель свойств справа на экране мониторинга не показывается, потому что это пока не редактор. Для Device Editor и Mimic Editor правило `слева → выбор, центр → работа, справа → свойства` остаётся обязательным.
-
-Blazor WebAssembly исполняется в браузере. В текущем deployment-layout его статические файлы раздаёт тот же `Dispatcher.Server`, поэтому Web, REST и SignalR работают с одного origin.
-
-Для .NET 10 bootstrap-файл Blazor WebAssembly является fingerprinted static asset. `index.html` содержит import map и использует placeholder `blazor.webassembly#[.{fingerprint}].js`, а Server публикует static web assets через `MapStaticAssets()`.
+Для .NET 10 bootstrap-файл Blazor WebAssembly fingerprinted; `index.html` содержит import map и placeholder `blazor.webassembly#[.{fingerprint}].js`, а Server использует `MapStaticAssets()`.
 
 ## Текущий Modbus scope
 
-Backend поддерживает:
+Поддерживается:
 
 - Modbus TCP;
 - Function Code 03;
@@ -144,11 +164,10 @@ Backend поддерживает:
 - polling interval;
 - timeout;
 - reconnect через новое соединение каждого cycle;
-- protocol-neutral `Online/Offline` состояние.
+- protocol-neutral `Online/Offline`;
+- запуск polling из ASP.NET Core host для одного настроенного устройства.
 
-`ModbusHoldingRegisterPoint.Address` — raw protocol address (`ushort`).
-
-На S06 Server всё ещё не запускает Modbus polling автоматически. Этот шаг проверяет Web/REST/SignalR границу. Полное чтение `Modbus → Web` будет соединено с runtime host до завершения Phase 1.
+Write path ещё не реализован. Он составляет S07B и завершит Phase 1.
 
 ## Основные принципы
 
