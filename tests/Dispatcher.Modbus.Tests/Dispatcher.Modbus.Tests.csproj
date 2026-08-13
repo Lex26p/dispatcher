@@ -1,0 +1,10 @@
+<Project Sdk="MSTest.Sdk/4.3.2">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Dispatcher.Core\Dispatcher.Core.csproj" />
+    <ProjectReference Include="..\..\src\Dispatcher.Modbus\Dispatcher.Modbus.csproj" />
+  </ItemGroup>
+</Project>

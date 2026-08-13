@@ -42,6 +42,7 @@ Modbus TCP device
 - Server API: ASP.NET Core.
 - Web: Blazor WebAssembly.
 - Realtime: SignalR.
+- Modbus: NModbus 3.0.83.
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
 - Постоянное хранение конфигурации будет добавлено на этапе редактора устройств.
@@ -62,12 +63,32 @@ Target framework проекта централизованно зафиксир�
 Dispatcher.slnx
 ├── src/
 │   ├── Dispatcher.Core/
+│   ├── Dispatcher.Modbus/
 │   └── Dispatcher.Server/
 └── tests/
-    └── Dispatcher.Core.Tests/
+    ├── Dispatcher.Core.Tests/
+    └── Dispatcher.Modbus.Tests/
 ```
 
 Новые проекты добавляются только в тот момент, когда они нужны соответствующему этапу дорожной карты.
+
+## Текущий Modbus scope
+
+На S03 реализован минимальный вертикальный участок внутри backend:
+
+```text
+Modbus TCP FC03
+      ↓
+UInt16 Holding Register
+      ↓
+ModbusReadService
+      ↓
+TagService
+```
+
+`ModbusHoldingRegisterPoint.Address` — это raw protocol address (`ushort`), который передаётся в Modbus Function 03. Формат документации вида `40001` пока автоматически не преобразуется.
+
+Polling, reconnect, connection state, другие типы регистров и запись добавляются следующими шагами.
 
 ## Основные принципы
 

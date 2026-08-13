@@ -121,15 +121,38 @@ GetAll()
 
 ### Modbus
 
-В ответственности Modbus-компонента:
+Начиная с S03 Modbus расположен в отдельном проекте `Dispatcher.Modbus`.
 
-- соединение с Modbus TCP устройством;
-- polling;
-- адреса регистров/coils;
-- Unit ID;
-- преобразование Modbus-данных в нормальные значения тегов;
-- запись значений обратно в устройство;
-- обработка disconnect/reconnect в объёме текущего этапа.
+Минимальные protocol-specific модели:
+
+```text
+ModbusTcpDevice
+├── Host
+├── Port
+└── UnitId
+
+ModbusHoldingRegisterPoint
+├── TagId
+└── Address
+```
+
+`Address` — raw 0-based protocol address, передаваемый в Function Code 03. Представления документации устройств вида `40001` автоматически не преобразуются.
+
+Минимальный путь чтения:
+
+```text
+Modbus TCP server
+      ↓ FC03
+ModbusTcpRegisterReader
+      ↓ UInt16
+ModbusReadService
+      ↓
+TagService.Set(TagId, value)
+```
+
+На S03 поддерживается ровно один тип чтения: один Holding Register (`UInt16`) через Function Code 03.
+
+Polling, persistent connection, timeout/reconnect policy, connection state, другие области Modbus и преобразования многорегистровых типов относятся к последующим шагам.
 
 ### SNMP
 

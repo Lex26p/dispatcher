@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="NModbus" Version="3.0.83" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dispatcher.Core\Dispatcher.Core.csproj" />
+  </ItemGroup>
+</Project>
