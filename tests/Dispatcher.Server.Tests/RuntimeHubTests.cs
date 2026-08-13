@@ -18,11 +18,17 @@ public sealed class RuntimeHubTests
     [TestMethod]
     public async Task TagChange_IsPublishedThroughSignalR()
     {
-        using var factory = new WebApplicationFactory<Program>();
-        await using var connection = CreateConnection(factory);
+        using var database =
+            await TestConfigurationDatabase.CreateAsync();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
+        await using var connection =
+            CreateConnection(factory);
 
-        var received = new TaskCompletionSource<TagValueDto>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
+        var received =
+            new TaskCompletionSource<TagValueDto>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
 
         connection.On<TagValueDto>(
             RuntimeHubContract.TagChanged,
@@ -30,39 +36,59 @@ public sealed class RuntimeHubTests
 
         await connection.StartAsync();
 
-        var tagService = factory.Services.GetRequiredService<TagService>();
-        var timestamp = new DateTimeOffset(
-            2026,
-            8,
-            13,
-            20,
-            0,
-            0,
-            TimeSpan.Zero);
+        var tagService =
+            factory.Services.GetRequiredService<TagService>();
+
+        var timestamp =
+            new DateTimeOffset(
+                2026,
+                8,
+                13,
+                20,
+                0,
+                0,
+                TimeSpan.Zero);
 
         tagService.Set(
             "device01.register100",
             (ushort)4321,
             timestamp);
 
-        var update = await received.Task.WaitAsync(
-            TimeSpan.FromSeconds(2));
+        var update =
+            await received.Task.WaitAsync(
+                TimeSpan.FromSeconds(2));
 
-        Assert.AreEqual("device01.register100", update.TagId);
-        Assert.AreEqual(timestamp, update.Timestamp);
+        Assert.AreEqual(
+            "device01.register100",
+            update.TagId);
+        Assert.AreEqual(
+            timestamp,
+            update.Timestamp);
+        Assert.IsFalse(
+            update.Writable);
 
-        var jsonValue = (JsonElement)update.Value!;
-        Assert.AreEqual(4321, jsonValue.GetInt32());
+        var jsonValue =
+            (JsonElement)update.Value!;
+
+        Assert.AreEqual(
+            4321,
+            jsonValue.GetInt32());
     }
 
     [TestMethod]
     public async Task DeviceStateChange_IsPublishedThroughSignalR()
     {
-        using var factory = new WebApplicationFactory<Program>();
-        await using var connection = CreateConnection(factory);
+        using var database =
+            await TestConfigurationDatabase.CreateAsync();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
+        await using var connection =
+            CreateConnection(factory);
 
-        var received = new TaskCompletionSource<DeviceStateDto>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
+        var received =
+            new TaskCompletionSource<DeviceStateDto>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
 
         connection.On<DeviceStateDto>(
             RuntimeHubContract.DeviceStateChanged,
@@ -73,31 +99,38 @@ public sealed class RuntimeHubTests
         var deviceStateService =
             factory.Services.GetRequiredService<DeviceStateService>();
 
-        var timestamp = new DateTimeOffset(
-            2026,
-            8,
-            13,
-            20,
-            0,
-            0,
-            TimeSpan.Zero);
+        var timestamp =
+            new DateTimeOffset(
+                2026,
+                8,
+                13,
+                20,
+                0,
+                0,
+                TimeSpan.Zero);
 
         deviceStateService.SetOnline(
             "device01",
             timestamp);
 
-        var update = await received.Task.WaitAsync(
-            TimeSpan.FromSeconds(2));
+        var update =
+            await received.Task.WaitAsync(
+                TimeSpan.FromSeconds(2));
 
-        Assert.AreEqual("device01", update.DeviceId);
+        Assert.AreEqual(
+            "device01",
+            update.DeviceId);
         Assert.AreEqual(
             DeviceConnectionStatusDto.Online,
             update.Status);
-        Assert.AreEqual(timestamp, update.UpdatedAt);
+        Assert.AreEqual(
+            timestamp,
+            update.UpdatedAt);
         Assert.AreEqual(
             timestamp,
             update.LastSuccessfulPollAt);
-        Assert.IsNull(update.Error);
+        Assert.IsNull(
+            update.Error);
     }
 
     private static HubConnection CreateConnection(

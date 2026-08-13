@@ -1,21 +1,20 @@
 using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace Dispatcher.Server.Runtime;
 
 public sealed class ModbusRuntimeHostedService : BackgroundService
 {
-    private readonly IOptions<ModbusRuntimeOptions> _options;
+    private readonly ConfigurationCatalog _configuration;
     private readonly ModbusPollingService _pollingService;
     private readonly ILogger<ModbusRuntimeHostedService> _logger;
 
     public ModbusRuntimeHostedService(
-        IOptions<ModbusRuntimeOptions> options,
+        ConfigurationCatalog configuration,
         ModbusPollingService pollingService,
         ILogger<ModbusRuntimeHostedService> logger)
     {
-        _options = options;
+        _configuration = configuration;
         _pollingService = pollingService;
         _logger = logger;
     }
@@ -23,29 +22,53 @@ public sealed class ModbusRuntimeHostedService : BackgroundService
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
-        var options = _options.Value;
+        var pollingTasks =
+            new List<Task>();
 
-        if (!options.Enabled)
+        foreach (var device in _configuration.Devices)
+        {
+            if (!device.Enabled)
+            {
+                continue;
+            }
+
+            var plan =
+                ModbusConfigurationMapper.CreatePollingPlan(
+                    device);
+
+            if (plan is null)
+            {
+                _logger.LogWarning(
+                    "Skipping enabled Modbus device {DeviceId} because it has no configured tags.",
+                    device.DeviceId);
+
+                continue;
+            }
+
+            _logger.LogInformation(
+                "Starting Modbus polling for {DeviceId} at {Host}:{Port}, UnitId {UnitId}, {PointCount} point(s), interval {PollIntervalMs} ms.",
+                plan.Device.DeviceId,
+                plan.Device.Host,
+                plan.Device.Port,
+                plan.Device.UnitId,
+                plan.Points.Count,
+                plan.PollInterval.TotalMilliseconds);
+
+            pollingTasks.Add(
+                _pollingService.RunAsync(
+                    plan,
+                    stoppingToken));
+        }
+
+        if (pollingTasks.Count == 0)
         {
             _logger.LogInformation(
-                "Modbus runtime is disabled.");
+                "No enabled Modbus devices with polling tags are configured.");
 
             return;
         }
 
-        var plan = options.CreatePollingPlan();
-
-        _logger.LogInformation(
-            "Starting Modbus polling for {DeviceId} at {Host}:{Port}, UnitId {UnitId}, {PointCount} point(s), interval {PollIntervalMs} ms.",
-            plan.Device.DeviceId,
-            plan.Device.Host,
-            plan.Device.Port,
-            plan.Device.UnitId,
-            plan.Points.Count,
-            plan.PollInterval.TotalMilliseconds);
-
-        await _pollingService.RunAsync(
-            plan,
-            stoppingToken);
+        await Task.WhenAll(
+            pollingTasks);
     }
 }

@@ -1,120 +1,170 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после Phase 1
+## 1. Состояние S08
 
-Первый вертикальный срез работает в обоих направлениях:
-
-```text
-                 read / write
-Browser  ↔  Server  ↔  Core  ↔  Modbus  ↔  Device
-```
-
-Система остаётся одним ASP.NET Core host с логически разделёнными проектами.
-
-## 2. Логическая схема
+После S08 система разделяет два принципиально разных состояния:
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│ Browser                                               │
-│ Dispatcher.Web — Blazor WebAssembly                  │
-│ REST commands/snapshot + SignalR updates             │
-└───────────────────────┬──────────────────────────────┘
-                        │ same origin
-┌───────────────────────▼──────────────────────────────┐
-│ Dispatcher.Server — ASP.NET Core                     │
-│                                                      │
-│ GET /api/tags                                        │
-│ GET /api/devices                                     │
-│ POST /api/tags/{tagId}/write                         │
-│ SignalR /hubs/runtime                                │
-│                                                      │
-│ ModbusRuntimeHostedService                           │
-└───────────────┬──────────────────────────────────────┘
-                │
-      ┌─────────┴─────────┐
-      │                   │
-┌─────▼──────┐     ┌──────▼──────────┐
-│ TagService │     │ DeviceState     │
-│            │     │ Service         │
-└─────▲──────┘     └──────▲──────────┘
-      │                   │
-      └─────────┬─────────┘
-                │
-       Dispatcher.Modbus
-       ├── polling FC03
-       └── write FC06
-                │
-                ▼
-        Modbus TCP device
+Persistent configuration
+        SQLite
+          ↓
+ ConfigurationCatalog
+          ↓
+ protocol runtime
+
+Runtime current state
+ TagService / DeviceStateService
+          ↓
+    REST / SignalR
+          ↓
+         Web
 ```
 
-## 3. Core runtime
+Первый слой переживает перезапуск процесса. Второй пересоздаётся при запуске и наполняется protocol workers.
 
-### TagService
-
-Хранит текущее runtime-значение:
+## 2. Общая схема
 
 ```text
-TagId
-Value
-Timestamp
+┌──────────────────────────────────────────────────────────┐
+│ Dispatcher.Web — Blazor WebAssembly                     │
+│ REST commands/snapshot + SignalR updates                │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+┌────────────────────────▼─────────────────────────────────┐
+│ Dispatcher.Server                                        │
+│                                                          │
+│ SQLite ──load──> ConfigurationCatalog                    │
+│                     │                                    │
+│                     ├──> ModbusRuntimeHostedService      │
+│                     ├──> write routing                   │
+│                     └──> Writable metadata               │
+│                                                          │
+│ TagService + DeviceStateService                          │
+│          │                                               │
+│          └──> REST / SignalR                             │
+└────────────────────────┬─────────────────────────────────┘
+                         │
+                 Dispatcher.Modbus
+                  FC03 / FC06
+                         │
+                  Modbus devices
 ```
 
-После `Set` публикует in-process `Changed`.
+## 3. Persistent configuration
 
-`Writable` не хранится в `TagService`: это configuration metadata, а не runtime value.
+Текущий persistent model намеренно соответствует реализованному Modbus scope.
 
-### DeviceStateService
-
-Хранит:
+### ModbusDeviceConfiguration
 
 ```text
 DeviceId
-Status = Unknown | Online | Offline
-UpdatedAt
-LastSuccessfulPollAt
-Error
+Name
+Enabled
+Host
+Port
+UnitId
+PollIntervalMilliseconds
+RequestTimeoutMilliseconds
+Tags[]
 ```
 
-Core не знает Modbus address, Unit ID, ASP.NET или SignalR.
-
-## 4. Modbus read
-
-Текущий read scope:
-
-- Modbus TCP;
-- FC03;
-- Holding Register;
-- `UInt16`;
-- несколько points;
-- timeout;
-- новое соединение каждого poll-cycle.
-
-Путь:
+### ModbusTagConfiguration
 
 ```text
-ModbusPollingService
-        ↓
-ModbusTcpRegisterReader
-        ↓ FC03
-Device
-        ↓
-TagService + DeviceStateService
+TagId
+Name
+Address
+Writable
 ```
 
-Новый poll публикует значения только после успешного чтения всего настроенного набора.
+`Address` — raw Modbus address текущего Holding Register.
 
-## 5. Modbus write
+Data type пока не хранится как выбираемое поле, потому что Phase 1 реализует только `UInt16`. Когда появляется второй реально поддерживаемый data type, configuration model расширяется вместе с protocol conversion.
 
-Текущий write scope:
+## 4. SQLite store
 
-- только настроенный `Writable = true` tag;
-- Holding Register;
-- `UInt16`;
-- FC06 Write Single Register;
-- значение `0…65535`.
+`SqliteConfigurationStore` отвечает только за durable storage.
 
-Публичная команда не содержит protocol address:
+Таблицы:
+
+```text
+modbus_devices
+modbus_tags
+```
+
+Схема имеет версию через:
+
+```text
+PRAGMA user_version = 1
+```
+
+Если БД имеет неизвестную ненулевую schema version, Server завершает startup с понятной ошибкой вместо молчаливого чтения несовместимой схемы.
+
+Store предоставляет:
+
+```text
+InitializeAsync
+LoadAsync
+ReplaceAsync
+```
+
+`ReplaceAsync` уже даёт минимальную persistence primitive для следующего S09, но S08 не публикует CRUD API.
+
+## 5. ConfigurationCatalog
+
+`ConfigurationCatalog` — in-memory snapshot уже загруженной persistent configuration.
+
+Он нужен потому, что polling и HTTP write routing не должны выполнять SQLite query на каждом poll/write.
+
+Catalog предоставляет:
+
+```text
+Devices
+FindTag(TagId)
+IsTagWritable(TagId)
+Replace(...)
+```
+
+Snapshot заменяется целиком. На S08 замена происходит только при startup. На S09 тот же механизм будет использован после сохранения изменений.
+
+## 6. Startup order
+
+Hosted services регистрируются в порядке:
+
+```text
+1. ConfigurationInitializationHostedService
+2. ModbusRuntimeHostedService
+3. RuntimeHubPublisher
+```
+
+Initialization service синхронно относительно startup:
+
+1. создаёт/проверяет SQLite schema;
+2. загружает devices/tags;
+3. валидирует configuration;
+4. устанавливает snapshot в `ConfigurationCatalog`.
+
+Только затем запускается Modbus runtime.
+
+## 7. Modbus runtime
+
+`ModbusRuntimeHostedService` больше не читает `IOptions<ModbusRuntimeOptions>`.
+
+Он читает `ConfigurationCatalog` и запускает один polling loop на каждое:
+
+```text
+Enabled = true
+AND
+Tags.Count > 0
+```
+
+устройство.
+
+Disabled devices сохраняются в SQLite, но не инициируют network connection.
+
+## 8. Write routing
+
+Public write contract не изменился:
 
 ```text
 POST /api/tags/{tagId}/write
@@ -123,128 +173,63 @@ POST /api/tags/{tagId}/write
 }
 ```
 
-Server:
-
-1. проверяет, что Modbus runtime включён;
-2. находит `TagId` в текущей configuration;
-3. проверяет `Writable`;
-4. проверяет `UInt16`;
-5. преобразует configuration в Modbus write target;
-6. вызывает `ModbusWriteService`;
-7. после успешного FC06 обновляет `TagService`.
+Routing:
 
 ```text
-TagId + value
-      ↓
-Server validation / routing
-      ↓
-configured Device + Address
-      ↓
-ModbusWriteService
-      ↓
-ModbusTcpRegisterWriter
-      ↓ FC06
-Device
-      ↓ success
-TagService.Set
-      ↓
-SignalR
-      ↓
-Web
+TagId
+  ↓
+ConfigurationCatalog.FindTag
+  ↓
+Device + Tag persistent metadata
+  ↓
+validation
+  ↓
+Modbus write target
+  ↓
+FC06
 ```
 
-На этом этапе отдельный generic command bus не вводится.
+Web по-прежнему не знает Address/UnitId.
 
-## 6. Configuration
+## 9. Runtime state
 
-До S08 один Modbus device задаётся стандартной ASP.NET Core configuration:
-
-```text
-Modbus
-├── Enabled
-└── Device
-    ├── DeviceId
-    ├── Host
-    ├── Port
-    ├── UnitId
-    ├── PollIntervalMilliseconds
-    ├── RequestTimeoutMilliseconds
-    └── Points
-        ├── TagId
-        ├── Address
-        └── Writable
-```
-
-`Writable` по умолчанию `false`.
-
-В S08 эта bootstrap-конфигурация заменяется persistent configuration.
-
-## 7. Public contracts
-
-`Dispatcher.Contracts` не зависит от Core/Modbus/Server/Web.
-
-`TagValueDto`:
+`TagService` по-прежнему хранит только:
 
 ```text
 TagId
 Value
 Timestamp
-Writable
 ```
 
-`Writable` нужен Web для отображения разрешённого действия, но адрес протокола наружу не публикуется.
+`DeviceStateService` хранит connection state.
 
-## 8. REST + SignalR
+Ни один из этих сервисов не является persistent configuration store.
 
-REST:
+## 10. Database location
+
+Infrastructure setting:
 
 ```text
-GET  /api/tags
-GET  /api/devices
-POST /api/tags/{tagId}/write
+ConfigurationDatabase:Path
 ```
 
-SignalR:
+Если пусто, Windows-разработка использует:
 
 ```text
-/hubs/runtime
-TagChanged
-DeviceStateChanged
+%LOCALAPPDATA%\Dispatcher\dispatcher.db
 ```
 
-REST используется для snapshot и command request. SignalR — для realtime state changes.
+Можно задать абсолютный или content-root-relative путь.
 
-Успешная write-команда возвращает обновлённый `TagValueDto` и одновременно приводит к `TagChanged` через `TagService`.
+## 11. S09 boundary
 
-## 9. Web
+S08 не добавляет:
 
-`Dispatcher.Web` зависит только от `Dispatcher.Contracts`.
+- configuration REST DTO;
+- CRUD endpoints;
+- Web editor;
+- live restart/reload protocol workers;
+- data types сверх `UInt16`;
+- SNMP configuration.
 
-Monitoring screen остаётся плотным:
-
-- локальная навигация слева;
-- таблица тегов в центре;
-- status устройства и SignalR видимы;
-- writable row содержит компактный input и кнопку;
-- read-only row явно маркируется;
-- во время write кнопка блокируется;
-- server/device error показывается в строке команды.
-
-Web никогда не получает `Address`, `UnitId` или NModbus types.
-
-## 10. Ограничения после Phase 1
-
-Пока нет:
-
-- persistent device/tag configuration;
-- нескольких управляемых конфигурацией устройств;
-- coils/input registers/discrete inputs;
-- Int16/Int32/UInt32/Float32 conversion;
-- grouped register reads;
-- historian;
-- alarms/events;
-- users/roles;
-- generic plugin runtime;
-- distributed message broker.
-
-Следующий шаг — S08, persistent configuration.
+Это следующий шаг S09.

@@ -4,9 +4,6 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Dispatcher.Contracts.Tags;
 using Dispatcher.Core.Tags;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -16,21 +13,30 @@ namespace Dispatcher.Server.Tests;
 public sealed class TagWriteApiTests
 {
     [TestMethod]
-    public async Task WriteTag_WritablePoint_SendsFc06_AndUpdatesRuntimeValue()
+    public async Task WriteTag_WritablePersistedPoint_SendsFc06_AndUpdatesRuntimeValue()
     {
-        using var modbusServer = new ReadThenWriteModbusTcpServer(
-            expectedUnitId: 1,
-            expectedAddress: 100,
-            initialValue: 1234,
-            expectedWriteValue: 3456);
+        using var modbusServer =
+            new ReadThenWriteModbusTcpServer(
+                expectedUnitId: 1,
+                expectedAddress: 100,
+                initialValue: 1234,
+                expectedWriteValue: 3456);
 
-        var serverTask = modbusServer.ServeAsync();
+        var serverTask =
+            modbusServer.ServeAsync();
 
-        using var factory = CreateFactory(
-            modbusServer.Port,
-            writable: true);
+        using var database =
+            await TestConfigurationDatabase.CreateAsync(
+                TestModbusConfiguration.CreateDevice(
+                    modbusServer.Port,
+                    writable: true));
 
-        using var client = factory.CreateClient();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
+
+        using var client =
+            factory.CreateClient();
 
         var tagService =
             factory.Services.GetRequiredService<TagService>();
@@ -41,23 +47,26 @@ public sealed class TagWriteApiTests
                 (ushort)1234),
             TimeSpan.FromSeconds(2));
 
-        var snapshot = await client.GetFromJsonAsync<TagValueDto[]>(
-            "/api/tags");
+        var snapshot =
+            await client.GetFromJsonAsync<TagValueDto[]>(
+                "/api/tags");
 
         Assert.IsNotNull(snapshot);
         Assert.AreEqual(1, snapshot.Length);
         Assert.IsTrue(snapshot[0].Writable);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/tags/device01.register100/write",
-            new TagWriteRequest(3456));
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/tags/device01.register100/write",
+                new TagWriteRequest(3456));
 
         Assert.AreEqual(
             HttpStatusCode.OK,
             response.StatusCode);
 
-        var updated = await response.Content
-            .ReadFromJsonAsync<TagValueDto>();
+        var updated =
+            await response.Content
+                .ReadFromJsonAsync<TagValueDto>();
 
         Assert.IsNotNull(updated);
         Assert.AreEqual(
@@ -65,8 +74,12 @@ public sealed class TagWriteApiTests
             updated.TagId);
         Assert.IsTrue(updated.Writable);
 
-        var jsonValue = (JsonElement)updated.Value!;
-        Assert.AreEqual(3456, jsonValue.GetInt32());
+        var jsonValue =
+            (JsonElement)updated.Value!;
+
+        Assert.AreEqual(
+            3456,
+            jsonValue.GetInt32());
 
         await serverTask.WaitAsync(
             TimeSpan.FromSeconds(2));
@@ -80,19 +93,28 @@ public sealed class TagWriteApiTests
     }
 
     [TestMethod]
-    public async Task WriteTag_ReadOnlyPoint_ReturnsConflict()
+    public async Task WriteTag_ReadOnlyPersistedPoint_ReturnsConflict()
     {
-        var port = ReserveUnusedPort();
+        var port =
+            ReserveUnusedPort();
 
-        using var factory = CreateFactory(
-            port,
-            writable: false);
+        using var database =
+            await TestConfigurationDatabase.CreateAsync(
+                TestModbusConfiguration.CreateDevice(
+                    port,
+                    writable: false));
 
-        using var client = factory.CreateClient();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/tags/device01.register100/write",
-            new TagWriteRequest(100));
+        using var client =
+            factory.CreateClient();
+
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/tags/device01.register100/write",
+                new TagWriteRequest(100));
 
         Assert.AreEqual(
             HttpStatusCode.Conflict,
@@ -102,71 +124,44 @@ public sealed class TagWriteApiTests
     [TestMethod]
     public async Task WriteTag_ValueOutsideUInt16_ReturnsBadRequest()
     {
-        var port = ReserveUnusedPort();
+        var port =
+            ReserveUnusedPort();
 
-        using var factory = CreateFactory(
-            port,
-            writable: true);
+        using var database =
+            await TestConfigurationDatabase.CreateAsync(
+                TestModbusConfiguration.CreateDevice(
+                    port,
+                    writable: true));
 
-        using var client = factory.CreateClient();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/tags/device01.register100/write",
-            new TagWriteRequest(70000));
+        using var client =
+            factory.CreateClient();
+
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/tags/device01.register100/write",
+                new TagWriteRequest(70000));
 
         Assert.AreEqual(
             HttpStatusCode.BadRequest,
             response.StatusCode);
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(
-        int port,
-        bool writable)
-    {
-        return new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureAppConfiguration((_, configuration) =>
-                {
-                    configuration.AddInMemoryCollection(
-                        CreateModbusConfiguration(
-                            port,
-                            writable));
-                });
-            });
-    }
-
-    private static Dictionary<string, string?> CreateModbusConfiguration(
-        int port,
-        bool writable)
-    {
-        return new Dictionary<string, string?>
-        {
-            ["Modbus:Enabled"] = "true",
-            ["Modbus:Device:DeviceId"] = "device01",
-            ["Modbus:Device:Host"] =
-                IPAddress.Loopback.ToString(),
-            ["Modbus:Device:Port"] = port.ToString(),
-            ["Modbus:Device:UnitId"] = "1",
-            ["Modbus:Device:PollIntervalMilliseconds"] = "10000",
-            ["Modbus:Device:RequestTimeoutMilliseconds"] = "1000",
-            ["Modbus:Device:Points:0:TagId"] =
-                "device01.register100",
-            ["Modbus:Device:Points:0:Address"] = "100",
-            ["Modbus:Device:Points:0:Writable"] =
-                writable.ToString()
-        };
-    }
-
     private static int ReserveUnusedPort()
     {
-        var listener = new TcpListener(
-            IPAddress.Loopback,
-            0);
+        var listener =
+            new TcpListener(
+                IPAddress.Loopback,
+                0);
 
         listener.Start();
+
         var port =
             ((IPEndPoint)listener.LocalEndpoint).Port;
+
         listener.Stop();
 
         return port;
@@ -176,7 +171,8 @@ public sealed class TagWriteApiTests
         Func<bool> condition,
         TimeSpan timeout)
     {
-        var deadline = DateTimeOffset.UtcNow + timeout;
+        var deadline =
+            DateTimeOffset.UtcNow + timeout;
 
         while (!condition())
         {
@@ -209,9 +205,10 @@ public sealed class TagWriteApiTests
             _initialValue = initialValue;
             _expectedWriteValue = expectedWriteValue;
 
-            _listener = new TcpListener(
-                IPAddress.Loopback,
-                0);
+            _listener =
+                new TcpListener(
+                    IPAddress.Loopback,
+                    0);
             _listener.Start();
 
             Port =
@@ -232,9 +229,11 @@ public sealed class TagWriteApiTests
         {
             using var client =
                 await _listener.AcceptTcpClientAsync();
-            using var stream = client.GetStream();
+            using var stream =
+                client.GetStream();
 
             var request = new byte[12];
+
             await ReadExactlyAsync(
                 stream,
                 request);
@@ -272,9 +271,11 @@ public sealed class TagWriteApiTests
         {
             using var client =
                 await _listener.AcceptTcpClientAsync();
-            using var stream = client.GetStream();
+            using var stream =
+                client.GetStream();
 
             var request = new byte[12];
+
             await ReadExactlyAsync(
                 stream,
                 request);
@@ -323,10 +324,11 @@ public sealed class TagWriteApiTests
 
             while (offset < buffer.Length)
             {
-                var read = await stream.ReadAsync(
-                    buffer.AsMemory(
-                        offset,
-                        buffer.Length - offset));
+                var read =
+                    await stream.ReadAsync(
+                        buffer.AsMemory(
+                            offset,
+                            buffer.Length - offset));
 
                 if (read == 0)
                 {

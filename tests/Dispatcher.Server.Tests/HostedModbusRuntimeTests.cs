@@ -5,9 +5,6 @@ using Dispatcher.Contracts.Devices;
 using Dispatcher.Contracts.Tags;
 using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -17,29 +14,31 @@ namespace Dispatcher.Server.Tests;
 public sealed class HostedModbusRuntimeTests
 {
     [TestMethod]
-    public async Task EnabledModbusRuntime_PollsConfiguredPoint_AndPublishesRuntimeState()
+    public async Task PersistedEnabledDevice_PollsConfiguredPoint_AndPublishesRuntimeState()
     {
-        using var modbusServer = new SingleReadModbusTcpServer(
-            expectedUnitId: 1,
-            expectedAddress: 100,
-            registerValue: 2468);
+        using var modbusServer =
+            new SingleReadModbusTcpServer(
+                expectedUnitId: 1,
+                expectedAddress: 100,
+                registerValue: 2468);
 
-        var serverTask = modbusServer.ServeOnceAsync();
+        var serverTask =
+            modbusServer.ServeOnceAsync();
 
-        using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureAppConfiguration((_, configuration) =>
-                {
-                    configuration.AddInMemoryCollection(
-                        CreateModbusConfiguration(
-                            modbusServer.Port));
-                });
-            });
+        using var database =
+            await TestConfigurationDatabase.CreateAsync(
+                TestModbusConfiguration.CreateDevice(
+                    modbusServer.Port));
 
-        using var client = factory.CreateClient();
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath);
 
-        await serverTask.WaitAsync(TimeSpan.FromSeconds(2));
+        using var client =
+            factory.CreateClient();
+
+        await serverTask.WaitAsync(
+            TimeSpan.FromSeconds(2));
 
         var tagService =
             factory.Services.GetRequiredService<TagService>();
@@ -55,10 +54,12 @@ public sealed class HostedModbusRuntimeTests
                     == DeviceConnectionStatus.Online,
             TimeSpan.FromSeconds(2));
 
-        var tags = await client.GetFromJsonAsync<TagValueDto[]>(
-            "/api/tags");
-        var devices = await client.GetFromJsonAsync<DeviceStateDto[]>(
-            "/api/devices");
+        var tags =
+            await client.GetFromJsonAsync<TagValueDto[]>(
+                "/api/tags");
+        var devices =
+            await client.GetFromJsonAsync<DeviceStateDto[]>(
+                "/api/devices");
 
         Assert.IsNotNull(tags);
         Assert.IsNotNull(devices);
@@ -69,39 +70,29 @@ public sealed class HostedModbusRuntimeTests
             "device01.register100",
             tags[0].TagId);
 
-        var tagValue = (System.Text.Json.JsonElement)tags[0].Value!;
-        Assert.AreEqual(2468, tagValue.GetInt32());
+        var tagValue =
+            (System.Text.Json.JsonElement)tags[0].Value!;
 
-        Assert.AreEqual("device01", devices[0].DeviceId);
+        Assert.AreEqual(
+            2468,
+            tagValue.GetInt32());
+
+        Assert.AreEqual(
+            "device01",
+            devices[0].DeviceId);
         Assert.AreEqual(
             DeviceConnectionStatusDto.Online,
             devices[0].Status);
-        Assert.IsNull(devices[0].Error);
-    }
-
-    private static Dictionary<string, string?> CreateModbusConfiguration(
-        int port)
-    {
-        return new Dictionary<string, string?>
-        {
-            ["Modbus:Enabled"] = "true",
-            ["Modbus:Device:DeviceId"] = "device01",
-            ["Modbus:Device:Host"] = IPAddress.Loopback.ToString(),
-            ["Modbus:Device:Port"] = port.ToString(),
-            ["Modbus:Device:UnitId"] = "1",
-            ["Modbus:Device:PollIntervalMilliseconds"] = "10000",
-            ["Modbus:Device:RequestTimeoutMilliseconds"] = "1000",
-            ["Modbus:Device:Points:0:TagId"] =
-                "device01.register100",
-            ["Modbus:Device:Points:0:Address"] = "100"
-        };
+        Assert.IsNull(
+            devices[0].Error);
     }
 
     private static async Task WaitUntilAsync(
         Func<bool> condition,
         TimeSpan timeout)
     {
-        var deadline = DateTimeOffset.UtcNow + timeout;
+        var deadline =
+            DateTimeOffset.UtcNow + timeout;
 
         while (!condition())
         {
@@ -131,12 +122,14 @@ public sealed class HostedModbusRuntimeTests
             _expectedAddress = expectedAddress;
             _registerValue = registerValue;
 
-            _listener = new TcpListener(
-                IPAddress.Loopback,
-                0);
+            _listener =
+                new TcpListener(
+                    IPAddress.Loopback,
+                    0);
             _listener.Start();
 
-            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            Port =
+                ((IPEndPoint)_listener.LocalEndpoint).Port;
         }
 
         public int Port { get; }
@@ -145,10 +138,14 @@ public sealed class HostedModbusRuntimeTests
         {
             using var client =
                 await _listener.AcceptTcpClientAsync();
-            using var stream = client.GetStream();
+            using var stream =
+                client.GetStream();
 
             var request = new byte[12];
-            await ReadExactlyAsync(stream, request);
+
+            await ReadExactlyAsync(
+                stream,
+                request);
 
             ValidateRequest(request);
 
@@ -170,7 +167,8 @@ public sealed class HostedModbusRuntimeTests
             await stream.WriteAsync(response);
         }
 
-        private void ValidateRequest(byte[] request)
+        private void ValidateRequest(
+            byte[] request)
         {
             var unitId = request[6];
             var functionCode = request[7];
@@ -179,10 +177,18 @@ public sealed class HostedModbusRuntimeTests
             var quantity =
                 (ushort)((request[10] << 8) | request[11]);
 
-            Assert.AreEqual(_expectedUnitId, unitId);
-            Assert.AreEqual((byte)3, functionCode);
-            Assert.AreEqual(_expectedAddress, address);
-            Assert.AreEqual((ushort)1, quantity);
+            Assert.AreEqual(
+                _expectedUnitId,
+                unitId);
+            Assert.AreEqual(
+                (byte)3,
+                functionCode);
+            Assert.AreEqual(
+                _expectedAddress,
+                address);
+            Assert.AreEqual(
+                (ushort)1,
+                quantity);
         }
 
         private static async Task ReadExactlyAsync(
@@ -193,10 +199,11 @@ public sealed class HostedModbusRuntimeTests
 
             while (offset < buffer.Length)
             {
-                var read = await stream.ReadAsync(
-                    buffer.AsMemory(
-                        offset,
-                        buffer.Length - offset));
+                var read =
+                    await stream.ReadAsync(
+                        buffer.AsMemory(
+                            offset,
+                            buffer.Length - offset));
 
                 if (read == 0)
                 {

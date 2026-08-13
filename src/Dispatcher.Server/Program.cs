@@ -7,16 +7,20 @@ using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
-using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<TagService>();
 builder.Services.AddSingleton<DeviceStateService>();
 
-builder.Services.Configure<ModbusRuntimeOptions>(
-    builder.Configuration.GetSection(
-        ModbusRuntimeOptions.SectionName));
+builder.Services.AddSingleton(
+    services =>
+        new SqliteConfigurationStore(
+            ResolveConfigurationDatabasePath(
+                services.GetRequiredService<IConfiguration>(),
+                services.GetRequiredService<IHostEnvironment>())));
+builder.Services.AddSingleton<ConfigurationCatalog>();
+builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
 
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
@@ -40,12 +44,12 @@ app.MapGet(
     "/api/tags",
     (
         TagService tagService,
-        IOptions<ModbusRuntimeOptions> modbusOptions) =>
+        ConfigurationCatalog configuration) =>
     {
         return tagService.GetAll()
             .Select(tag => RuntimeContractMapper.ToDto(
                 tag,
-                modbusOptions.Value.IsTagWritable(tag.TagId)))
+                configuration.IsTagWritable(tag.TagId)))
             .ToArray();
     });
 
@@ -61,14 +65,14 @@ app.MapPost(
     (
         string tagId,
         TagWriteRequest request,
-        IOptions<ModbusRuntimeOptions> modbusOptions,
+        ConfigurationCatalog configuration,
         ModbusWriteService writeService,
         ILogger<Program> logger,
         CancellationToken cancellationToken) =>
         WriteTagAsync(
             tagId,
             request,
-            modbusOptions,
+            configuration,
             writeService,
             logger,
             cancellationToken));
@@ -84,32 +88,31 @@ app.Run();
 static async Task<IResult> WriteTagAsync(
     string tagId,
     TagWriteRequest request,
-    IOptions<ModbusRuntimeOptions> modbusOptions,
+    ConfigurationCatalog configuration,
     ModbusWriteService writeService,
     ILogger<Program> logger,
     CancellationToken cancellationToken)
 {
-    var options = modbusOptions.Value;
+    var binding =
+        configuration.FindTag(tagId);
 
-    if (!options.Enabled)
-    {
-        return Results.Problem(
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            title: "Modbus runtime is disabled.",
-            detail: "Запись недоступна, пока Modbus runtime отключён.");
-    }
-
-    var point = options.FindPoint(tagId);
-
-    if (point is null)
+    if (binding is null)
     {
         return Results.Problem(
             statusCode: StatusCodes.Status404NotFound,
             title: "Tag not found.",
-            detail: $"Тег '{tagId}' отсутствует в текущей Modbus-конфигурации.");
+            detail: $"Тег '{tagId}' отсутствует в текущей конфигурации.");
     }
 
-    if (!point.Writable)
+    if (!binding.Device.Enabled)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            title: "Device is disabled.",
+            detail: $"Устройство '{binding.Device.DeviceId}' отключено в конфигурации.");
+    }
+
+    if (!binding.Tag.Writable)
     {
         return Results.Problem(
             statusCode: StatusCodes.Status409Conflict,
@@ -127,14 +130,17 @@ static async Task<IResult> WriteTagAsync(
 
     try
     {
-        var target = options.CreateWriteTarget(point);
+        var target =
+            ModbusConfigurationMapper.CreateWriteTarget(
+                binding);
 
-        var tagValue = await writeService.WriteHoldingRegisterAsync(
-            target.Device,
-            target.Point,
-            value,
-            target.RequestTimeout,
-            cancellationToken);
+        var tagValue =
+            await writeService.WriteHoldingRegisterAsync(
+                target.Device,
+                target.Point,
+                value,
+                target.RequestTimeout,
+                cancellationToken);
 
         return Results.Ok(
             RuntimeContractMapper.ToDto(
@@ -158,6 +164,41 @@ static async Task<IResult> WriteTagAsync(
             title: "Modbus write failed.",
             detail: exception.Message);
     }
+}
+
+static string ResolveConfigurationDatabasePath(
+    IConfiguration configuration,
+    IHostEnvironment environment)
+{
+    var configuredPath =
+        configuration[
+            "ConfigurationDatabase:Path"];
+
+    if (!string.IsNullOrWhiteSpace(configuredPath))
+    {
+        return Path.IsPathRooted(configuredPath)
+            ? configuredPath
+            : Path.Combine(
+                environment.ContentRootPath,
+                configuredPath);
+    }
+
+    var localApplicationData =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+
+    if (!string.IsNullOrWhiteSpace(localApplicationData))
+    {
+        return Path.Combine(
+            localApplicationData,
+            "Dispatcher",
+            "dispatcher.db");
+    }
+
+    return Path.Combine(
+        AppContext.BaseDirectory,
+        "data",
+        "dispatcher.db");
 }
 
 static bool TryGetUInt16(

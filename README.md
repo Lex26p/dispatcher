@@ -2,9 +2,9 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Проект развивается небольшими проверяемыми шагами. Первый вертикальный срез Modbus → Web завершён; далее добавляются постоянная конфигурация, редактор устройств, SNMP и мнемосхемы.
+Первый вертикальный срез Modbus → Web завершён. Phase 2 переводит конфигурацию устройств и тегов из bootstrap-файла в постоянное хранилище и затем добавляет Web-редактор.
 
-## Первый вертикальный срез
+## Рабочий вертикальный срез
 
 ```text
 Modbus TCP device
@@ -20,14 +20,13 @@ Modbus TCP device
  Blazor WebAssembly
 ```
 
-Текущая Phase 1 умеет:
+Система умеет:
 
-1. Запускать polling одного настроенного Modbus TCP устройства.
-2. Читать несколько Holding Register `UInt16` через FC03.
-3. Хранить текущие значения и Online/Offline state.
-4. Показывать значения в Web через REST + SignalR.
-5. Разрешать запись только явно помеченных writable-тегов.
-6. Записывать `UInt16` в Holding Register через FC06 из Web.
+1. Читать несколько Holding Register `UInt16` через FC03.
+2. Хранить текущие значения и Online/Offline state.
+3. Показывать значения в Web через REST + SignalR.
+4. Записывать явно разрешённые Holding Register через FC06.
+5. Загружать persistent device/tag configuration из SQLite при старте.
 
 ## Базовый стек
 
@@ -35,41 +34,121 @@ Modbus TCP device
 - Server API: ASP.NET Core.
 - Web: Blazor WebAssembly.
 - Realtime: SignalR.
-- Blazor/SignalR packages: 10.0.10.
+- SQLite provider: Microsoft.Data.Sqlite 10.0.10.
+- SQLite native bundle: SQLitePCLRaw.bundle_e_sqlite3 2.1.12 (explicitly pinned to avoid the vulnerable 2.1.11 transitive resolution).
 - Modbus: NModbus 3.0.83.
 - Первый протокол: Modbus TCP.
 - Второй протокол: SNMP.
-- Постоянное хранение конфигурации добавляется на этапе S08.
 
-Target framework проекта централизованно зафиксирован как `net10.0` в `Directory.Build.props`.
+Target framework централизованно зафиксирован как `net10.0` в `Directory.Build.props`.
 
-`global.json` ограничивает SDK линией .NET 10:
+## Configuration и Runtime
 
-- минимальная версия SDK: `10.0.100`;
-- `rollForward: latestFeature`;
-- prerelease SDK разрешены для установленного preview feature band SDK .NET 10.
-
-## Структура solution
+С S08 эти два слоя явно разделены:
 
 ```text
-Dispatcher.slnx
-├── src/
-│   ├── Dispatcher.Contracts/
-│   ├── Dispatcher.Core/
-│   ├── Dispatcher.Modbus/
-│   ├── Dispatcher.Server/
-│   └── Dispatcher.Web/
-└── tests/
-    ├── Dispatcher.Core.Tests/
-    ├── Dispatcher.Modbus.Tests/
-    └── Dispatcher.Server.Tests/
+Persistent configuration
+SQLite
+  ↓ startup load
+ConfigurationCatalog
+  ↓
+protocol runtime
+
+Runtime state
+TagService + DeviceStateService
+  ↓
+REST / SignalR
 ```
 
-`Dispatcher.Web` зависит только от `Dispatcher.Contracts` и platform packages Blazor/SignalR. Он не ссылается на Core или Modbus.
+`TagService` не хранит IP, Unit ID, Address, Writable или другие configuration fields.
 
-## Runtime API и realtime
+### SQLite configuration
 
-ASP.NET Core публикует:
+Server использует:
+
+```text
+modbus_devices
+modbus_tags
+```
+
+`modbus_devices` хранит:
+
+```text
+DeviceId
+Name
+Enabled
+Host
+Port
+UnitId
+PollIntervalMilliseconds
+RequestTimeoutMilliseconds
+```
+
+`modbus_tags` хранит:
+
+```text
+TagId
+DeviceId
+Name
+Address
+Writable
+```
+
+Текущий schema version = `1` через SQLite `PRAGMA user_version`.
+
+После загрузки БД данные копируются в in-memory `ConfigurationCatalog`. Polling, REST writable metadata, SignalR и write routing используют один и тот же catalog snapshot.
+
+`ConfigurationDatabase:Path` разрешается при создании `SqliteConfigurationStore` из финальной DI-конфигурации host. Это позволяет стандартным configuration providers, включая test overrides, корректно задавать путь к БД.
+
+На S08 catalog загружается один раз при старте. Live-применение изменений будет добавлено в S09 вместе с редактором.
+
+### Где находится БД
+
+Настройка:
+
+```text
+ConfigurationDatabase:Path
+```
+
+Если `Path` пустой, Server использует локальное application-data хранилище пользователя:
+
+```text
+%LOCALAPPDATA%\Dispatcher\dispatcher.db
+```
+
+на Windows.
+
+Путь можно переопределить через `appsettings.json` или environment variable:
+
+```text
+ConfigurationDatabase__Path
+```
+
+Относительный явно заданный путь разрешается относительно content root `Dispatcher.Server`.
+
+Новая БД создаётся пустой. Это намеренно: S08 не добавляет скрытую sample-конфигурацию. Создание/изменение устройств через Web относится к S09.
+
+## Startup
+
+Порядок:
+
+```text
+ConfigurationInitializationHostedService
+        ↓
+create/check SQLite schema
+        ↓
+load devices/tags
+        ↓
+ConfigurationCatalog
+        ↓
+ModbusRuntimeHostedService
+        ↓
+one polling loop per enabled device with tags
+```
+
+Таким образом persistent configuration загружена до начала protocol runtime.
+
+## Runtime API
 
 ```text
 GET  /health
@@ -80,107 +159,28 @@ POST /api/tags/{tagId}/write
 SignalR /hubs/runtime
 ```
 
-`TagValueDto` содержит:
+Web по-прежнему работает только с logical `TagId`; SQLite/Modbus details в public runtime API не выходят.
 
-```text
-TagId
-Value
-Timestamp
-Writable
-```
+## Текущий Modbus scope
 
-Web сначала получает snapshot через REST, затем применяет SignalR updates. После reconnect выполняется новый REST snapshot.
+- Modbus TCP.
+- FC03 read.
+- FC06 write.
+- Holding Register `UInt16`.
+- несколько тегов на устройство.
+- несколько persisted устройств могут быть загружены при старте.
+- timeout/reconnect через новое соединение каждого polling cycle.
+- Writable — configuration metadata.
 
-## Hosted Modbus runtime
+## Следующий шаг
 
-Временная конфигурация находится в:
+S09 добавит Web-редактор:
 
-```text
-src/Dispatcher.Server/appsettings.json
-```
-
-По умолчанию:
-
-```text
-Modbus:Enabled = false
-```
-
-Конфигурация одного устройства:
-
-```text
-DeviceId
-Host
-Port
-UnitId
-PollIntervalMilliseconds
-RequestTimeoutMilliseconds
-Points[]
-  TagId
-  Address
-  Writable
-```
-
-`Writable` по умолчанию `false`. Только явно writable-точка принимает команду из Web.
-
-Путь чтения:
-
-```text
-Modbus TCP
-    ↓ FC03
-ModbusPollingService
-    ↓
-TagService + DeviceStateService
-    ↓
-REST / SignalR
-    ↓
-Web
-```
-
-Путь записи:
-
-```text
-Web
-  ↓ TagId + value
-POST /api/tags/{tagId}/write
-  ↓ server-side validation
-TagId → configured Modbus point
-  ↓
-ModbusWriteService
-  ↓ FC06
-Modbus TCP device
-  ↓ success
-TagService.Set(...)
-  ↓
-SignalR / Web
-```
-
-Web не передаёт register address, Unit ID или другие Modbus-specific параметры.
-
-Текущая запись ограничена одним Holding Register `UInt16`, значение должно быть целым числом `0…65535`.
-
-Файловая конфигурация Phase 1 — bootstrap-механизм. В S08 она заменяется persistent configuration.
-
-## Web UI
-
-Первый экран — `Мониторинг`.
-
-- `☰` открывает глобальную навигацию поверх рабочей области.
-- локальная навигация находится слева;
-- таблица текущих значений занимает основную площадь;
-- Online/Offline и SignalR state видимы постоянно;
-- writable-теги получают компактный input + `Записать` прямо в таблице;
-- read-only теги явно помечены;
-- во время команды кнопка блокируется, ошибка отображается в строке.
-
-## Основные принципы
-
-- Репозиторий — единственный источник истины.
-- Разработка идёт маленькими законченными шагами.
-- Web работает с логическими `TagId`, а не с Modbus-адресами.
-- Протокольные детали изолированы от Core и Web.
-- Configuration и runtime state разделены.
-- Не вводим преждевременно alarms, historian, roles, brokers или distributed services.
-- Web проектируется как плотный инженерный интерфейс.
+- список устройств;
+- CRUD устройств и тегов;
+- сохранение в SQLite;
+- применение изменённой configuration;
+- editor layout: слева выбор, центр работа, справа свойства.
 
 ## Документы
 

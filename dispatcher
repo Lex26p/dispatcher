@@ -1,0 +1,14 @@
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/ARCHITECTURE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/DECISIONS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/ROADMAP.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/Dispatcher.Server/Dispatcher.Server.csproj', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/Dispatcher.Server/Program.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/Dispatcher.Server/Realtime/RuntimeHubPublisher.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/Dispatcher.Server/Runtime/ModbusRuntimeHostedService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/Dispatcher.Server/appsettings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/Dispatcher.Server.Tests/HostedModbusRuntimeTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/Dispatcher.Server.Tests/RuntimeApiTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/Dispatcher.Server.Tests/RuntimeHubTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/Dispatcher.Server.Tests/TagWriteApiTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/Dispatcher.Server.Tests/WebHostTests.cs', LF will be replaced by CRLF the next time Git touches it

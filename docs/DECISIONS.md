@@ -24,9 +24,7 @@ Web-клиент реализуется на Blazor WebAssembly.
 
 **Status:** Accepted
 
-`TagService` хранит текущие значения логических Tag.
-
-Connection state хранится отдельно в `DeviceStateService`.
+`TagService` хранит текущие значения логических Tag. Connection state хранится отдельно в `DeviceStateService`.
 
 ---
 
@@ -34,7 +32,7 @@ Connection state хранится отдельно в `DeviceStateService`.
 
 **Status:** Accepted
 
-Web и общая логика работают с `TagId`/`DeviceId`, а не Modbus register/OID.
+Web работает с `TagId`/`DeviceId`, а не protocol address.
 
 ---
 
@@ -50,7 +48,7 @@ Web и общая логика работают с `TagId`/`DeviceId`, а не M
 
 **Status:** Accepted
 
-Core, Server и protocol components имеют явные границы, но ранняя версия выполняется в одном host.
+Компоненты имеют явные границы, но ранняя версия выполняется в одном host.
 
 ---
 
@@ -58,7 +56,7 @@ Core, Server и protocol components имеют явные границы, но �
 
 **Status:** Accepted
 
-REST используется для snapshot и команд, SignalR — для realtime changes.
+REST используется для snapshot/commands, SignalR — для realtime changes.
 
 ---
 
@@ -66,7 +64,7 @@ REST используется для snapshot и команд, SignalR — дл�
 
 **Status:** Accepted
 
-Persistent configuration не смешивается с текущими runtime values.
+Persistent configuration не смешивается с runtime current values.
 
 ---
 
@@ -74,7 +72,7 @@ Persistent configuration не смешивается с текущими runtime
 
 **Status:** Accepted
 
-Перед каждым шагом читается актуальный `master` и необходимые файлы.
+Перед каждым шагом читается актуальный `master`.
 
 ---
 
@@ -90,7 +88,7 @@ UI проектируется с приоритетом рабочей обла�
 
 **Status:** Accepted
 
-Первая Modbus TCP реализация использует NModbus 3.x (`3.0.83`).
+Modbus TCP использует NModbus 3.x (`3.0.83`).
 
 ---
 
@@ -98,7 +96,7 @@ UI проектируется с приоритетом рабочей обла�
 
 **Status:** Accepted
 
-Connection state хранится в protocol-neutral `DeviceStateService`.
+Connection state хранится в `DeviceStateService`.
 
 ---
 
@@ -106,7 +104,7 @@ Connection state хранится в protocol-neutral `DeviceStateService`.
 
 **Status:** Accepted
 
-Каждый cycle открывает новое TCP-соединение. Persistent connection вводится только при необходимости.
+Каждый cycle открывает новое TCP-соединение.
 
 ---
 
@@ -114,7 +112,7 @@ Connection state хранится в protocol-neutral `DeviceStateService`.
 
 **Status:** Accepted
 
-`Dispatcher.Contracts` не зависит от Core/Modbus/Server/Web. Web ссылается на Contracts, но не Core.
+`Dispatcher.Contracts` не зависит от Core/Modbus/Server/Web.
 
 ---
 
@@ -122,7 +120,7 @@ Connection state хранится в protocol-neutral `DeviceStateService`.
 
 **Status:** Accepted
 
-Client-side WASM, REST и SignalR работают с одного origin.
+WASM, REST и SignalR работают с одного origin.
 
 ---
 
@@ -130,15 +128,15 @@ Client-side WASM, REST и SignalR работают с одного origin.
 
 **Status:** Accepted
 
-Core публикует in-process `Changed`; Server преобразует их в SignalR.
+Core `Changed` events преобразуются Server в SignalR.
 
 ---
 
 ## D-017 — До persistent configuration Modbus host использует стандартную ASP.NET Core configuration
 
-**Status:** Accepted
+**Status:** Superseded by D-021
 
-S07A использует strongly typed секцию `Modbus`; persistent configuration относится к S08.
+S07A/S07B использовали `appsettings` как временный источник device/tag configuration.
 
 ---
 
@@ -146,31 +144,7 @@ S07A использует strongly typed секцию `Modbus`; persistent confi
 
 **Status:** Accepted
 
-Публичная команда:
-
-```text
-POST /api/tags/{tagId}/write
-```
-
-содержит только логический `TagId` и новое значение.
-
-Server разрешает `TagId` в текущей configuration и только затем получает Modbus-specific:
-
-```text
-Device
-UnitId
-Address
-Writable
-```
-
-Web не может передать произвольный Modbus address.
-
-Причина:
-
-- сохраняется граница `Protocol → Tag → Application`;
-- server-side configuration остаётся authority для write target;
-- read-only tags нельзя сделать writable подменой HTTP payload;
-- будущий Web не зависит от protocol-specific addressing.
+Server разрешает `TagId` в текущей configuration и только затем получает Modbus target.
 
 ---
 
@@ -178,21 +152,7 @@ Web не может передать произвольный Modbus address.
 
 **Status:** Accepted
 
-`TagService` продолжает хранить только:
-
-```text
-TagId
-Value
-Timestamp
-```
-
-`Writable` берётся из текущей configuration и добавляется только в public `TagValueDto`.
-
-Причина:
-
-- configuration/runtime остаются разделены;
-- текущее значение не становится владельцем access policy;
-- S08 сможет перенести metadata в persistent model без миграции runtime store.
+`TagService` хранит `TagId/Value/Timestamp`; `Writable` принадлежит configuration.
 
 ---
 
@@ -200,14 +160,81 @@ Timestamp
 
 **Status:** Accepted
 
-S07B пишет только один Holding Register `UInt16` через Modbus Function Code 06.
+Write поддерживает `UInt16` `0..65535` через FC06.
 
-Допустимый диапазон:
+---
+
+## D-021 — Persistent configuration хранится в SQLite
+
+**Status:** Accepted
+
+Начиная с S08 device/tag configuration хранится в SQLite.
+
+Используется `Microsoft.Data.Sqlite`, без EF Core.
+
+Причина:
+
+- текущая схема мала и хорошо выражается двумя таблицами;
+- ADO.NET provider даёт явное управление schema/load/save;
+- не требуется отдельный migration CLI/tooling на текущем этапе;
+- при необходимости schema evolution можно реализовать по `PRAGMA user_version`.
+
+Текущая schema version:
 
 ```text
-0..65535
+1
 ```
 
-После успешного Modbus response значение сразу записывается в `TagService`, поэтому Web получает подтверждённое новое состояние через существующий SignalR path.
+---
 
-Другие data types, coils и multi-register write добавляются только вместе с соответствующей configuration model.
+## D-022 — Активная configuration загружается в ConfigurationCatalog
+
+**Status:** Accepted
+
+SQLite является durable source of truth для конфигурации, но protocol runtime не читает БД на каждом poll/write.
+
+При startup:
+
+```text
+SQLite
+  ↓
+validate
+  ↓
+ConfigurationCatalog
+```
+
+Polling, Writable metadata и write routing используют один in-memory snapshot.
+
+S09 будет обновлять SQLite и затем заменять catalog snapshot.
+
+---
+
+## D-023 — Новая configuration database начинается пустой
+
+**Status:** Accepted
+
+S08 не создаёт скрытые sample devices/tags.
+
+Причина:
+
+- sample device не должен выглядеть как реальная configuration;
+- disabled localhost-запись не несёт продуктовой ценности;
+- следующий S09 предоставляет штатный Web CRUD.
+
+Пустая configuration означает отсутствие protocol network connections.
+
+---
+
+## D-024 — Data type не становится фиктивно настраиваемым до реализации второго типа
+
+**Status:** Accepted
+
+Persistent tag model S08 соответствует реально работающему scope:
+
+```text
+Holding Register UInt16
+```
+
+Поэтому UI/configuration пока не хранит выбираемый `DataType`.
+
+Когда добавляется следующий поддерживаемый тип (`Int16`, `Int32`, `Float32` и т.д.), model/schema расширяются вместе с фактическим conversion path.
