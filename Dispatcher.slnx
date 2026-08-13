@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dispatcher.Core/Dispatcher.Core.csproj" />
+    <Project Path="src/Dispatcher.Server/Dispatcher.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dispatcher.Core.Tests/Dispatcher.Core.Tests.csproj" />
+  </Folder>
+</Solution>

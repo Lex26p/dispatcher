@@ -38,7 +38,7 @@ Modbus TCP device
 
 ## Базовый стек
 
-- Backend/Core: C# / .NET.
+- Backend/Core: C# / .NET 10.
 - Server API: ASP.NET Core.
 - Web: Blazor WebAssembly.
 - Realtime: SignalR.
@@ -46,7 +46,28 @@ Modbus TCP device
 - Второй протокол: SNMP.
 - Постоянное хранение конфигурации будет добавлено на этапе редактора устройств.
 
-Точная версия .NET фиксируется при создании solution и после этого берётся только из файлов репозитория.
+Target framework проекта централизованно зафиксирован как `net10.0` в `Directory.Build.props`.
+
+`global.json` ограничивает SDK линией .NET 10:
+
+- минимальная версия SDK: `10.0.100`;
+- `rollForward: latestFeature`;
+- prerelease SDK разрешены, чтобы проект мог собираться установленными preview feature band SDK .NET 10.
+
+Это не меняет target framework: код по-прежнему собирается для `net10.0`.
+
+## Текущая структура solution
+
+```text
+Dispatcher.slnx
+├── src/
+│   ├── Dispatcher.Core/
+│   └── Dispatcher.Server/
+└── tests/
+    └── Dispatcher.Core.Tests/
+```
+
+Новые проекты добавляются только в тот момент, когда они нужны соответствующему этапу дорожной карты.
 
 ## Основные принципы
 
