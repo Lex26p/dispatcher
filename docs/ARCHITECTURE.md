@@ -28,21 +28,23 @@ Dispatcher строится как расширяемая система дис�
                          │      Server         │
                          └──────────┬──────────┘
                                     │
-                         ┌──────────▼──────────┐
-                         │     Tag Service     │
-                         │                    │
-                         │ current values     │
-                         │ tag access         │
-                         └──────────┬──────────┘
-                                    │
                     ┌───────────────┴───────────────┐
                     │                               │
           ┌─────────▼─────────┐           ┌────────▼────────┐
-          │  Modbus service   │           │  SNMP service   │
-          │   first stage     │           │     later       │
-          └─────────┬─────────┘           └────────┬────────┘
+          │    TagService     │           │ DeviceState     │
+          │ current tag data  │           │    Service      │
+          └─────────▲─────────┘           └────────▲────────┘
                     │                               │
-                 Devices                         Devices
+                    └───────────────┬───────────────┘
+                                    │
+                         ┌──────────┴──────────┐
+                         │                     │
+              ┌──────────▼─────────┐  ┌───────▼────────┐
+              │  Modbus service   │  │  SNMP service  │
+              │   first stage     │  │     later      │
+              └──────────┬─────────┘  └───────┬────────┘
+                         │                     │
+                      Devices               Devices
 ```
 
 ## 3. Центральная модель: Tag
@@ -80,13 +82,15 @@ Timestamp
 
 `TagId` сравнивается как регистрозависимая строка. `Timestamp` хранится как `DateTimeOffset`.
 
-`Quality/status` намеренно пока не входит в контракт. Он будет добавлен тогда, когда на этапе polling появится реальная модель состояния связи и качества данных.
+На S04 connection state устройства хранится отдельно от значения тега. `Quality` конкретного тега пока не добавляется: последнее успешно прочитанное значение остаётся в `TagService`, а доступность источника определяется через `DeviceStateService`.
 
-## 4. Tag Service
+## 4. Runtime services Core
 
-`TagService` — центральный владелец текущих значений.
+### TagService
 
-В S02 он предоставляет минимальный API:
+`TagService` — владелец текущих значений тегов.
+
+Он предоставляет минимальный API:
 
 ```text
 Set(tagId, value)
@@ -95,127 +99,117 @@ Get(tagId)
 GetAll()
 ```
 
-Текущие значения хранятся только в памяти. Повторный `Set` одного `TagId` заменяет его текущее значение. Хранилище допускает конкурентные обращения будущих polling-компонентов.
+Текущие значения хранятся только в памяти. Повторный `Set` одного `TagId` заменяет его текущее значение.
 
-`GetAll()` возвращает snapshot текущих значений, отсортированный по `TagId` для детерминированного результата.
+### DeviceStateService
 
-`TagService` не знает подробности Modbus, SNMP или будущих протоколов.
+Начиная с S04 connection state хранится в protocol-neutral `DeviceStateService`.
 
-### Что Tag Service не делает
+Минимальное состояние:
 
-На первых этапах он не отвечает за:
+```text
+DeviceId
+Status = Unknown | Online | Offline
+UpdatedAt
+LastSuccessfulPollAt
+Error
+```
 
-- аварии;
-- журнал событий;
-- исторические архивы;
-- пользователей и роли;
-- отчёты;
-- сложные вычисления;
-- протокольный polling;
-- подписки и события изменения;
-- маршрутизацию команд записи.
+Modbus сообщает в Core только логический `DeviceId` и результат poll-cycle. Core не хранит Modbus address, Unit ID или другие protocol-specific данные.
 
-## 5. Протокольные сервисы
+При успешном полном cycle устройство становится `Online`.
 
-Каждый протокол отвечает только за собственные особенности.
+При ошибке соединения или чтения устройство становится `Offline`, текст ошибки сохраняется, а время последнего успешного poll сохраняется.
 
-### Modbus
+## 5. Modbus
 
-Начиная с S03 Modbus расположен в отдельном проекте `Dispatcher.Modbus`.
+Modbus расположен в отдельном проекте `Dispatcher.Modbus`.
 
-Минимальные protocol-specific модели:
+### Конфигурация S04
 
 ```text
 ModbusTcpDevice
+├── DeviceId
 ├── Host
 ├── Port
 └── UnitId
+
+ModbusPollingPlan
+├── Device
+├── Points
+├── PollInterval
+└── RequestTimeout
 
 ModbusHoldingRegisterPoint
 ├── TagId
 └── Address
 ```
 
-`Address` — raw 0-based protocol address, передаваемый в Function Code 03. Представления документации устройств вида `40001` автоматически не преобразуются.
+`Address` — raw 0-based protocol address, передаваемый в Function Code 03.
 
-Минимальный путь чтения:
+### Poll cycle
 
-```text
-Modbus TCP server
-      ↓ FC03
-ModbusTcpRegisterReader
-      ↓ UInt16
-ModbusReadService
-      ↓
-TagService.Set(TagId, value)
-```
+В S04 один poll-cycle:
 
-На S03 поддерживается ровно один тип чтения: один Holding Register (`UInt16`) через Function Code 03.
+1. открывает одно TCP-соединение;
+2. последовательно читает все Holding Register points;
+3. только после успешного чтения всего набора обновляет `TagService`;
+4. переводит устройство в `Online`;
+5. закрывает соединение.
 
-Polling, persistent connection, timeout/reconnect policy, connection state, другие области Modbus и преобразования многорегистровых типов относятся к последующим шагам.
+При любой ошибке cycle:
 
-### SNMP
+1. значения этого cycle не публикуются;
+2. устройство переводится в `Offline`;
+3. следующий cycle снова открывает TCP-соединение и автоматически делает новую попытку.
 
-SNMP добавляется позже как независимый источник данных.
+Таким образом reconnect пока не является отдельной state machine. Это повторное подключение на каждом cycle.
 
-В его ответственности:
+### Ограничения текущего Modbus scope
 
-- SNMP connection/configuration;
-- версия протокола;
-- credentials/community;
-- OID;
-- polling;
-- преобразование SNMP-значений в значения тегов.
+Поддерживается:
 
-Добавление SNMP считается архитектурной проверкой: Web и центральный TagService не должны требовать значительной переделки.
+- Modbus TCP;
+- Function Code 03;
+- один `UInt16` на точку;
+- несколько точек на устройство;
+- polling interval;
+- request/connect timeout;
+- Online/Offline state.
+
+Пока не реализованы:
+
+- группировка соседних регистров в один запрос;
+- persistent TCP connection между cycles;
+- coils;
+- discrete inputs;
+- input registers;
+- Int16/Int32/UInt32/Float32 и другие преобразования;
+- write path.
 
 ## 6. Поток данных
 
-Чтение:
+Успешное чтение:
 
 ```text
 Device
   ↓
-Protocol service
-  ↓
-TagService.Set(...)
-  ↓
-Server
-  ↓
-SignalR
-  ↓
-Web / mimic
+ModbusPollingService
+  ├──────────→ TagService
+  └──────────→ DeviceStateService (Online)
 ```
 
-Получение начального состояния:
+Ошибка:
 
 ```text
-Web
-  ↓
-REST
-  ↓
-Server
-  ↓
-TagService
+Device / network error
+        ↓
+ModbusPollingService
+        ↓
+DeviceStateService (Offline)
 ```
 
-Управление:
-
-```text
-Web / mimic
-  ↓
-REST command
-  ↓
-Server
-  ↓
-TagService / routing layer
-  ↓
-Protocol service
-  ↓
-Device
-```
-
-Точный механизм маршрутизации write-команд будет определён по мере реализации. До появления реальной необходимости не вводится внешний message broker.
+Получение начального состояния Web будет добавлено в S05 через ASP.NET Core API.
 
 ## 7. Web
 
@@ -299,7 +293,7 @@ Web проектируется как инженерный рабочий инс
 - connection state;
 - quality.
 
-Runtime-данные на первом этапе могут жить в памяти.
+Runtime-данные на первом этапе живут в памяти.
 
 ## 9. Развёртывание на раннем этапе
 
@@ -313,7 +307,7 @@ Browser
    ▼
 ASP.NET Core process
    ├── Server
-   ├── Core / TagService
+   ├── Core runtime services
    └── Modbus component
 ```
 

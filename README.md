@@ -74,21 +74,31 @@ Dispatcher.slnx
 
 ## Текущий Modbus scope
 
-На S03 реализован минимальный вертикальный участок внутри backend:
+После S04 backend поддерживает:
 
 ```text
-Modbus TCP FC03
+несколько Holding Register UInt16
+              ↓
+       poll cycle
+              ↓
+         TagService
+
+и отдельно:
+
+Modbus device
       ↓
-UInt16 Holding Register
+DeviceStateService
       ↓
-ModbusReadService
-      ↓
-TagService
+Online / Offline
 ```
 
-`ModbusHoldingRegisterPoint.Address` — это raw protocol address (`ushort`), который передаётся в Modbus Function 03. Формат документации вида `40001` пока автоматически не преобразуется.
+Один poll cycle открывает одно TCP-соединение, последовательно читает все настроенные точки и закрывает соединение.
 
-Polling, reconnect, connection state, другие типы регистров и запись добавляются следующими шагами.
+Следующий cycle снова устанавливает соединение. Это является минимальной reconnect-моделью текущей версии: после ошибки устройство становится `Offline`, а следующий cycle автоматически делает новую попытку.
+
+`ModbusHoldingRegisterPoint.Address` — raw protocol address (`ushort`), передаваемый в Modbus Function 03. Формат документации вида `40001` пока автоматически не преобразуется.
+
+Пока поддерживается только Holding Register `UInt16`. Группировка соседних регистров, другие Modbus areas, преобразования типов и запись появятся позже.
 
 ## Основные принципы
 
