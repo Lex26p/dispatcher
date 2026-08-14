@@ -128,7 +128,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion1Database_ToVersion2WithoutLosingModbusData()
+    public async Task InitializeAsync_MigratesVersion1Database_ToVersion3WithoutLosingModbusData()
     {
         var directory =
             Path.Combine(
@@ -255,7 +255,7 @@ public sealed class SqliteConfigurationStoreTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(2, version);
+            Assert.AreEqual(3, version);
         }
         finally
         {

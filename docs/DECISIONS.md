@@ -441,3 +441,91 @@ create device with another protocol
 ```
 
 Если в будущем потребуется migration/conversion wizard, это будет отдельная операция, а не обычный update.
+
+---
+
+## D-036 — Runtime мнемосхемы хранится как persistent definition в SQLite
+
+**Status:** Accepted
+
+S11 добавляет `mimics` в общую configuration database и повышает schema version до `3`.
+
+Definition содержит canvas metadata и список элементов.
+
+Причина:
+
+- S12 editor должен сохранять тот же definition, который исполняет runtime;
+- отдельный файл/временная hard-coded схема создали бы второй источник истины;
+- SQLite уже является durable configuration storage приложения.
+
+Новая БД остаётся пустой: sample-мнемосхема автоматически не создаётся.
+
+---
+
+## D-037 — Первый mimic renderer использует SVG в Blazor WebAssembly
+
+**Status:** Accepted
+
+Runtime elements рендерятся через SVG `viewBox`.
+
+Причина:
+
+- S11 нужны absolute coordinates;
+- Text/Rectangle/Indicator естественно выражаются SVG primitives;
+- canvas масштабируется без собственной JavaScript rendering loop;
+- Blazor event handling достаточно для простого Button;
+- coordinate model можно повторно использовать в S12 editor.
+
+JavaScript canvas/WebGL не вводится до появления реальной необходимости.
+
+---
+
+## D-038 — Mimic binding хранит только TagId и использует существующий RuntimeStateClient
+
+**Status:** Accepted
+
+`Value`, `Indicator`, `Button` связываются с runtime только через logical `TagId`.
+
+Mimic definition не содержит:
+
+```text
+Modbus address
+UnitId
+SNMP OID
+Community
+protocol type
+```
+
+Realtime отдельного hub/service не создаёт.
+
+Mimic page использует существующий `RuntimeStateClient`, который уже объединяет REST snapshot и SignalR `TagChanged`.
+
+---
+
+## D-039 — Mimic Button использует существующий tag write path
+
+**Status:** Accepted
+
+Первый Button хранит:
+
+```text
+TagId
+CommandValue UInt16
+Text
+```
+
+Кнопка доступна только при `TagValueDto.Writable == true`.
+
+Command выполняется через:
+
+```text
+RuntimeStateClient.WriteTagAsync
+        ↓
+POST /api/tags/{tagId}/write
+        ↓
+existing write routing
+```
+
+Отдельный command bus или protocol-specific command в mimic definition не создаётся.
+
+SNMP-bound Button read-only/disabled в текущем scope.

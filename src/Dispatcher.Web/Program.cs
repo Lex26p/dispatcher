@@ -15,5 +15,6 @@ builder.Services.AddScoped(_ => new HttpClient
 
 builder.Services.AddScoped<RuntimeStateClient>();
 builder.Services.AddScoped<ConfigurationClient>();
+builder.Services.AddScoped<MimicClient>();
 
 await builder.Build().RunAsync();

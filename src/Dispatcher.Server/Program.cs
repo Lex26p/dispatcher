@@ -5,6 +5,7 @@ using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
 using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Mimics;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
 using Dispatcher.Snmp;
@@ -47,6 +48,7 @@ builder.Services.AddHostedService<SnmpRuntimeHostedService>(
 
 builder.Services.AddSingleton<RuntimeConfigurationCoordinator>();
 builder.Services.AddSingleton<ConfigurationEditorService>();
+builder.Services.AddSingleton<MimicConfigurationService>();
 builder.Services.AddHostedService<RuntimeHubPublisher>();
 
 var app =
@@ -104,6 +106,7 @@ app.MapPost(
             cancellationToken));
 
 app.MapConfigurationEndpoints();
+app.MapMimicEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
     RuntimeHubContract.Path);

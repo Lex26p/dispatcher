@@ -1,303 +1,326 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после S10B
+## 1. Состояние после S11
 
-Phase 3 завершает второй protocol vertical slice:
-
-```text
-Modbus TCP ─→ Dispatcher.Modbus ─┐
-                                 ├─→ TagService / DeviceStateService
-SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
-                                         REST / SignalR
-                                               ↓
-                                Monitoring + Device Editor
-```
-
-Monitoring остаётся protocol-neutral.
-
-Device Editor является configuration boundary и видит реальные protocol-specific поля.
-
-## 2. Persistent configuration
-
-SQLite schema version `2`:
+В application layer появляется третий пользовательский runtime service:
 
 ```text
-modbus_devices
-modbus_tags
-
-snmp_devices
-snmp_tags
-```
-
-`ConfigurationCatalog` содержит:
-
-```text
-ModbusDevices
-SnmpDevices
-```
-
-`DeviceId` и `TagId` глобально уникальны между протоколами.
-
-## 3. Configuration REST boundary
-
-Два protocol-specific route groups:
-
-```text
-/api/configuration/modbus/...
-/api/configuration/snmp/...
-```
-
-Это намеренно configuration API, а не runtime API.
-
-Публичные SNMP contracts:
-
-```text
-SnmpDeviceConfigurationDto
-SnmpTagConfigurationDto
-SnmpDeviceUpsertRequest
-SnmpTagUpsertRequest
-```
-
-SNMP device:
-
-```text
-DeviceId
-Name
-Enabled
-Host
-Port
-Community
-PollIntervalMilliseconds
-RequestTimeoutMilliseconds
-Tags[]
-```
-
-SNMP tag:
-
-```text
-TagId
-Name
-Oid
-```
-
-## 4. Единый ConfigurationEditorService
-
-Modbus и SNMP mutations выполняет один singleton `ConfigurationEditorService`.
-
-Внутри него один:
-
-```text
-SemaphoreSlim _mutationLock
-```
-
-Смысл — сериализовать configuration mutation между протоколами.
-
-Если бы Modbus и SNMP CRUD использовали независимые lock, возможен race:
-
-```text
-Modbus reads catalog A
-SNMP reads catalog A
-      ↓ parallel writes
-catalog/storage/runtime receive incompatible ordering
-```
-
-Общий lock сохраняет последовательную модель изменения active configuration.
-
-## 5. Modbus mutation
-
-```text
-copy Modbus snapshot
+Protocol workers
       ↓
-mutation
+TagService / DeviceStateService
       ↓
-validate Modbus + current SNMP
+REST + SignalR
       ↓
-ReplaceAsync(modbus)
-      ↓
-ConfigurationCatalog.ReplaceModbus
-      ↓
-RuntimeConfigurationCoordinator.ApplyAsync
-      ↓
-ConfigurationChanged
+┌────────────┬───────────────┐
+│ Monitoring │ Mimic runtime │
+└────────────┴───────────────┘
+
+Device Editor → configuration
 ```
 
-SNMP records в SQLite не затрагиваются.
+Mimic runtime не знает protocol-specific address.
 
-## 6. SNMP mutation
+## 2. Главная граница binding
+
+Обязательная цепочка:
 
 ```text
-copy SNMP snapshot
-      ↓
-mutation
-      ↓
-validate current Modbus + SNMP
-      ↓
-ReplaceSnmpAsync(snmp)
-      ↓
-ConfigurationCatalog.ReplaceSnmp
-      ↓
-RuntimeConfigurationCoordinator.ApplyAsync
-      ↓
-ConfigurationChanged
+Modbus Address / SNMP OID
+           ↓ protocol configuration
+         TagId
+           ↓
+       TagService
+           ↓
+      Mimic element
 ```
 
-Modbus records не затрагиваются.
+Мнемосхема сохраняет только `TagId`.
 
-## 7. Runtime live apply
+Это позволяет один и тот же runtime renderer использовать Modbus, SNMP и будущие протоколы.
 
-Общий coordinator:
+## 3. Mimic configuration
+
+Server-side model:
 
 ```text
-stop Modbus polling
-stop SNMP polling
-        ↓
-clear TagService
-clear DeviceStateService
-        ↓
-start Modbus
-start SNMP
+MimicConfiguration
+├── MimicId
+├── Name
+├── Width
+├── Height
+└── MimicElementConfiguration[]
 ```
 
-Individual protocol hosted services не очищают global runtime state.
-
-## 8. Device Editor data model
-
-Web получает два configuration snapshots:
+Element:
 
 ```text
-GET /api/configuration/modbus/devices
-GET /api/configuration/snmp/devices
+ElementId
+Type
+X / Y
+Width / Height
+Text?
+TagId?
+CommandValue?
 ```
 
-и объединяет их только на presentation layer:
+Типы:
 
 ```text
-DeviceItem
-├── Protocol
-├── common properties
-└── protocol-specific source DTO
-```
-
-Это не создаёт generic protocol model в Server/Core.
-
-Причина: общий UI действительно нужен сейчас, но protocol-specific configuration schemas остаются разными.
-
-## 9. Device Editor layout
-
-Сохраняется общий editor contract:
-
-```text
-слева  → единое дерево devices/tags
-центр  → таблица tags выбранного device
-справа → properties выбранного object
-сверху → create/save/delete/refresh
-```
-
-В дереве protocol виден сразу:
-
-```text
-PLC-01        MODBUS
-Switch-01     SNMP
-```
-
-Зелёный/серый marker в configuration tree означает `Enabled/Disabled`, а не Online/Offline. Реальный connection status показывается в Monitoring.
-
-## 10. Protocol selection
-
-Protocol выбирается при создании устройства:
-
-```text
-Modbus TCP
-SNMP v2c
-```
-
-Для persisted устройства protocol selector read-only.
-
-Причина: conversion Modbus → SNMP или SNMP → Modbus требует преобразования protocol-specific properties и tags и не является обычным field update.
-
-Текущий безопасный workflow:
-
-```text
-delete old device
-create new device with required protocol
-```
-
-## 11. SNMP Device Editor properties
-
-Device:
-
-```text
-DeviceId
-Name
-Enabled
-Host
-UDP Port
-Community
-PollIntervalMilliseconds
-RequestTimeoutMilliseconds
-```
-
-Tag:
-
-```text
-TagId
-Name
-OID
-```
-
-SNMP v2c GET scope read-only, поэтому `Writable` для SNMP в editor отсутствует.
-
-## 12. Client-side draft
-
-Правило S09B сохраняется для обоих протоколов:
-
-```text
-server snapshot
-      ↓
-local draft
-      ↓
-explicit Save
-      ↓
-REST mutation
-      ↓
-live runtime apply
-```
-
-Auto-save не используется.
-
-## 13. Runtime application boundary
-
-Monitoring получает:
-
-```text
-TagId
+Text
+Rectangle
 Value
-Timestamp
-Writable
-
-DeviceId
-Status
-UpdatedAt
-LastSuccessfulPollAt
-Error
+Indicator
+Button
 ```
 
-и не знает, пришёл tag из Modbus или SNMP.
+Public boundary находится в `Dispatcher.Contracts.Mimics`.
 
-SNMP tag публикуется как:
+## 4. Persistence
+
+SQLite schema version:
 
 ```text
-Writable = false
+3
 ```
 
-## 14. Следующий этап
-
-S11 вводит runtime-модель простой мнемосхемы.
-
-Ключевой принцип сохраняется:
+Новая table:
 
 ```text
-Mimic binding → TagId
+mimics
+├── mimic_id
+├── name
+├── width
+├── height
+└── elements_json
 ```
 
-Мнемосхема не должна хранить Modbus Address или SNMP OID.
+Schema migration:
+
+```text
+v1
+ ↓ existing migration
+v2
+ ↓ create mimics
+v3
+```
+
+При `v2 → v3` Modbus/SNMP tables не перестраиваются и не очищаются.
+
+## 5. Почему elements_json
+
+На S11 объём и структура mimic definition малы.
+
+Отдельные SQL tables для каждого типа элемента сейчас не дают функциональной пользы.
+
+`elements_json` даёт:
+
+- atomic save одной схемы;
+- простой load;
+- минимальный persistence code;
+- достаточную основу для S12 editor.
+
+Если в будущем потребуется server-side query по тысячам элементов или partial SQL updates, storage strategy можно пересмотреть.
+
+## 6. Mimic validation
+
+Server проверяет:
+
+- `MimicId` и `Name`;
+- canvas size;
+- уникальный `ElementId`;
+- bounds каждого элемента;
+- положительный element size;
+- `TagId` для `Value`, `Indicator`, `Button`;
+- `CommandValue` для `Button`;
+- максимальное количество элементов.
+
+Tag binding намеренно не обязан существовать в текущей device configuration.
+
+Причина: logical reference может временно отсутствовать или configuration устройства может быть изменена позже.
+
+Runtime тогда показывает missing/no-value state.
+
+## 7. Mimic API
+
+Runtime:
+
+```text
+GET /api/mimics
+GET /api/mimics/{mimicId}
+```
+
+Configuration foundation:
+
+```text
+PUT    /api/configuration/mimics/{mimicId}
+DELETE /api/configuration/mimics/{mimicId}
+```
+
+PUT выполняет create/update целого definition.
+
+S12 использует этот boundary вместо создания нового persistence API.
+
+## 8. Web runtime
+
+URL:
+
+```text
+/mimics
+```
+
+Spatial model:
+
+```text
+┌──────────────┬───────────────────────────────────────────────┐
+│ Mimics       │ name / dimensions / SignalR / refresh       │
+│              ├───────────────────────────────────────────────┤
+│ list         │                                               │
+│              │               SVG canvas                      │
+│              │                                               │
+└──────────────┴───────────────────────────────────────────────┘
+```
+
+Правая properties panel отсутствует, потому что runtime screen не редактирует элементы.
+
+S12 editor вернётся к стандартной схеме:
+
+```text
+left structure
+center canvas
+right properties
+top actions/tools
+```
+
+## 9. SVG renderer
+
+Blazor рендерит definition как `<svg viewBox>`.
+
+Причины:
+
+- absolute engineering coordinates без JavaScript;
+- масштабирование canvas средствами SVG;
+- Rectangle/Text/Indicator естественно выражаются SVG primitives;
+- Button можно обработать обычным Blazor `@onclick`;
+- editor S12 сможет использовать ту же coordinate model.
+
+JS canvas на этом этапе не нужен.
+
+## 10. Realtime binding
+
+Mimic page использует существующий scoped:
+
+```text
+RuntimeStateClient
+```
+
+Он уже:
+
+- загружает REST snapshot;
+- держит current tags;
+- принимает `TagChanged` через SignalR;
+- переподключается;
+- обновляет snapshot после reconnect.
+
+Mimic page подписывается только на `RuntimeStateClient.Changed`.
+
+Отдельный SignalR hub для мнемосхем не создаётся.
+
+## 11. Value
+
+`Value` находит current `TagValueDto` по `TagId`.
+
+Если значения нет:
+
+```text
+—
+```
+
+Никакая protocol-specific логика в renderer не выполняется.
+
+## 12. Indicator
+
+Indicator имеет три visual runtime состояния:
+
+```text
+active
+inactive
+missing
+```
+
+Базовая truthiness S11:
+
+```text
+true                 → active
+non-zero number      → active
+other nonempty text  → active
+
+false                → inactive
+0                    → inactive
+empty / null         → inactive
+
+missing TagValue     → missing
+```
+
+Более сложные expressions/conditions пока не вводятся.
+
+## 13. Button
+
+Button definition:
+
+```text
+TagId
+CommandValue UInt16
+Text
+```
+
+Runtime enable rule:
+
+```text
+TagValue exists
+AND Writable == true
+AND CommandValue exists
+```
+
+Command path:
+
+```text
+Button
+ ↓
+RuntimeStateClient.WriteTagAsync
+ ↓
+POST /api/tags/{tagId}/write
+ ↓
+existing Modbus write routing
+```
+
+S11 не создаёт новый command bus.
+
+SNMP tag автоматически read-only, поэтому SNMP-bound Button disabled.
+
+## 14. Configuration separation
+
+Mimic change не требует restart protocol polling.
+
+Поэтому mimic persistence использует отдельный `MimicConfigurationService` и отдельный mutation lock.
+
+Он не входит в `RuntimeConfigurationCoordinator`.
+
+Это сохраняет разницу:
+
+```text
+device protocol configuration change → protocol runtime apply
+mimic definition change              → save definition only
+```
+
+## 15. Следующий этап
+
+S12 добавляет visual editor поверх существующих:
+
+```text
+MimicDefinitionDto
+MimicConfigurationService
+SQLite mimics
+SVG coordinate model
+```
+
+Runtime contract S11 должен остаться основной точкой исполнения.

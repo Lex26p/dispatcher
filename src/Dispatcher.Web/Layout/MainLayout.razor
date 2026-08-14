@@ -39,10 +39,12 @@
                     Редактор устройств
                 </NavLink>
 
-                <div class="global-nav-link disabled">
-                    <span>Мнемосхемы</span>
-                    <span class="nav-note">позже</span>
-                </div>
+                <NavLink class="global-nav-link"
+                         ActiveClass="active"
+                         href="mimics"
+                         @onclick="CloseGlobalNavigation">
+                    Мнемосхемы
+                </NavLink>
             </nav>
         </div>
     }
@@ -62,11 +64,21 @@
             var path = NavigationManager.ToBaseRelativePath(
                 NavigationManager.Uri);
 
-            return path.StartsWith(
-                "devices",
-                StringComparison.OrdinalIgnoreCase)
-                ? "Редактор устройств"
-                : "Мониторинг";
+            if (path.StartsWith(
+                    "devices",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Редактор устройств";
+            }
+
+            if (path.StartsWith(
+                    "mimics",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Мнемосхемы";
+            }
+
+            return "Мониторинг";
         }
     }
 

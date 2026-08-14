@@ -1,0 +1,580 @@
+@page "/mimics"
+@implements IDisposable
+@inject MimicClient MimicApi
+@inject RuntimeStateClient RuntimeState
+
+<PageTitle>Dispatcher — Мнемосхемы</PageTitle>
+
+<div class="mimic-runtime-shell">
+    <aside class="mimic-local-navigation">
+        <div class="mimic-panel-heading">
+            <span>Мнемосхемы</span>
+            <span class="item-count">@_mimics.Count</span>
+        </div>
+
+        <div class="mimic-list">
+            @if (_loading)
+            {
+                <div class="compact-empty">Загрузка…</div>
+            }
+            else if (_mimics.Count == 0)
+            {
+                <div class="compact-empty">
+                    Мнемосхем пока нет.
+                </div>
+            }
+            else
+            {
+                @foreach (var mimic in _mimics)
+                {
+                    <button type="button"
+                            class="mimic-list-item @MimicSelectionClass(mimic)"
+                            @onclick="() => SelectMimicAsync(mimic.MimicId)">
+                        <span class="mimic-list-name">@mimic.Name</span>
+                        <span class="mimic-list-meta">
+                            @mimic.MimicId · @mimic.ElementCount элементов
+                        </span>
+                    </button>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="mimic-workspace">
+        <div class="mimic-toolbar">
+            <div class="mimic-toolbar-left">
+                <span class="mimic-toolbar-title">
+                    @(_selected?.Name ?? "Runtime")
+                </span>
+
+                @if (_selected is not null)
+                {
+                    <span class="mimic-toolbar-meta">
+                        @_selected.Width × @_selected.Height
+                    </span>
+                }
+            </div>
+
+            <div class="mimic-toolbar-right">
+                <span class="realtime-state @ConnectionClass(RuntimeState.ConnectionState)">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    @ConnectionText(RuntimeState.ConnectionState)
+                </span>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_refreshing"
+                        @onclick="RefreshAsync">
+                    @(_refreshing ? "Обновление…" : "Обновить")
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="runtime-error">
+                @_error
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(RuntimeState.LastError))
+        {
+            <div class="runtime-error">
+                @RuntimeState.LastError
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_lastCommandError))
+        {
+            <div class="mimic-command-error">
+                @_lastCommandError
+            </div>
+        }
+
+        <div class="mimic-stage">
+            @if (_selected is null)
+            {
+                <div class="mimic-empty-state">
+                    <div class="mimic-empty-title">
+                        Выберите мнемосхему
+                    </div>
+                    <div class="mimic-empty-text">
+                        Определения создаются через configuration API.
+                        Визуальный редактор появится в S12.
+                    </div>
+                </div>
+            }
+            else
+            {
+                <svg class="mimic-canvas"
+                     viewBox="0 0 @_selected.Width @_selected.Height"
+                     preserveAspectRatio="xMidYMid meet"
+                     role="img"
+                     aria-label="@_selected.Name">
+                    <rect x="0"
+                          y="0"
+                          width="@_selected.Width"
+                          height="@_selected.Height"
+                          class="mimic-canvas-background" />
+
+                    @foreach (var element in _selected.Elements)
+                    {
+                        @switch (element.Type)
+                        {
+                            case MimicElementTypeDto.Text:
+                                <foreignObject x="@element.X"
+                                               y="@element.Y"
+                                               width="@element.Width"
+                                               height="@element.Height"
+                                               class="mimic-foreign-object">
+                                    <div class="mimic-text">
+                                        @element.Text
+                                    </div>
+                                </foreignObject>
+                                break;
+
+                            case MimicElementTypeDto.Rectangle:
+                                <rect x="@element.X"
+                                      y="@element.Y"
+                                      width="@element.Width"
+                                      height="@element.Height"
+                                      class="mimic-rectangle" />
+                                break;
+
+                            case MimicElementTypeDto.Value:
+                                <g class="mimic-value">
+                                    <rect x="@element.X"
+                                          y="@element.Y"
+                                          width="@element.Width"
+                                          height="@element.Height"
+                                          rx="3"
+                                          class="mimic-value-box" />
+                                    <foreignObject x="@element.X"
+                                                   y="@element.Y"
+                                                   width="@element.Width"
+                                                   height="@element.Height"
+                                                   class="mimic-foreign-object">
+                                        <div class="mimic-value-content">
+                                            <div class="mimic-element-label">
+                                                @ElementLabel(element)
+                                            </div>
+                                            <div class="mimic-value-text">
+                                                @FormatValue(FindTag(element.TagId)?.Value)
+                                            </div>
+                                        </div>
+                                    </foreignObject>
+                                </g>
+                                break;
+
+                            case MimicElementTypeDto.Indicator:
+                                <g class="mimic-indicator">
+                                    <rect x="@element.X"
+                                          y="@element.Y"
+                                          width="@element.Width"
+                                          height="@element.Height"
+                                          rx="3"
+                                          class="mimic-indicator-box" />
+                                    <circle cx="@(element.X + 16)"
+                                            cy="@(element.Y + element.Height / 2)"
+                                            r="7"
+                                            class="mimic-indicator-lamp @IndicatorClass(element)" />
+                                    <foreignObject x="@(element.X + 28)"
+                                                   y="@element.Y"
+                                                   width="@Math.Max(1, element.Width - 28)"
+                                                   height="@element.Height"
+                                                   class="mimic-foreign-object">
+                                        <div class="mimic-indicator-content">
+                                            <div class="mimic-element-label">
+                                                @ElementLabel(element)
+                                            </div>
+                                            <div class="mimic-indicator-value">
+                                                @FormatValue(FindTag(element.TagId)?.Value)
+                                            </div>
+                                        </div>
+                                    </foreignObject>
+                                </g>
+                                break;
+
+                            case MimicElementTypeDto.Button:
+                                <g class="mimic-button @ButtonClass(element)"
+                                   @onclick="() => ExecuteButtonAsync(element)">
+                                    <rect x="@element.X"
+                                          y="@element.Y"
+                                          width="@element.Width"
+                                          height="@element.Height"
+                                          rx="4"
+                                          class="mimic-button-face" />
+                                    <foreignObject x="@element.X"
+                                                   y="@element.Y"
+                                                   width="@element.Width"
+                                                   height="@element.Height"
+                                                   class="mimic-foreign-object mimic-button-label">
+                                        <div class="mimic-button-text">
+                                            @ButtonText(element)
+                                        </div>
+                                    </foreignObject>
+                                </g>
+                                break;
+                        }
+                    }
+                </svg>
+            }
+        </div>
+    </main>
+</div>
+
+@code {
+    private IReadOnlyList<MimicSummaryDto> _mimics =
+        Array.Empty<MimicSummaryDto>();
+
+    private MimicDefinitionDto? _selected;
+    private bool _loading;
+    private bool _refreshing;
+    private string? _error;
+    private string? _lastCommandError;
+    private readonly HashSet<string> _writingElements =
+        new(StringComparer.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        RuntimeState.Changed += OnRuntimeChanged;
+        await RuntimeState.StartAsync();
+        await LoadMimicsAsync();
+    }
+
+    private async Task LoadMimicsAsync(
+        string? preferredMimicId = null)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _mimics =
+                await MimicApi.GetAllAsync();
+
+            var targetId =
+                preferredMimicId
+                ?? _selected?.MimicId
+                ?? _mimics.FirstOrDefault()?.MimicId;
+
+            if (targetId is null)
+            {
+                _selected = null;
+                return;
+            }
+
+            _selected =
+                await MimicApi.GetAsync(
+                    targetId);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectMimicAsync(
+        string mimicId)
+    {
+        _error = null;
+        _lastCommandError = null;
+
+        try
+        {
+            _selected =
+                await MimicApi.GetAsync(
+                    mimicId);
+
+            if (_selected is null)
+            {
+                _error =
+                    $"Мнемосхема '{mimicId}' не найдена.";
+
+                await LoadMimicsAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _refreshing = true;
+
+        try
+        {
+            await RuntimeState.RefreshAsync();
+            await LoadMimicsAsync(
+                _selected?.MimicId);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private TagValueDto? FindTag(
+        string? tagId)
+    {
+        if (string.IsNullOrWhiteSpace(
+                tagId))
+        {
+            return null;
+        }
+
+        return RuntimeState.Tags.FirstOrDefault(tag =>
+            string.Equals(
+                tag.TagId,
+                tagId,
+                StringComparison.Ordinal));
+    }
+
+    private async Task ExecuteButtonAsync(
+        MimicElementDto element)
+    {
+        if (!CanExecuteButton(
+                element)
+            || element.CommandValue is null)
+        {
+            return;
+        }
+
+        _lastCommandError = null;
+        _writingElements.Add(
+            element.ElementId);
+
+        try
+        {
+            var error =
+                await RuntimeState.WriteTagAsync(
+                    element.TagId!,
+                    element.CommandValue.Value);
+
+            if (error is not null)
+            {
+                _lastCommandError =
+                    $"{ButtonText(element)}: {error}";
+            }
+        }
+        finally
+        {
+            _writingElements.Remove(
+                element.ElementId);
+        }
+    }
+
+    private bool CanExecuteButton(
+        MimicElementDto element)
+    {
+        var tag =
+            FindTag(
+                element.TagId);
+
+        return tag?.Writable == true
+               && element.CommandValue is not null
+               && !_writingElements.Contains(
+                   element.ElementId);
+    }
+
+    private string ButtonClass(
+        MimicElementDto element)
+    {
+        if (_writingElements.Contains(
+                element.ElementId))
+        {
+            return "pending";
+        }
+
+        return CanExecuteButton(element)
+            ? "enabled"
+            : "disabled";
+    }
+
+    private string ButtonText(
+        MimicElementDto element)
+    {
+        if (_writingElements.Contains(
+                element.ElementId))
+        {
+            return "Запись…";
+        }
+
+        return string.IsNullOrWhiteSpace(
+                element.Text)
+            ? element.CommandValue?.ToString()
+                ?? "Команда"
+            : element.Text;
+    }
+
+    private string IndicatorClass(
+        MimicElementDto element)
+    {
+        var tag =
+            FindTag(
+                element.TagId);
+
+        if (tag is null)
+        {
+            return "missing";
+        }
+
+        return IsActive(
+                tag.Value)
+            ? "active"
+            : "inactive";
+    }
+
+    private static bool IsActive(
+        object? value)
+    {
+        if (value is null)
+        {
+            return false;
+        }
+
+        if (value is JsonElement json)
+        {
+            return json.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Number =>
+                    json.TryGetDouble(out var number)
+                    && Math.Abs(number) > double.Epsilon,
+                JsonValueKind.String =>
+                    IsActiveString(
+                        json.GetString()),
+                _ => false
+            };
+        }
+
+        return value switch
+        {
+            bool boolean => boolean,
+            byte number => number != 0,
+            sbyte number => number != 0,
+            short number => number != 0,
+            ushort number => number != 0,
+            int number => number != 0,
+            uint number => number != 0,
+            long number => number != 0,
+            ulong number => number != 0,
+            float number => Math.Abs(number) > float.Epsilon,
+            double number => Math.Abs(number) > double.Epsilon,
+            decimal number => number != 0,
+            string text => IsActiveString(text),
+            _ => true
+        };
+    }
+
+    private static bool IsActiveString(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(
+                value))
+        {
+            return false;
+        }
+
+        return !string.Equals(
+                   value,
+                   "0",
+                   StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(
+                   value,
+                   "false",
+                   StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(
+                   value,
+                   "off",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ElementLabel(
+        MimicElementDto element)
+    {
+        return string.IsNullOrWhiteSpace(
+                element.Text)
+            ? element.TagId
+                ?? string.Empty
+            : element.Text;
+    }
+
+    private static string FormatValue(
+        object? value)
+    {
+        if (value is null)
+        {
+            return "—";
+        }
+
+        if (value is JsonElement json)
+        {
+            return json.ValueKind switch
+            {
+                JsonValueKind.String =>
+                    json.GetString()
+                    ?? string.Empty,
+                JsonValueKind.True => "True",
+                JsonValueKind.False => "False",
+                JsonValueKind.Null => "—",
+                _ => json.ToString()
+            };
+        }
+
+        return value.ToString()
+            ?? string.Empty;
+    }
+
+    private string MimicSelectionClass(
+        MimicSummaryDto mimic)
+    {
+        return string.Equals(
+            mimic.MimicId,
+            _selected?.MimicId,
+            StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private static string ConnectionClass(
+        RuntimeConnectionState state)
+    {
+        return state switch
+        {
+            RuntimeConnectionState.Connected => "connected",
+            RuntimeConnectionState.Reconnecting => "reconnecting",
+            _ => "disconnected"
+        };
+    }
+
+    private static string ConnectionText(
+        RuntimeConnectionState state)
+    {
+        return state switch
+        {
+            RuntimeConnectionState.Connecting => "SignalR: подключение",
+            RuntimeConnectionState.Connected => "SignalR: подключен",
+            RuntimeConnectionState.Reconnecting => "SignalR: переподключение",
+            _ => "SignalR: отключен"
+        };
+    }
+
+    private void OnRuntimeChanged()
+    {
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        RuntimeState.Changed -=
+            OnRuntimeChanged;
+    }
+}

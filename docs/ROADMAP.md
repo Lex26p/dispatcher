@@ -33,26 +33,7 @@
 ## Phase 3 — SNMP
 
 - [x] **S10A — SNMP runtime и persistent configuration**
-  - `Dispatcher.Snmp`;
-  - SNMP v2c GET;
-  - polling OID;
-  - общий `TagService` / `DeviceStateService`;
-  - SQLite schema v2 и migration;
-  - simultaneous Modbus/SNMP runtime;
-  - `RuntimeConfigurationCoordinator`.
-
 - [x] **S10B — SNMP configuration API и Device Editor**
-  - SNMP configuration DTO/contracts;
-  - CRUD SNMP devices/tags;
-  - единый mutation lock для Modbus/SNMP configuration;
-  - protocol selection при создании device;
-  - SNMP v2c Host/Port/Community properties;
-  - OID editor;
-  - explicit Save;
-  - live apply через общий coordinator;
-  - единое дерево Modbus/SNMP devices;
-  - protocol badges;
-  - integration tests CRUD, validation, cross-protocol ID и live apply.
 
 ### Результат Phase 3
 
@@ -60,24 +41,37 @@ Modbus TCP и SNMP v2c одновременно опрашиваются, пол
 
 ## Phase 4 — Простая мнемосхема
 
-- [ ] **S11 — Runtime мнемосхемы**
-  - Text;
-  - Rectangle;
-  - Value;
-  - Indicator;
-  - Button;
-  - binding по `TagId`;
-  - realtime;
-  - простое управление.
+- [x] **S11 — Runtime мнемосхемы**
+  - persistent mimic definitions;
+  - SQLite schema v3 и migration v2 → v3;
+  - `Text`;
+  - `Rectangle`;
+  - `Value`;
+  - `Indicator`;
+  - `Button`;
+  - binding только по `TagId`;
+  - SVG renderer в Blazor;
+  - realtime через существующий `RuntimeStateClient` / SignalR;
+  - простая команда UInt16 через существующий write path;
+  - runtime API `GET /api/mimics...`;
+  - минимальный configuration PUT/DELETE как foundation для S12;
+  - без скрытой sample-мнемосхемы.
 
 - [ ] **S12 — Минимальный редактор мнемосхемы**
-  - создание схемы;
+  - создание/удаление схем;
   - добавление/удаление элементов;
   - позиция и размер;
-  - свойства;
-  - выбор тега;
+  - свойства выбранного элемента справа;
+  - выбор типа элемента;
+  - выбор `TagId`;
+  - настройка Button command value;
   - сохранение и загрузка;
-  - общий editor layout.
+  - общий editor layout;
+  - запуск/проверка через существующий S11 runtime.
+
+### Результат Phase 4
+
+Инженер создаёт простую мнемосхему, связывает элементы с logical tags, сохраняет её и использует тот же definition в операторском realtime runtime.
 
 ## Phase 5 — Дальнейшее развитие
 

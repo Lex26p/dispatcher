@@ -1,10 +1,12 @@
+using System.Text.Json;
+using Dispatcher.Server.Mimics;
 using Microsoft.Data.Sqlite;
 
 namespace Dispatcher.Server.Configuration;
 
 public sealed class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 2;
+    private const int CurrentSchemaVersion = 3;
 
     private readonly string _connectionString;
 
@@ -55,13 +57,23 @@ public sealed class SqliteConfigurationStore
         switch (schemaVersion)
         {
             case 0:
-                await CreateSchemaV2Async(
+                await CreateSchemaV3Async(
                     connection,
                     cancellationToken);
                 return;
 
             case 1:
                 await MigrateV1ToV2Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV2ToV3Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 2:
+                await MigrateV2ToV3Async(
                     connection,
                     cancellationToken);
                 return;
@@ -357,6 +369,150 @@ public sealed class SqliteConfigurationStore
         return devices;
     }
 
+    public async Task<IReadOnlyList<MimicConfiguration>> LoadMimicsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                mimic_id,
+                name,
+                width,
+                height,
+                elements_json
+            FROM mimics
+            ORDER BY mimic_id;
+            """;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var mimics =
+            new List<MimicConfiguration>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            var elements =
+                JsonSerializer.Deserialize<MimicElementConfiguration[]>(
+                    reader.GetString(4))
+                ?? [];
+
+            var mimic =
+                new MimicConfiguration(
+                    MimicId:
+                        reader.GetString(0),
+                    Name:
+                        reader.GetString(1),
+                    Width:
+                        reader.GetInt32(2),
+                    Height:
+                        reader.GetInt32(3),
+                    Elements:
+                        elements);
+
+            MimicConfigurationValidator.Validate(
+                mimic);
+
+            mimics.Add(
+                mimic);
+        }
+
+        return mimics;
+    }
+
+    public async Task UpsertMimicAsync(
+        MimicConfiguration mimic,
+        CancellationToken cancellationToken = default)
+    {
+        MimicConfigurationValidator.Validate(
+            mimic);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            INSERT INTO mimics (
+                mimic_id,
+                name,
+                width,
+                height,
+                elements_json)
+            VALUES (
+                $mimicId,
+                $name,
+                $width,
+                $height,
+                $elementsJson)
+            ON CONFLICT(mimic_id) DO UPDATE SET
+                name = excluded.name,
+                width = excluded.width,
+                height = excluded.height,
+                elements_json = excluded.elements_json;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$mimicId",
+            mimic.MimicId);
+        command.Parameters.AddWithValue(
+            "$name",
+            mimic.Name);
+        command.Parameters.AddWithValue(
+            "$width",
+            mimic.Width);
+        command.Parameters.AddWithValue(
+            "$height",
+            mimic.Height);
+        command.Parameters.AddWithValue(
+            "$elementsJson",
+            JsonSerializer.Serialize(
+                mimic.Elements));
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
+    public async Task<bool> DeleteMimicAsync(
+        string mimicId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            mimicId);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DELETE FROM mimics
+            WHERE mimic_id = $mimicId;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$mimicId",
+            mimicId);
+
+        return await command.ExecuteNonQueryAsync(
+            cancellationToken) > 0;
+    }
+
     public async Task ReplaceAsync(
         IReadOnlyCollection<ModbusDeviceConfiguration> devices,
         CancellationToken cancellationToken = default)
@@ -483,7 +639,7 @@ public sealed class SqliteConfigurationStore
             result);
     }
 
-    private static async Task CreateSchemaV2Async(
+    private static async Task CreateSchemaV3Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -541,7 +697,15 @@ public sealed class SqliteConfigurationStore
             CREATE INDEX IF NOT EXISTS ix_snmp_tags_device_id
                 ON snmp_tags(device_id);
 
-            PRAGMA user_version = 2;
+            CREATE TABLE IF NOT EXISTS mimics (
+                mimic_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                width INTEGER NOT NULL CHECK (width > 0),
+                height INTEGER NOT NULL CHECK (height > 0),
+                elements_json TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 3;
             """;
 
         await command.ExecuteNonQueryAsync(
@@ -587,6 +751,37 @@ public sealed class SqliteConfigurationStore
                 ON snmp_tags(device_id);
 
             PRAGMA user_version = 2;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV2ToV3Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS mimics (
+                mimic_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                width INTEGER NOT NULL CHECK (width > 0),
+                height INTEGER NOT NULL CHECK (height > 0),
+                elements_json TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 3;
             """;
 
         await command.ExecuteNonQueryAsync(

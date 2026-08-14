@@ -1,0 +1,353 @@
+.mimic-runtime-shell {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr);
+    background: var(--surface);
+}
+
+.mimic-local-navigation {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-muted);
+}
+
+.mimic-panel-heading {
+    min-height: 38px;
+    flex: 0 0 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 10px 0 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 650;
+}
+
+.mimic-list {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 5px;
+}
+
+.mimic-list-item {
+    width: 100%;
+    min-height: 42px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.mimic-list-item:hover {
+    background: var(--surface-hover);
+}
+
+.mimic-list-item.selected {
+    background: #e7eefc;
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.mimic-list-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.mimic-list-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+}
+
+.mimic-workspace {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: #dfe3e8;
+}
+
+.mimic-toolbar {
+    min-width: 0;
+    min-height: 38px;
+    flex: 0 0 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 8px 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.mimic-toolbar-left,
+.mimic-toolbar-right {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mimic-toolbar-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 650;
+}
+
+.mimic-toolbar-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.mimic-command-error {
+    min-height: 30px;
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    border-bottom: 1px solid #efc5c2;
+    background: #fff1f0;
+    color: #8f2520;
+    font-size: 12px;
+}
+
+.mimic-stage {
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+    padding: 10px;
+}
+
+.mimic-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: 1px solid #b8bec7;
+    background: #f7f8fa;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+.mimic-canvas-background {
+    fill: #f7f8fa;
+}
+
+.mimic-rectangle {
+    fill: #e8edf3;
+    stroke: #6d7885;
+    stroke-width: 1;
+}
+
+.mimic-foreign-object {
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.mimic-text {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    padding: 0 4px;
+    color: #1d2630;
+    font-family: system-ui, sans-serif;
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.15;
+}
+
+.mimic-value-box,
+.mimic-indicator-box {
+    fill: #ffffff;
+    stroke: #89939f;
+    stroke-width: 1;
+}
+
+.mimic-value-content,
+.mimic-indicator-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    padding: 4px 8px;
+}
+
+.mimic-element-label {
+    overflow: hidden;
+    color: #596472;
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mimic-value-text {
+    overflow: hidden;
+    margin-top: 4px;
+    color: #15202b;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mimic-indicator-content {
+    padding-left: 2px;
+}
+
+.mimic-indicator-value {
+    overflow: hidden;
+    margin-top: 3px;
+    color: #394451;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mimic-indicator-lamp {
+    stroke: #5e6873;
+    stroke-width: 1;
+}
+
+.mimic-indicator-lamp.active {
+    fill: #2c9a47;
+}
+
+.mimic-indicator-lamp.inactive {
+    fill: #a7afb8;
+}
+
+.mimic-indicator-lamp.missing {
+    fill: #e3a32b;
+}
+
+.mimic-button {
+    user-select: none;
+}
+
+.mimic-button.enabled {
+    cursor: pointer;
+}
+
+.mimic-button.disabled,
+.mimic-button.pending {
+    cursor: default;
+}
+
+.mimic-button-face {
+    fill: #edf3ff;
+    stroke: #668bcf;
+    stroke-width: 1;
+}
+
+.mimic-button.enabled:hover .mimic-button-face {
+    fill: #dfe9fc;
+}
+
+.mimic-button.disabled .mimic-button-face {
+    fill: #eceff3;
+    stroke: #aab2bc;
+}
+
+.mimic-button.pending .mimic-button-face {
+    fill: #fff4d6;
+    stroke: #c99a35;
+}
+
+.mimic-button-label {
+    pointer-events: none;
+}
+
+.mimic-button-text {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0 6px;
+    color: #174ea6;
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+}
+
+.mimic-button.disabled .mimic-button-text {
+    color: #7d8792;
+}
+
+.mimic-button.pending .mimic-button-text {
+    color: #7c5a13;
+}
+
+.mimic-empty-state {
+    margin: auto;
+    max-width: 430px;
+    padding: 22px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.mimic-empty-title {
+    margin-bottom: 5px;
+    color: var(--text);
+    font-weight: 650;
+}
+
+.mimic-empty-text {
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+    .mimic-runtime-shell {
+        grid-template-columns: 190px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .mimic-runtime-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .mimic-local-navigation {
+        display: none;
+    }
+
+    .mimic-stage {
+        padding: 4px;
+    }
+}
