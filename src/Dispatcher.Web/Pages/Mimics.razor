@@ -56,6 +56,11 @@
             </div>
 
             <div class="mimic-toolbar-right">
+                <a class="toolbar-button mimic-toolbar-link"
+                   href="/mimics/editor">
+                    Редактор
+                </a>
+
                 <span class="realtime-state @ConnectionClass(RuntimeState.ConnectionState)">
                     <span class="status-dot" aria-hidden="true"></span>
                     @ConnectionText(RuntimeState.ConnectionState)
@@ -98,8 +103,7 @@
                         Выберите мнемосхему
                     </div>
                     <div class="mimic-empty-text">
-                        Определения создаются через configuration API.
-                        Визуальный редактор появится в S12.
+                        Создайте первую схему в визуальном редакторе.
                     </div>
                 </div>
             }

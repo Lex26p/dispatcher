@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Phase 1 Modbus → Web, Phase 2 Device Editor, Phase 3 SNMP завершены. Phase 4 начата runtime-мнемосхемой.
+Phase 1 Modbus → Web, Phase 2 Device Editor, Phase 3 SNMP и Phase 4 простая мнемосхема завершены.
 
 ## Рабочая цепочка
 
@@ -28,6 +28,11 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 9. Binding-ить `Value`, `Indicator` и `Button` только по `TagId`.
 10. Получать realtime values через существующий `RuntimeStateClient` / SignalR.
 11. Выполнять простую команду из `Button` через существующий tag write path.
+12. Создавать и удалять мнемосхемы через Web.
+13. Добавлять/удалять `Text`, `Rectangle`, `Value`, `Indicator`, `Button`.
+14. Редактировать координаты и размеры элементов справа.
+15. Выбирать logical `TagId` из Modbus/SNMP configuration.
+16. Сохранять editor draft в тот же definition, который исполняет runtime.
 
 ## Базовый стек
 
@@ -239,7 +244,26 @@ Layout:
 сверху → имя / размер / SignalR / refresh
 ```
 
-Правая properties panel отсутствует намеренно: S11 — runtime screen, а не editor.
+Runtime `/mimics` остаётся operator screen без properties panel.
+
+Editor:
+
+```text
+/mimics/editor
+```
+
+Layout:
+
+```text
+слева  → список мнемосхем
+центр  → SVG canvas
+справа → свойства схемы или выбранного элемента
+сверху → create / element tools / save / delete / runtime
+```
+
+Editor использует client-side draft и explicit `Сохранить`. Изменения координат и свойств не отправляются на Server до Save.
+
+Минимальный S12 не использует drag-and-drop. Position/size редактируются численно в правой properties panel; выбор элемента выполняется кликом по canvas.
 
 ## Новая БД
 
@@ -249,20 +273,19 @@ S11 не создаёт скрытую sample-мнемосхему. До S12 о�
 
 ## Следующий этап
 
-**S12 — минимальный редактор мнемосхемы.**
+Базовый roadmap S00–S12 завершён.
 
-Он должен использовать существующие S11 persistence/contracts/runtime:
+Phase 5 намеренно не детализирован заранее. Следующие приоритеты выбираются после эксплуатации текущего vertical slice; возможные направления:
 
 ```text
-создание/удаление mimic
-добавление/удаление элементов
-position / size
-properties справа
-TagId picker
-Save
+historian
+alarms/events
+users/roles
+дополнительные протоколы
+расширение mimic graphics
+templates/scripting
+redundancy/distributed execution
 ```
-
-Runtime renderer переделывать не требуется.
 
 ## Документы
 

@@ -1,23 +1,31 @@
-.mimic-runtime-shell {
+.mimic-editor-shell {
     width: 100%;
     height: 100%;
     min-height: 0;
     display: grid;
-    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-columns: 230px minmax(0, 1fr) 300px;
     background: var(--surface);
 }
 
-.mimic-local-navigation {
+.mimic-editor-navigation,
+.mimic-editor-properties {
     min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid var(--border);
     background: var(--surface-muted);
 }
 
-.mimic-panel-heading {
+.mimic-editor-navigation {
+    border-right: 1px solid var(--border);
+}
+
+.mimic-editor-properties {
+    border-left: 1px solid var(--border);
+}
+
+.mimic-editor-panel-heading {
     min-height: 38px;
     flex: 0 0 38px;
     display: flex;
@@ -29,14 +37,14 @@
     font-weight: 650;
 }
 
-.mimic-list {
+.mimic-editor-list {
     min-height: 0;
     flex: 1 1 auto;
     overflow: auto;
     padding: 5px;
 }
 
-.mimic-list-item {
+.mimic-editor-list-item {
     width: 100%;
     min-height: 42px;
     display: flex;
@@ -52,33 +60,34 @@
     cursor: pointer;
 }
 
-.mimic-list-item:hover {
+.mimic-editor-list-item:hover {
     background: var(--surface-hover);
 }
 
-.mimic-list-item.selected {
+.mimic-editor-list-item.selected {
     background: #e7eefc;
     box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.mimic-list-name {
+.mimic-editor-list-name,
+.mimic-editor-list-meta {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.mimic-editor-list-name {
     font-size: 12px;
     font-weight: 650;
 }
 
-.mimic-list-meta {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.mimic-editor-list-meta {
     color: var(--text-muted);
-    font-size: 10px;
     font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 10px;
 }
 
-.mimic-workspace {
+.mimic-editor-workspace {
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -86,7 +95,7 @@
     background: #dfe3e8;
 }
 
-.mimic-toolbar {
+.mimic-editor-toolbar {
     min-width: 0;
     min-height: 38px;
     flex: 0 0 38px;
@@ -94,78 +103,106 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 0 8px 0 12px;
+    padding: 0 8px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
 }
 
-.mimic-toolbar-left,
-.mimic-toolbar-right {
+.mimic-editor-toolbar-left,
+.mimic-editor-toolbar-right {
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
 }
 
-.mimic-toolbar-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 650;
+.mimic-editor-toolbar-left {
+    overflow-x: auto;
 }
 
-.mimic-toolbar-meta {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
+.mimic-editor-toolbar-divider {
+    width: 1px;
+    height: 20px;
+    flex: 0 0 1px;
+    margin: 0 2px;
+    background: var(--border);
 }
 
-.mimic-command-error {
-    min-height: 30px;
-    flex: 0 0 auto;
-    padding: 6px 10px;
-    border-bottom: 1px solid #efc5c2;
-    background: #fff1f0;
-    color: #8f2520;
-    font-size: 12px;
+.mimic-editor-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
-.mimic-stage {
+.mimic-editor-work-content {
     min-width: 0;
     min-height: 0;
     flex: 1 1 auto;
     display: flex;
-    align-items: stretch;
-    justify-content: stretch;
     overflow: hidden;
+}
+
+.mimic-editor-canvas-wrap {
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
     padding: 10px;
 }
 
-.mimic-canvas {
+.mimic-editor-canvas {
     width: 100%;
     height: 100%;
     display: block;
-    border: 1px solid #b8bec7;
+    border: 1px solid #aeb6c0;
     background: #f7f8fa;
     box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 
-.mimic-canvas-background {
+.mimic-editor-canvas-background {
     fill: #f7f8fa;
 }
 
-.mimic-rectangle {
+.mimic-editor-element {
+    cursor: pointer;
+}
+
+.mimic-editor-text-hit-area {
+    fill: transparent;
+    stroke: none;
+}
+
+.mimic-editor-preview-rectangle {
     fill: #e8edf3;
     stroke: #6d7885;
     stroke-width: 1;
 }
 
-.mimic-foreign-object {
+.mimic-editor-preview-box {
+    fill: #ffffff;
+    stroke: #89939f;
+    stroke-width: 1;
+}
+
+.mimic-editor-preview-indicator {
+    fill: #a7afb8;
+    stroke: #5e6873;
+    stroke-width: 1;
+}
+
+.mimic-editor-preview-button {
+    fill: #edf3ff;
+    stroke: #668bcf;
+    stroke-width: 1;
+}
+
+.mimic-editor-foreign {
     overflow: hidden;
     pointer-events: none;
 }
 
-.mimic-text {
+.mimic-editor-preview-text {
     width: 100%;
     height: 100%;
     display: flex;
@@ -179,15 +216,7 @@
     line-height: 1.15;
 }
 
-.mimic-value-box,
-.mimic-indicator-box {
-    fill: #ffffff;
-    stroke: #89939f;
-    stroke-width: 1;
-}
-
-.mimic-value-content,
-.mimic-indicator-content {
+.mimic-editor-preview-content {
     width: 100%;
     height: 100%;
     display: flex;
@@ -197,99 +226,37 @@
     padding: 4px 8px;
 }
 
-.mimic-element-label {
+.mimic-editor-preview-label,
+.mimic-editor-preview-value,
+.mimic-editor-preview-small {
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mimic-editor-preview-label {
     color: #596472;
     font-family: system-ui, sans-serif;
     font-size: 11px;
     font-weight: 650;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.mimic-value-text {
-    overflow: hidden;
+.mimic-editor-preview-value {
     margin-top: 4px;
     color: #15202b;
     font-family: "Cascadia Code", "Consolas", monospace;
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 700;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.mimic-indicator-content {
-    padding-left: 2px;
-}
-
-.mimic-indicator-value {
-    overflow: hidden;
+.mimic-editor-preview-small {
     margin-top: 3px;
-    color: #394451;
+    color: #596472;
     font-family: "Cascadia Code", "Consolas", monospace;
-    font-size: 11px;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 10px;
 }
 
-.mimic-indicator-lamp {
-    stroke: #5e6873;
-    stroke-width: 1;
-}
-
-.mimic-indicator-lamp.active {
-    fill: #2c9a47;
-}
-
-.mimic-indicator-lamp.inactive {
-    fill: #a7afb8;
-}
-
-.mimic-indicator-lamp.missing {
-    fill: #e3a32b;
-}
-
-.mimic-button {
-    user-select: none;
-}
-
-.mimic-button.enabled {
-    cursor: pointer;
-}
-
-.mimic-button.disabled,
-.mimic-button.pending {
-    cursor: default;
-}
-
-.mimic-button-face {
-    fill: #edf3ff;
-    stroke: #668bcf;
-    stroke-width: 1;
-}
-
-.mimic-button.enabled:hover .mimic-button-face {
-    fill: #dfe9fc;
-}
-
-.mimic-button.disabled .mimic-button-face {
-    fill: #eceff3;
-    stroke: #aab2bc;
-}
-
-.mimic-button.pending .mimic-button-face {
-    fill: #fff4d6;
-    stroke: #c99a35;
-}
-
-.mimic-button-label {
-    pointer-events: none;
-}
-
-.mimic-button-text {
+.mimic-editor-preview-button-text {
     width: 100%;
     height: 100%;
     display: flex;
@@ -301,19 +268,24 @@
     font-family: system-ui, sans-serif;
     font-size: 12px;
     font-weight: 700;
-    line-height: 1.15;
     text-align: center;
 }
 
-.mimic-button.disabled .mimic-button-text {
-    color: #7d8792;
+.mimic-editor-selection {
+    fill: none;
+    stroke: #1f64d8;
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    pointer-events: none;
 }
 
-.mimic-button.pending .mimic-button-text {
-    color: #7c5a13;
+.mimic-editor-properties-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 12px;
 }
 
-.mimic-empty-state {
+.mimic-editor-empty {
     margin: auto;
     max-width: 430px;
     padding: 22px;
@@ -321,41 +293,43 @@
     text-align: center;
 }
 
-.mimic-empty-title {
+.mimic-editor-empty-title {
     margin-bottom: 5px;
     color: var(--text);
     font-weight: 650;
 }
 
-.mimic-empty-text {
+.mimic-editor-empty-text {
     font-size: 12px;
     line-height: 1.45;
 }
 
-@media (max-width: 760px) {
-    .mimic-runtime-shell {
-        grid-template-columns: 190px minmax(0, 1fr);
+@media (max-width: 1050px) {
+    .mimic-editor-shell {
+        grid-template-columns: 205px minmax(0, 1fr) 270px;
     }
 }
 
-@media (max-width: 600px) {
-    .mimic-runtime-shell {
+@media (max-width: 800px) {
+    .mimic-editor-shell {
+        grid-template-columns: 190px minmax(0, 1fr);
+    }
+
+    .mimic-editor-properties {
+        display: none;
+    }
+}
+
+@media (max-width: 620px) {
+    .mimic-editor-shell {
         grid-template-columns: 1fr;
     }
 
-    .mimic-local-navigation {
+    .mimic-editor-navigation {
         display: none;
     }
 
-    .mimic-stage {
+    .mimic-editor-canvas-wrap {
         padding: 4px;
     }
-}
-
-
-.mimic-toolbar-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
 }

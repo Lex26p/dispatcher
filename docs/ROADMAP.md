@@ -57,17 +57,19 @@ Modbus TCP и SNMP v2c одновременно опрашиваются, пол
   - минимальный configuration PUT/DELETE как foundation для S12;
   - без скрытой sample-мнемосхемы.
 
-- [ ] **S12 — Минимальный редактор мнемосхемы**
+- [x] **S12 — Минимальный редактор мнемосхемы**
   - создание/удаление схем;
-  - добавление/удаление элементов;
-  - позиция и размер;
-  - свойства выбранного элемента справа;
-  - выбор типа элемента;
-  - выбор `TagId`;
+  - добавление/удаление `Text`, `Rectangle`, `Value`, `Indicator`, `Button`;
+  - выбор элемента кликом на SVG canvas;
+  - позиция и размер через properties panel;
+  - свойства схемы и выбранного элемента справа;
+  - смена типа элемента;
+  - `TagId` picker из Modbus/SNMP configuration;
   - настройка Button command value;
-  - сохранение и загрузка;
-  - общий editor layout;
-  - запуск/проверка через существующий S11 runtime.
+  - client-side draft + explicit Save;
+  - сохранение через существующий S11 full-definition PUT;
+  - переход Runtime ↔ Editor;
+  - без отдельного drag-and-drop/JS слоя.
 
 ### Результат Phase 4
 

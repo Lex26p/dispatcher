@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после S11
+## 1. Состояние после S12
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -15,10 +15,11 @@ REST + SignalR
 │ Monitoring │ Mimic runtime │
 └────────────┴───────────────┘
 
-Device Editor → configuration
+Device Editor → device configuration
+Mimic Editor  → mimic definition
 ```
 
-Mimic runtime не знает protocol-specific address.
+Mimic runtime и Mimic Editor не знают protocol-specific address.
 
 ## 2. Главная граница binding
 
@@ -312,15 +313,98 @@ device protocol configuration change → protocol runtime apply
 mimic definition change              → save definition only
 ```
 
-## 15. Следующий этап
+## 15. Mimic Editor
 
-S12 добавляет visual editor поверх существующих:
+URL:
 
 ```text
-MimicDefinitionDto
-MimicConfigurationService
-SQLite mimics
-SVG coordinate model
+/mimics/editor
 ```
 
-Runtime contract S11 должен остаться основной точкой исполнения.
+Spatial model:
+
+```text
+┌──────────────┬──────────────────────────────────────┬───────────────┐
+│ Mimics       │ element tools / Save / Runtime      │ Properties    │
+│              ├──────────────────────────────────────┤               │
+│ list         │                                      │ mimic/element │
+│              │             SVG canvas               │               │
+│              │                                      │               │
+└──────────────┴──────────────────────────────────────┴───────────────┘
+```
+
+Editor загружает тот же `MimicDefinitionDto`, который исполняет runtime.
+
+Рабочая модель:
+
+```text
+GET definition
+      ↓
+client-side MimicDraft
+      ↓
+edit locally
+      ↓
+explicit Save
+      ↓
+PUT whole MimicDefinitionDto
+      ↓
+SQLite mimics.elements_json
+```
+
+Изменение mimic definition не затрагивает protocol polling и не вызывает `RuntimeConfigurationCoordinator`.
+
+## 16. Tag picker
+
+Editor получает configured tags из существующих:
+
+```text
+GET /api/configuration/modbus/devices
+GET /api/configuration/snmp/devices
+```
+
+и объединяет только их logical `TagId`.
+
+В mimic definition по-прежнему сохраняется только строка `TagId`.
+
+Если persisted definition содержит binding на уже удалённый tag, editor сохраняет этот ID в selector, чтобы пользователь мог увидеть и исправить stale binding.
+
+## 17. Минимальная coordinate editing model
+
+S12 не добавляет drag-and-drop.
+
+Выбор элемента:
+
+```text
+click SVG element
+```
+
+Редактирование:
+
+```text
+X
+Y
+Width
+Height
+```
+
+в правой properties panel.
+
+Причина: это закрывает функциональный scope editor и сохраняет одну coordinate model с S11 runtime без JavaScript interaction layer. Drag/resize handles могут быть добавлены позднее, если подтвердится необходимость.
+
+## 18. Завершение базового roadmap
+
+S00–S12 дают законченный вертикальный срез:
+
+```text
+protocol configuration
+        ↓
+Modbus / SNMP polling
+        ↓
+logical runtime tags
+        ↓
+Monitoring
+        ↓
+Mimic definition/editor/runtime
+```
+
+Phase 5 выбирается после оценки эксплуатации, а не проектируется заранее.

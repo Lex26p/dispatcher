@@ -529,3 +529,60 @@ existing write routing
 Отдельный command bus или protocol-specific command в mimic definition не создаётся.
 
 SNMP-bound Button read-only/disabled в текущем scope.
+
+---
+
+## D-040 — Mimic Editor использует client-side draft и explicit Save
+
+**Status:** Accepted
+
+S12 повторяет уже проверенный Device Editor interaction model:
+
+```text
+server MimicDefinitionDto
+        ↓
+client-side draft
+        ↓
+local property changes
+        ↓
+explicit Save
+        ↓
+PUT whole definition
+```
+
+Причина:
+
+- координаты и свойства меняются часто во время редактирования;
+- auto-save на каждый input создавал бы лишние HTTP writes;
+- пользователь должен явно видеть границу сохранённой и несохранённой схемы;
+- S11 persistence уже атомарно сохраняет whole definition.
+
+При смене схемы или refresh dirty draft требует подтверждения потери изменений.
+
+---
+
+## D-041 — Минимальный S12 редактирует position/size через properties panel без drag-and-drop
+
+**Status:** Accepted
+
+Выбор элемента выполняется кликом на SVG canvas.
+
+Position и size редактируются численно:
+
+```text
+X
+Y
+Width
+Height
+```
+
+в правой properties panel.
+
+Причина:
+
+- это полностью покрывает текущий S12 scope;
+- сохраняется одна coordinate model с S11 SVG runtime;
+- не требуется JavaScript pointer/drag layer;
+- drag handles, snapping, zoom/pan и multi-select можно добавлять только при подтверждённой необходимости.
+
+Отсутствие drag-and-drop не меняет persistent/runtime contracts.
