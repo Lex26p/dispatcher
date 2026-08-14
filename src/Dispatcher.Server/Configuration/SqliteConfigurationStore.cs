@@ -4,16 +4,19 @@ namespace Dispatcher.Server.Configuration;
 
 public sealed class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     private readonly string _connectionString;
 
     public SqliteConfigurationStore(
         string databasePath)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            databasePath);
 
-        DatabasePath = Path.GetFullPath(databasePath);
+        DatabasePath =
+            Path.GetFullPath(
+                databasePath);
 
         _connectionString =
             new SqliteConnectionStringBuilder
@@ -30,11 +33,14 @@ public sealed class SqliteConfigurationStore
         CancellationToken cancellationToken = default)
     {
         var directory =
-            Path.GetDirectoryName(DatabasePath);
+            Path.GetDirectoryName(
+                DatabasePath);
 
-        if (!string.IsNullOrWhiteSpace(directory))
+        if (!string.IsNullOrWhiteSpace(
+                directory))
         {
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(
+                directory);
         }
 
         await using var connection =
@@ -46,20 +52,27 @@ public sealed class SqliteConfigurationStore
                 connection,
                 cancellationToken);
 
-        if (schemaVersion == 0)
+        switch (schemaVersion)
         {
-            await CreateSchemaAsync(
-                connection,
-                cancellationToken);
+            case 0:
+                await CreateSchemaV2Async(
+                    connection,
+                    cancellationToken);
+                return;
 
-            return;
-        }
+            case 1:
+                await MigrateV1ToV2Async(
+                    connection,
+                    cancellationToken);
+                return;
 
-        if (schemaVersion != CurrentSchemaVersion)
-        {
-            throw new InvalidOperationException(
-                $"Unsupported configuration database schema version {schemaVersion}. " +
-                $"Expected {CurrentSchemaVersion}.");
+            case CurrentSchemaVersion:
+                return;
+
+            default:
+                throw new InvalidOperationException(
+                    $"Unsupported configuration database schema version {schemaVersion}. " +
+                    $"Expected {CurrentSchemaVersion}.");
         }
     }
 
@@ -70,9 +83,11 @@ public sealed class SqliteConfigurationStore
             await OpenConnectionAsync(
                 cancellationToken);
 
-        var deviceRows = new List<DeviceRow>();
+        var deviceRows =
+            new List<ModbusDeviceRow>();
 
-        await using (var command = connection.CreateCommand())
+        await using (var command =
+            connection.CreateCommand())
         {
             command.CommandText =
                 """
@@ -93,18 +108,27 @@ public sealed class SqliteConfigurationStore
                 await command.ExecuteReaderAsync(
                     cancellationToken);
 
-            while (await reader.ReadAsync(cancellationToken))
+            while (await reader.ReadAsync(
+                cancellationToken))
             {
                 deviceRows.Add(
-                    new DeviceRow(
-                        DeviceId: reader.GetString(0),
-                        Name: reader.GetString(1),
-                        Enabled: reader.GetInt64(2) != 0,
-                        Host: reader.GetString(3),
-                        Port: reader.GetInt32(4),
-                        UnitId: reader.GetInt32(5),
-                        PollIntervalMilliseconds: reader.GetInt32(6),
-                        RequestTimeoutMilliseconds: reader.GetInt32(7)));
+                    new ModbusDeviceRow(
+                        DeviceId:
+                            reader.GetString(0),
+                        Name:
+                            reader.GetString(1),
+                        Enabled:
+                            reader.GetInt64(2) != 0,
+                        Host:
+                            reader.GetString(3),
+                        Port:
+                            reader.GetInt32(4),
+                        UnitId:
+                            reader.GetInt32(5),
+                        PollIntervalMilliseconds:
+                            reader.GetInt32(6),
+                        RequestTimeoutMilliseconds:
+                            reader.GetInt32(7)));
             }
         }
 
@@ -114,7 +138,8 @@ public sealed class SqliteConfigurationStore
                 _ => new List<ModbusTagConfiguration>(),
                 StringComparer.Ordinal);
 
-        await using (var command = connection.CreateCommand())
+        await using (var command =
+            connection.CreateCommand())
         {
             command.CommandText =
                 """
@@ -132,10 +157,13 @@ public sealed class SqliteConfigurationStore
                 await command.ExecuteReaderAsync(
                     cancellationToken);
 
-            while (await reader.ReadAsync(cancellationToken))
+            while (await reader.ReadAsync(
+                cancellationToken))
             {
-                var tagId = reader.GetString(0);
-                var deviceId = reader.GetString(1);
+                var tagId =
+                    reader.GetString(0);
+                var deviceId =
+                    reader.GetString(1);
 
                 if (!tagsByDevice.TryGetValue(
                         deviceId,
@@ -147,30 +175,184 @@ public sealed class SqliteConfigurationStore
 
                 tags.Add(
                     new ModbusTagConfiguration(
-                        TagId: tagId,
-                        Name: reader.GetString(2),
-                        Address: reader.GetInt32(3),
-                        Writable: reader.GetInt64(4) != 0));
+                        TagId:
+                            tagId,
+                        Name:
+                            reader.GetString(2),
+                        Address:
+                            reader.GetInt32(3),
+                        Writable:
+                            reader.GetInt64(4) != 0));
             }
         }
 
-        var devices = deviceRows
-            .Select(device =>
-                new ModbusDeviceConfiguration(
-                    DeviceId: device.DeviceId,
-                    Name: device.Name,
-                    Enabled: device.Enabled,
-                    Host: device.Host,
-                    Port: device.Port,
-                    UnitId: device.UnitId,
-                    PollIntervalMilliseconds:
-                        device.PollIntervalMilliseconds,
-                    RequestTimeoutMilliseconds:
-                        device.RequestTimeoutMilliseconds,
-                    Tags: tagsByDevice[device.DeviceId].ToArray()))
-            .ToArray();
+        var devices =
+            deviceRows
+                .Select(device =>
+                    new ModbusDeviceConfiguration(
+                        DeviceId:
+                            device.DeviceId,
+                        Name:
+                            device.Name,
+                        Enabled:
+                            device.Enabled,
+                        Host:
+                            device.Host,
+                        Port:
+                            device.Port,
+                        UnitId:
+                            device.UnitId,
+                        PollIntervalMilliseconds:
+                            device.PollIntervalMilliseconds,
+                        RequestTimeoutMilliseconds:
+                            device.RequestTimeoutMilliseconds,
+                        Tags:
+                            tagsByDevice[
+                                device.DeviceId]
+                                .ToArray()))
+                .ToArray();
 
-        ModbusConfigurationValidator.Validate(devices);
+        ModbusConfigurationValidator.Validate(
+            devices);
+
+        return devices;
+    }
+
+    public async Task<IReadOnlyList<SnmpDeviceConfiguration>> LoadSnmpAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        var deviceRows =
+            new List<SnmpDeviceRow>();
+
+        await using (var command =
+            connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                SELECT
+                    device_id,
+                    name,
+                    enabled,
+                    host,
+                    port,
+                    community,
+                    poll_interval_ms,
+                    request_timeout_ms
+                FROM snmp_devices
+                ORDER BY device_id;
+                """;
+
+            await using var reader =
+                await command.ExecuteReaderAsync(
+                    cancellationToken);
+
+            while (await reader.ReadAsync(
+                cancellationToken))
+            {
+                deviceRows.Add(
+                    new SnmpDeviceRow(
+                        DeviceId:
+                            reader.GetString(0),
+                        Name:
+                            reader.GetString(1),
+                        Enabled:
+                            reader.GetInt64(2) != 0,
+                        Host:
+                            reader.GetString(3),
+                        Port:
+                            reader.GetInt32(4),
+                        Community:
+                            reader.GetString(5),
+                        PollIntervalMilliseconds:
+                            reader.GetInt32(6),
+                        RequestTimeoutMilliseconds:
+                            reader.GetInt32(7)));
+            }
+        }
+
+        var tagsByDevice =
+            deviceRows.ToDictionary(
+                device => device.DeviceId,
+                _ => new List<SnmpTagConfiguration>(),
+                StringComparer.Ordinal);
+
+        await using (var command =
+            connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                SELECT
+                    tag_id,
+                    device_id,
+                    name,
+                    oid
+                FROM snmp_tags
+                ORDER BY device_id, tag_id;
+                """;
+
+            await using var reader =
+                await command.ExecuteReaderAsync(
+                    cancellationToken);
+
+            while (await reader.ReadAsync(
+                cancellationToken))
+            {
+                var tagId =
+                    reader.GetString(0);
+                var deviceId =
+                    reader.GetString(1);
+
+                if (!tagsByDevice.TryGetValue(
+                        deviceId,
+                        out var tags))
+                {
+                    throw new InvalidOperationException(
+                        $"SNMP tag '{tagId}' references unknown device '{deviceId}'.");
+                }
+
+                tags.Add(
+                    new SnmpTagConfiguration(
+                        TagId:
+                            tagId,
+                        Name:
+                            reader.GetString(2),
+                        Oid:
+                            reader.GetString(3)));
+            }
+        }
+
+        var devices =
+            deviceRows
+                .Select(device =>
+                    new SnmpDeviceConfiguration(
+                        DeviceId:
+                            device.DeviceId,
+                        Name:
+                            device.Name,
+                        Enabled:
+                            device.Enabled,
+                        Host:
+                            device.Host,
+                        Port:
+                            device.Port,
+                        Community:
+                            device.Community,
+                        PollIntervalMilliseconds:
+                            device.PollIntervalMilliseconds,
+                        RequestTimeoutMilliseconds:
+                            device.RequestTimeoutMilliseconds,
+                        Tags:
+                            tagsByDevice[
+                                device.DeviceId]
+                                .ToArray()))
+                .ToArray();
+
+        SnmpConfigurationValidator.Validate(
+            devices);
 
         return devices;
     }
@@ -179,7 +361,8 @@ public sealed class SqliteConfigurationStore
         IReadOnlyCollection<ModbusDeviceConfiguration> devices,
         CancellationToken cancellationToken = default)
     {
-        ModbusConfigurationValidator.Validate(devices);
+        ModbusConfigurationValidator.Validate(
+            devices);
 
         await using var connection =
             await OpenConnectionAsync(
@@ -188,29 +371,16 @@ public sealed class SqliteConfigurationStore
         using var transaction =
             connection.BeginTransaction();
 
-        await using (var deleteTags = connection.CreateCommand())
-        {
-            deleteTags.Transaction = transaction;
-            deleteTags.CommandText =
-                "DELETE FROM modbus_tags;";
-
-            await deleteTags.ExecuteNonQueryAsync(
-                cancellationToken);
-        }
-
-        await using (var deleteDevices = connection.CreateCommand())
-        {
-            deleteDevices.Transaction = transaction;
-            deleteDevices.CommandText =
-                "DELETE FROM modbus_devices;";
-
-            await deleteDevices.ExecuteNonQueryAsync(
-                cancellationToken);
-        }
+        await DeleteProtocolConfigurationAsync(
+            connection,
+            transaction,
+            "modbus_tags",
+            "modbus_devices",
+            cancellationToken);
 
         foreach (var device in devices)
         {
-            await InsertDeviceAsync(
+            await InsertModbusDeviceAsync(
                 connection,
                 transaction,
                 device,
@@ -218,7 +388,50 @@ public sealed class SqliteConfigurationStore
 
             foreach (var tag in device.Tags)
             {
-                await InsertTagAsync(
+                await InsertModbusTagAsync(
+                    connection,
+                    transaction,
+                    device.DeviceId,
+                    tag,
+                    cancellationToken);
+            }
+        }
+
+        transaction.Commit();
+    }
+
+    public async Task ReplaceSnmpAsync(
+        IReadOnlyCollection<SnmpDeviceConfiguration> devices,
+        CancellationToken cancellationToken = default)
+    {
+        SnmpConfigurationValidator.Validate(
+            devices);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        using var transaction =
+            connection.BeginTransaction();
+
+        await DeleteProtocolConfigurationAsync(
+            connection,
+            transaction,
+            "snmp_tags",
+            "snmp_devices",
+            cancellationToken);
+
+        foreach (var device in devices)
+        {
+            await InsertSnmpDeviceAsync(
+                connection,
+                transaction,
+                device,
+                cancellationToken);
+
+            foreach (var tag in device.Tags)
+            {
+                await InsertSnmpTagAsync(
                     connection,
                     transaction,
                     device.DeviceId,
@@ -266,10 +479,11 @@ public sealed class SqliteConfigurationStore
             await command.ExecuteScalarAsync(
                 cancellationToken);
 
-        return Convert.ToInt32(result);
+        return Convert.ToInt32(
+            result);
     }
 
-    private static async Task CreateSchemaAsync(
+    private static async Task CreateSchemaV2Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -303,14 +517,117 @@ public sealed class SqliteConfigurationStore
             CREATE INDEX IF NOT EXISTS ix_modbus_tags_device_id
                 ON modbus_tags(device_id);
 
-            PRAGMA user_version = 1;
+            CREATE TABLE IF NOT EXISTS snmp_devices (
+                device_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+                community TEXT NOT NULL,
+                poll_interval_ms INTEGER NOT NULL CHECK (poll_interval_ms > 0),
+                request_timeout_ms INTEGER NOT NULL CHECK (request_timeout_ms > 0)
+            );
+
+            CREATE TABLE IF NOT EXISTS snmp_tags (
+                tag_id TEXT NOT NULL PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                oid TEXT NOT NULL,
+                FOREIGN KEY (device_id)
+                    REFERENCES snmp_devices(device_id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_snmp_tags_device_id
+                ON snmp_tags(device_id);
+
+            PRAGMA user_version = 2;
             """;
 
         await command.ExecuteNonQueryAsync(
             cancellationToken);
     }
 
-    private static async Task InsertDeviceAsync(
+    private static async Task MigrateV1ToV2Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS snmp_devices (
+                device_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+                community TEXT NOT NULL,
+                poll_interval_ms INTEGER NOT NULL CHECK (poll_interval_ms > 0),
+                request_timeout_ms INTEGER NOT NULL CHECK (request_timeout_ms > 0)
+            );
+
+            CREATE TABLE IF NOT EXISTS snmp_tags (
+                tag_id TEXT NOT NULL PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                oid TEXT NOT NULL,
+                FOREIGN KEY (device_id)
+                    REFERENCES snmp_devices(device_id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_snmp_tags_device_id
+                ON snmp_tags(device_id);
+
+            PRAGMA user_version = 2;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task DeleteProtocolConfigurationAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tagTable,
+        string deviceTable,
+        CancellationToken cancellationToken)
+    {
+        await using (var deleteTags =
+            connection.CreateCommand())
+        {
+            deleteTags.Transaction =
+                transaction;
+            deleteTags.CommandText =
+                $"DELETE FROM {tagTable};";
+
+            await deleteTags.ExecuteNonQueryAsync(
+                cancellationToken);
+        }
+
+        await using (var deleteDevices =
+            connection.CreateCommand())
+        {
+            deleteDevices.Transaction =
+                transaction;
+            deleteDevices.CommandText =
+                $"DELETE FROM {deviceTable};";
+
+            await deleteDevices.ExecuteNonQueryAsync(
+                cancellationToken);
+        }
+    }
+
+    private static async Task InsertModbusDeviceAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         ModbusDeviceConfiguration device,
@@ -319,7 +636,8 @@ public sealed class SqliteConfigurationStore
         await using var command =
             connection.CreateCommand();
 
-        command.Transaction = transaction;
+        command.Transaction =
+            transaction;
         command.CommandText =
             """
             INSERT INTO modbus_devices (
@@ -371,7 +689,7 @@ public sealed class SqliteConfigurationStore
             cancellationToken);
     }
 
-    private static async Task InsertTagAsync(
+    private static async Task InsertModbusTagAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string deviceId,
@@ -381,7 +699,8 @@ public sealed class SqliteConfigurationStore
         await using var command =
             connection.CreateCommand();
 
-        command.Transaction = transaction;
+        command.Transaction =
+            transaction;
         command.CommandText =
             """
             INSERT INTO modbus_tags (
@@ -418,13 +737,128 @@ public sealed class SqliteConfigurationStore
             cancellationToken);
     }
 
-    private sealed record DeviceRow(
+    private static async Task InsertSnmpDeviceAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        SnmpDeviceConfiguration device,
+        CancellationToken cancellationToken)
+    {
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            INSERT INTO snmp_devices (
+                device_id,
+                name,
+                enabled,
+                host,
+                port,
+                community,
+                poll_interval_ms,
+                request_timeout_ms)
+            VALUES (
+                $deviceId,
+                $name,
+                $enabled,
+                $host,
+                $port,
+                $community,
+                $pollInterval,
+                $requestTimeout);
+            """;
+
+        command.Parameters.AddWithValue(
+            "$deviceId",
+            device.DeviceId);
+        command.Parameters.AddWithValue(
+            "$name",
+            device.Name);
+        command.Parameters.AddWithValue(
+            "$enabled",
+            device.Enabled ? 1 : 0);
+        command.Parameters.AddWithValue(
+            "$host",
+            device.Host);
+        command.Parameters.AddWithValue(
+            "$port",
+            device.Port);
+        command.Parameters.AddWithValue(
+            "$community",
+            device.Community);
+        command.Parameters.AddWithValue(
+            "$pollInterval",
+            device.PollIntervalMilliseconds);
+        command.Parameters.AddWithValue(
+            "$requestTimeout",
+            device.RequestTimeoutMilliseconds);
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
+    private static async Task InsertSnmpTagAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string deviceId,
+        SnmpTagConfiguration tag,
+        CancellationToken cancellationToken)
+    {
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            INSERT INTO snmp_tags (
+                tag_id,
+                device_id,
+                name,
+                oid)
+            VALUES (
+                $tagId,
+                $deviceId,
+                $name,
+                $oid);
+            """;
+
+        command.Parameters.AddWithValue(
+            "$tagId",
+            tag.TagId);
+        command.Parameters.AddWithValue(
+            "$deviceId",
+            deviceId);
+        command.Parameters.AddWithValue(
+            "$name",
+            tag.Name);
+        command.Parameters.AddWithValue(
+            "$oid",
+            tag.Oid);
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
+    private sealed record ModbusDeviceRow(
         string DeviceId,
         string Name,
         bool Enabled,
         string Host,
         int Port,
         int UnitId,
+        int PollIntervalMilliseconds,
+        int RequestTimeoutMilliseconds);
+
+    private sealed record SnmpDeviceRow(
+        string DeviceId,
+        string Name,
+        bool Enabled,
+        string Host,
+        int Port,
+        string Community,
         int PollIntervalMilliseconds,
         int RequestTimeoutMilliseconds);
 }

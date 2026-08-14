@@ -1,165 +1,292 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после S09B
+## 1. Состояние S10A
 
-Phase 2 завершает полный configuration path:
+В системе впервые работают два protocol runtime:
 
 ```text
-Blazor Device Editor
-        ↓
-Configuration REST API
-        ↓
-validate
-        ↓
-SQLite
-        ↓
-ConfigurationCatalog
-        ↓
-Modbus runtime live apply
+Modbus TCP ──→ Dispatcher.Modbus ─┐
+                                  ├──→ TagService
+SNMP v2c  ──→ Dispatcher.Snmp ────┘        ↓
+                                     REST / SignalR
+                                           ↓
+                                      Monitoring
 ```
 
-Runtime current state остаётся отдельным:
+`TagService` и `DeviceStateService` остаются protocol-neutral.
+
+## 2. Dispatcher.Snmp
+
+Новый проект:
 
 ```text
-Protocol workers
-      ↓
-TagService / DeviceStateService
-      ↓
-REST / SignalR
-      ↓
-Monitoring / future mimics
+Dispatcher.Snmp
+├── SnmpGetClient
+├── SnmpPollingService
+├── SnmpValueConverter
+└── Configuration
+    ├── SnmpV2cDevice
+    ├── SnmpPoint
+    ├── SnmpPollingPlan
+    └── SnmpOidValidator
 ```
 
-## 2. Web services
-
-Глобальная навигация:
+Зависимости:
 
 ```text
-Monitoring
-Device Editor
+Dispatcher.Snmp
+├── Dispatcher.Core
+└── Lextm.SharpSnmpLib
 ```
 
-Monitoring является runtime application UI.
+Он не зависит от Server, Web или Modbus.
 
-Device Editor является configuration UI и поэтому может видеть protocol-specific Modbus fields.
+## 3. SNMP scope
 
-## 3. Device Editor layout
-
-Редактор реализует общий пространственный контракт:
+S10A реализует:
 
 ```text
-слева  → devices/tags selection tree
-центр  → tags work table
-справа → selected object properties
-сверху → create/save/delete/refresh
+SNMP version: v2c
+operation:    GET
+transport:    UDP
+configuration: Host / Port / Community
+points:       TagId / OID
 ```
 
-Правая панель всегда относится к выбранному object.
+Один poll-cycle формирует GET request с настроенным набором varbind OID.
 
-Выбор device показывает его tags в центральной таблице. Выбор tag сохраняет ту же рабочую таблицу и выделяет строку, а справа показывает tag properties.
-
-## 4. Client-side draft
-
-Device Editor не отправляет mutation на каждый `input`.
+Успешный ответ:
 
 ```text
-server snapshot
+SNMP varbinds
+     ↓
+SnmpValueConverter
+     ↓
+TagService.Set(...)
+     ↓
+DeviceStateService.Online
+```
+
+Ошибка DNS, timeout, protocol error, missing OID или malformed response:
+
+```text
+DeviceStateService.Offline
+```
+
+External cancellation не превращается в Offline.
+
+## 4. SNMP values
+
+На текущем этапе явно сохраняется тип для распространённых SMI values:
+
+```text
+Integer32   → Int32
+Counter32   → UInt32
+Gauge32     → UInt32
+TimeTicks   → UInt32
+Counter64   → UInt64
+OctetString → String
+Null        → null
+```
+
+Другие valid library values временно переходят в `string`.
+
+`NoSuchObject`, `NoSuchInstance`, `EndOfMibView` считаются ошибкой poll-cycle.
+
+## 5. Persistent configuration
+
+SQLite schema version:
+
+```text
+2
+```
+
+Старые таблицы:
+
+```text
+modbus_devices
+modbus_tags
+```
+
+Новые:
+
+```text
+snmp_devices
+snmp_tags
+```
+
+### snmp_devices
+
+```text
+device_id
+name
+enabled
+host
+port
+community
+poll_interval_ms
+request_timeout_ms
+```
+
+### snmp_tags
+
+```text
+tag_id
+device_id
+name
+oid
+```
+
+## 6. Schema migration
+
+Если Server открывает schema version `1`:
+
+```text
+existing Modbus data
+       ↓ preserve
+CREATE snmp_devices
+CREATE snmp_tags
+       ↓
+PRAGMA user_version = 2
+```
+
+Новая empty database сразу создаётся как version `2`.
+
+Неизвестная schema version по-прежнему приводит к startup error.
+
+## 7. ConfigurationCatalog
+
+`ConfigurationCatalog` теперь содержит:
+
+```text
+ModbusDevices
+SnmpDevices
+```
+
+и общий индекс:
+
+```text
+DeviceId
+TagId
+```
+
+`DeviceId` и `TagId` глобально уникальны между протоколами.
+
+Причина:
+
+```text
+TagService[tagId]
+DeviceStateService[deviceId]
+```
+
+имеют общие protocol-neutral keys. Два protocol owners не могут публиковать разные сущности под одним ID.
+
+Modbus write routing остаётся отдельным `FindTag`, потому что S10A SNMP tags read-only.
+
+## 8. Protocol runtime coordination
+
+До второго протокола `ModbusRuntimeHostedService` самостоятельно очищал весь runtime state.
+
+С двумя протоколами это неверно.
+
+Теперь individual hosted services отвечают только за собственные polling loops:
+
+```text
+ModbusRuntimeHostedService
+SnmpRuntimeHostedService
+```
+
+а configuration live apply координирует:
+
+```text
+RuntimeConfigurationCoordinator
+```
+
+Алгоритм:
+
+```text
+stop Modbus
+stop SNMP
     ↓
-local editable draft
+clear TagService
+clear DeviceStateService
     ↓
-explicit Save
-    ↓
-configuration API
+start Modbus from ConfigurationCatalog
+start SNMP from ConfigurationCatalog
 ```
 
-Причина: каждая server mutation live-применяет configuration и перезапускает polling loops. Auto-save на каждом символе был бы неправильным runtime behaviour.
+Таким образом изменение Modbus configuration не оставляет SNMP runtime остановленным или stale.
 
-При переходе к другому object или refresh с dirty draft пользователь получает browser confirmation.
+## 9. Startup
 
-## 5. ConfigurationClient
-
-`Dispatcher.Web.Services.ConfigurationClient` инкапсулирует HTTP-вызовы:
+Порядок регистрации hosted services:
 
 ```text
-GET devices
-POST/PUT/DELETE device
-POST/PUT/DELETE tag
+ConfigurationInitializationHostedService
+        ↓ loads Modbus + SNMP into catalog
+
+ModbusRuntimeHostedService
+        ↓
+
+SnmpRuntimeHostedService
+        ↓
+
+RuntimeHubPublisher
 ```
 
-Он работает только с `Dispatcher.Contracts.Configuration`.
+Каждый protocol worker читает уже готовый active catalog.
 
-Web по-прежнему не ссылается на Server, Core или Modbus assemblies.
+## 10. Existing Device Editor
 
-Server validation errors извлекаются из Problem Details `detail/title` и показываются в editor.
+S10A намеренно не меняет UI/API редактора.
 
-## 6. Configuration API
+Текущий `/api/configuration/modbus/...` продолжает редактировать только Modbus.
 
-S09A endpoints не меняются:
+При его mutation:
 
 ```text
-GET    /api/configuration/modbus/devices
-
-POST   /api/configuration/modbus/devices
-PUT    /api/configuration/modbus/devices/{deviceId}
-DELETE /api/configuration/modbus/devices/{deviceId}
-
-POST   /api/configuration/modbus/devices/{deviceId}/tags
-PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
-DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
+replace Modbus records in SQLite
+        ↓
+ConfigurationCatalog.ReplaceModbus
+        ↓
+RuntimeConfigurationCoordinator
+        ↓
+restart both active protocols
 ```
 
-## 7. Runtime reconfiguration
+SNMP records в SQLite не удаляются.
 
-После Save/Delete:
+S10B добавит SNMP CRUD API и UI.
 
-```text
-SQLite ReplaceAsync
-      ↓
-ConfigurationCatalog.Replace
-      ↓
-cancel old polling
-      ↓
-clear old runtime current state
-      ↓
-start new polling
-      ↓
-ConfigurationChanged
-```
+## 11. Runtime application boundary
 
-Monitoring reloads current runtime snapshot.
-
-Device Editor после собственной mutation повторно читает configuration snapshot, поэтому отображает server-confirmed state.
-
-## 8. Protocol boundary
-
-Monitoring и будущие Mimics работают с logical tags.
-
-Device Editor редактирует:
+Monitoring по-прежнему не знает protocol:
 
 ```text
-Host
-Port
-UnitId
-Holding Register Address
+TagId
+Value
+Timestamp
 Writable
 ```
 
-Это protocol-specific configuration boundary и не переносит Modbus details в runtime application model.
-
-## 9. Current tag model
-
-На S09B поддержан только:
+SNMP tag автоматически получает:
 
 ```text
-Holding Register UInt16
+Writable = false
 ```
 
-Поэтому тип в редакторе показывается read-only.
+и появляется через те же REST/SignalR endpoints, что и Modbus.
 
-Появление второго data type должно расширять configuration schema и protocol conversion вместе, а не добавлять фиктивный UI selector.
+## 12. S10B boundary
 
-## 10. Следующий этап
+S10B должен добавить configuration/editor boundary:
 
-S10 добавляет второй protocol component — SNMP.
+```text
+Device Editor
+├── Modbus TCP
+└── SNMP v2c
+```
 
-Ключевая архитектурная проверка S10: Device Editor должен уметь редактировать Modbus и SNMP configuration, а Monitoring должен продолжать работать с общими `TagId` и `DeviceId`.
+но не создавать отдельный SNMP monitoring screen.
+
+Операторский runtime остаётся единым.

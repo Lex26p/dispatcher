@@ -7,8 +7,10 @@ using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
+using Dispatcher.Snmp;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder =
+    WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<TagService>();
 builder.Services.AddSingleton<DeviceStateService>();
@@ -19,6 +21,7 @@ builder.Services.AddSingleton(
             ResolveConfigurationDatabasePath(
                 services.GetRequiredService<IConfiguration>(),
                 services.GetRequiredService<IHostEnvironment>())));
+
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
 
@@ -27,6 +30,9 @@ builder.Services.AddSingleton<ModbusPollingService>();
 builder.Services.AddSingleton<ModbusTcpRegisterWriter>();
 builder.Services.AddSingleton<ModbusWriteService>();
 
+builder.Services.AddSingleton<SnmpGetClient>();
+builder.Services.AddSingleton<SnmpPollingService>();
+
 builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<ModbusRuntimeHostedService>();
@@ -34,17 +40,26 @@ builder.Services.AddHostedService<ModbusRuntimeHostedService>(
     services =>
         services.GetRequiredService<ModbusRuntimeHostedService>());
 
+builder.Services.AddSingleton<SnmpRuntimeHostedService>();
+builder.Services.AddHostedService<SnmpRuntimeHostedService>(
+    services =>
+        services.GetRequiredService<SnmpRuntimeHostedService>());
+
+builder.Services.AddSingleton<RuntimeConfigurationCoordinator>();
 builder.Services.AddSingleton<ConfigurationEditorService>();
 builder.Services.AddHostedService<RuntimeHubPublisher>();
 
-var app = builder.Build();
+var app =
+    builder.Build();
 
 app.UseStaticFiles();
 
-app.MapGet("/health", () => Results.Ok(new
-{
-    status = "ok"
-}));
+app.MapGet(
+    "/health",
+    () => Results.Ok(new
+    {
+        status = "ok"
+    }));
 
 app.MapGet(
     "/api/tags",
@@ -53,18 +68,23 @@ app.MapGet(
         ConfigurationCatalog configuration) =>
     {
         return tagService.GetAll()
-            .Select(tag => RuntimeContractMapper.ToDto(
-                tag,
-                configuration.IsTagWritable(tag.TagId)))
+            .Select(tag =>
+                RuntimeContractMapper.ToDto(
+                    tag,
+                    configuration.IsTagWritable(
+                        tag.TagId)))
             .ToArray();
     });
 
-app.MapGet("/api/devices", (DeviceStateService deviceStateService) =>
-{
-    return deviceStateService.GetAll()
-        .Select(RuntimeContractMapper.ToDto)
-        .ToArray();
-});
+app.MapGet(
+    "/api/devices",
+    (DeviceStateService deviceStateService) =>
+    {
+        return deviceStateService.GetAll()
+            .Select(
+                RuntimeContractMapper.ToDto)
+            .ToArray();
+    });
 
 app.MapPost(
     "/api/tags/{tagId}/write",
@@ -89,7 +109,8 @@ app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
     RuntimeHubContract.Path);
 
 app.MapStaticAssets();
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile(
+    "index.html");
 
 app.Run();
 
@@ -102,38 +123,65 @@ static async Task<IResult> WriteTagAsync(
     CancellationToken cancellationToken)
 {
     var binding =
-        configuration.FindTag(tagId);
+        configuration.FindTag(
+            tagId);
 
     if (binding is null)
     {
+        if (configuration.ContainsTagId(
+                tagId))
+        {
+            return Results.Problem(
+                statusCode:
+                    StatusCodes.Status409Conflict,
+                title:
+                    "Tag is read-only.",
+                detail:
+                    $"Тег '{tagId}' не поддерживает запись текущим протоколом.");
+        }
+
         return Results.Problem(
-            statusCode: StatusCodes.Status404NotFound,
-            title: "Tag not found.",
-            detail: $"Тег '{tagId}' отсутствует в текущей конфигурации.");
+            statusCode:
+                StatusCodes.Status404NotFound,
+            title:
+                "Tag not found.",
+            detail:
+                $"Тег '{tagId}' отсутствует в текущей конфигурации.");
     }
 
     if (!binding.Device.Enabled)
     {
         return Results.Problem(
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            title: "Device is disabled.",
-            detail: $"Устройство '{binding.Device.DeviceId}' отключено в конфигурации.");
+            statusCode:
+                StatusCodes.Status503ServiceUnavailable,
+            title:
+                "Device is disabled.",
+            detail:
+                $"Устройство '{binding.Device.DeviceId}' отключено в конфигурации.");
     }
 
     if (!binding.Tag.Writable)
     {
         return Results.Problem(
-            statusCode: StatusCodes.Status409Conflict,
-            title: "Tag is read-only.",
-            detail: $"Тег '{tagId}' доступен только для чтения.");
+            statusCode:
+                StatusCodes.Status409Conflict,
+            title:
+                "Tag is read-only.",
+            detail:
+                $"Тег '{tagId}' доступен только для чтения.");
     }
 
-    if (!TryGetUInt16(request.Value, out var value))
+    if (!TryGetUInt16(
+            request.Value,
+            out var value))
     {
         return Results.Problem(
-            statusCode: StatusCodes.Status400BadRequest,
-            title: "Invalid tag value.",
-            detail: "Значение должно быть целым числом от 0 до 65535.");
+            statusCode:
+                StatusCodes.Status400BadRequest,
+            title:
+                "Invalid tag value.",
+            detail:
+                "Значение должно быть целым числом от 0 до 65535.");
     }
 
     try
@@ -168,9 +216,12 @@ static async Task<IResult> WriteTagAsync(
             tagId);
 
         return Results.Problem(
-            statusCode: StatusCodes.Status502BadGateway,
-            title: "Modbus write failed.",
-            detail: exception.Message);
+            statusCode:
+                StatusCodes.Status502BadGateway,
+            title:
+                "Modbus write failed.",
+            detail:
+                exception.Message);
     }
 }
 
@@ -182,9 +233,11 @@ static string ResolveConfigurationDatabasePath(
         configuration[
             "ConfigurationDatabase:Path"];
 
-    if (!string.IsNullOrWhiteSpace(configuredPath))
+    if (!string.IsNullOrWhiteSpace(
+            configuredPath))
     {
-        return Path.IsPathRooted(configuredPath)
+        return Path.IsPathRooted(
+                configuredPath)
             ? configuredPath
             : Path.Combine(
                 environment.ContentRootPath,
@@ -195,7 +248,8 @@ static string ResolveConfigurationDatabasePath(
         Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData);
 
-    if (!string.IsNullOrWhiteSpace(localApplicationData))
+    if (!string.IsNullOrWhiteSpace(
+            localApplicationData))
     {
         return Path.Combine(
             localApplicationData,
@@ -219,20 +273,26 @@ static bool TryGetUInt16(
         {
             ValueKind: JsonValueKind.Number
         } json
-            when json.TryGetUInt16(out value):
+            when json.TryGetUInt16(
+                out value):
             return true;
 
         case ushort direct:
-            value = direct;
+            value =
+                direct;
             return true;
 
         case int number
-            when number is >= ushort.MinValue and <= ushort.MaxValue:
-            value = (ushort)number;
+            when number is
+                >= ushort.MinValue
+                and <= ushort.MaxValue:
+            value =
+                (ushort)number;
             return true;
 
         default:
-            value = default;
+            value =
+                default;
             return false;
     }
 }

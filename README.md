@@ -2,34 +2,38 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Phase 1 Modbus → Web завершена. Phase 2 завершена первым полноценным Device Editor: Modbus-устройства и теги сохраняются в SQLite, применяются к работающему polling runtime и редактируются через Blazor WebAssembly.
+Phase 1 Modbus → Web и Phase 2 Device Editor завершены. Phase 3 добавляет второй протокол — SNMP — без изменения общей runtime-модели логических тегов.
 
 ## Рабочая цепочка
 
 ```text
-Modbus TCP device
-        ↕
-   Modbus service
-        ↕
-     Tag service
-        ↕
- ASP.NET Core server
-        ↕
- REST + SignalR
-        ↕
- Blazor WebAssembly
+                 ┌── Modbus TCP
+                 │
+Protocol workers ├── SNMP v2c
+                 │
+                 ↓
+      TagService / DeviceStateService
+                 ↓
+         ASP.NET Core Server
+                 ↓
+           REST + SignalR
+                 ↓
+        Blazor WebAssembly
 ```
 
-Система умеет:
+После S10A система умеет:
 
-1. Читать несколько Holding Register `UInt16` через FC03.
-2. Хранить текущие значения и Online/Offline state.
-3. Показывать значения в Web через REST + SignalR.
-4. Записывать явно разрешённые Holding Register через FC06.
-5. Хранить device/tag configuration в SQLite.
-6. CRUD-ить Modbus configuration через REST.
-7. Применять изменённую configuration к polling без перезапуска Server.
-8. Создавать, редактировать и удалять Modbus devices/tags через Web Device Editor.
+1. Читать Modbus Holding Register `UInt16` через FC03.
+2. Записывать разрешённые Modbus Holding Register через FC06.
+3. Хранить Modbus device/tag configuration в SQLite.
+4. Редактировать Modbus configuration через Web.
+5. Опросить SNMP v2c OID через GET.
+6. Преобразовать SNMP varbind в общий `TagService`.
+7. Использовать общий `DeviceStateService` для Modbus и SNMP.
+8. Загружать Modbus и SNMP configuration из одной SQLite database.
+9. Одновременно запускать Modbus и SNMP polling workers.
+
+SNMP configuration API и поля SNMP в Device Editor добавляются в S10B.
 
 ## Базовый стек
 
@@ -40,69 +44,62 @@ Modbus TCP device
 - SQLite provider: Microsoft.Data.Sqlite 10.0.10.
 - SQLite native bundle: SQLitePCLRaw.bundle_e_sqlite3 2.1.12.
 - Modbus: NModbus 3.0.83.
-- Первый протокол: Modbus TCP.
-- Второй протокол: SNMP.
+- SNMP: Lextm.SharpSnmpLib 12.5.7.
+- SNMP scope S10A: v2c GET.
 
-## Configuration и Runtime
-
-```text
-SQLite
-  ↓
-ConfigurationCatalog
-  ↓
-Modbus runtime
-
-TagService + DeviceStateService
-  ↓
-REST / SignalR
-  ↓
-Monitoring
-```
-
-Configuration и runtime current state остаются разными слоями.
-
-## Web
-
-Глобальная навигация:
+## Runtime
 
 ```text
-☰
-├── Мониторинг
-└── Редактор устройств
+ModbusRuntimeHostedService ─┐
+                            ├─→ TagService
+SnmpRuntimeHostedService ───┘       ↓
+                              REST / SignalR
 ```
 
-### Мониторинг
-
-Показывает current tag values, Online/Offline, SignalR state и write controls для writable tags.
-
-### Редактор устройств
-
-URL:
+`TagService` по-прежнему хранит только:
 
 ```text
-/devices
+TagId
+Value
+Timestamp
 ```
 
-Компоновка:
+`DeviceStateService` по-прежнему хранит protocol-neutral Online/Offline.
+
+Для SNMP current value конвертируются распространённые типы:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ ☰ Dispatcher   Редактор устройств                                  │
-├──────────────┬──────────────────────────────────────┬───────────────┤
-│ Devices      │ +Device +Tag Save Delete Refresh   │ Свойства      │
-│ ├─ PLC-01    ├──────────────────────────────────────┤ выбранного    │
-│ │  └─ Tags   │                                      │ объекта       │
-│ └─ PLC-02    │      таблица тегов устройства        │               │
-└──────────────┴──────────────────────────────────────┴───────────────┘
+Integer32   → Int32
+Counter32   → UInt32
+Gauge32     → UInt32
+TimeTicks   → UInt32
+Counter64   → UInt64
+OctetString → String
 ```
 
-Редактор использует S09A configuration API.
+Остальные поддержанные library-типы временно публикуются через строковое представление.
 
-Изменения редактируются как локальный draft и применяются только по `Сохранить`. Это важно: ввод одного символа не должен перезапускать Modbus polling. При наличии несохранённого draft UI предупреждает перед сменой объекта или refresh.
+## SQLite schema
 
-Server-side validation остаётся окончательной. Ошибка отображается непосредственно в редакторе.
+Schema version после S10A:
 
-Текущие свойства device:
+```text
+2
+```
+
+Таблицы:
+
+```text
+modbus_devices
+modbus_tags
+
+snmp_devices
+snmp_tags
+```
+
+При открытии существующей schema version `1` Server автоматически добавляет SNMP tables и переводит БД в version `2`, не удаляя Modbus records.
+
+SNMP device configuration:
 
 ```text
 DeviceId
@@ -110,69 +107,87 @@ Name
 Enabled
 Host
 Port
-UnitId
+Community
 PollIntervalMilliseconds
 RequestTimeoutMilliseconds
 ```
 
-Tag:
+SNMP tag:
 
 ```text
 TagId
 Name
-Holding Register UInt16
-Raw Address
-Writable
+Oid
 ```
 
-## Configuration API
+S10A поддерживает SNMP v2c, поэтому `Community` хранится как часть configuration. SNMP v3 пока не реализован.
+
+## Общая уникальность ID
+
+`DeviceId` и `TagId` должны быть уникальны между всеми protocol configurations:
 
 ```text
-GET    /api/configuration/modbus/devices
-
-POST   /api/configuration/modbus/devices
-PUT    /api/configuration/modbus/devices/{deviceId}
-DELETE /api/configuration/modbus/devices/{deviceId}
-
-POST   /api/configuration/modbus/devices/{deviceId}/tags
-PUT    /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
-DELETE /api/configuration/modbus/devices/{deviceId}/tags/{tagId}
+Modbus + SNMP
 ```
 
-Каждая успешная mutation сохраняется в SQLite и live-применяется к polling runtime.
+Это необходимо, потому что runtime services индексируют current state общими logical identifiers.
 
-## Runtime API
+## Live apply
+
+После S10A отдельный protocol worker больше не очищает глобальное runtime state самостоятельно.
+
+Общий алгоритм configuration apply:
 
 ```text
-GET  /health
-GET  /api/tags
-GET  /api/devices
-POST /api/tags/{tagId}/write
-
-SignalR /hubs/runtime
+stop Modbus polling
+stop SNMP polling
+        ↓
+clear TagService / DeviceStateService один раз
+        ↓
+start Modbus polling
+start SNMP polling
 ```
 
-SignalR events:
+За это отвечает `RuntimeConfigurationCoordinator`.
+
+Текущий Modbus Device Editor продолжает использовать уже существующий CRUD API. Его Save теперь перезапускает оба protocol runtime из единого active configuration snapshot, поэтому SNMP runtime не теряется после изменения Modbus configuration.
+
+## SNMP protocol boundary
+
+`Dispatcher.Snmp` зависит от:
 
 ```text
-TagChanged
-DeviceStateChanged
-ConfigurationChanged
+Dispatcher.Core
+Lextm.SharpSnmpLib
 ```
 
-## Текущий Modbus scope
+и не зависит от Server/Web/Modbus.
 
-- Modbus TCP.
-- FC03 read.
-- FC06 write.
-- Holding Register `UInt16`.
-- несколько tags/devices.
-- live restart polling после configuration changes.
-- Writable — configuration metadata.
+Один SNMP poll-cycle отправляет GET с настроенным набором OID. Результаты публикуются в `TagService` после успешного ответа. Ошибка/timeout переводит устройство в Offline.
 
-## Следующий этап
+## Web
 
-S10 добавляет SNMP как второй protocol service и интегрирует его configuration в общий Device Editor без изменения runtime Web-модели logical tags.
+Monitoring не требует изменений для SNMP:
+
+```text
+SNMP value → TagService → REST/SignalR → Monitoring
+```
+
+SNMP tags на S10A read-only; `Writable = false`.
+
+S10B расширит существующий `/devices` editor:
+
+```text
+Protocol = Modbus TCP | SNMP v2c
+```
+
+с protocol-specific properties справа.
+
+## Следующий шаг
+
+**S10B — SNMP configuration API + Device Editor integration.**
+
+После него пользователь сможет создать SNMP device и OID tags через Web и одновременно видеть Modbus/SNMP данные в Monitoring.
 
 ## Документы
 

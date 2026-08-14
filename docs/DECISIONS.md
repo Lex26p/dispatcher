@@ -170,8 +170,6 @@ Write поддерживает `UInt16` `0..65535` через FC06.
 
 Начиная с S08 device/tag configuration хранится в SQLite через `Microsoft.Data.Sqlite`.
 
-Schema version = `1`.
-
 ---
 
 ## D-022 — Активная configuration загружается в ConfigurationCatalog
@@ -194,7 +192,7 @@ SQLite — durable source of truth, `ConfigurationCatalog` — активный 
 
 **Status:** Accepted
 
-Текущий persistent tag model соответствует реально работающему `Holding Register UInt16`.
+Persistent Modbus tag model соответствует реально работающему `Holding Register UInt16`.
 
 ---
 
@@ -233,22 +231,9 @@ runtime ApplyAsync
 
 ## D-026 — Live apply перезапускает polling loops и сбрасывает runtime current state
 
-**Status:** Accepted
+**Status:** Superseded by D-031
 
-После успешного сохранения configuration Server отменяет текущие Modbus polling loops и запускает их заново из нового snapshot.
-
-Перед новым запуском очищаются:
-
-```text
-TagService
-DeviceStateService
-```
-
-Причина:
-
-после изменения Host, UnitId, Address или состава tags старое значение нельзя считать актуальным.
-
-После live apply Web получает `ConfigurationChanged` и перечитывает runtime snapshot.
+В S09A один Modbus runtime мог самостоятельно очистить global runtime state. После появления SNMP очистка координируется между протоколами.
 
 ---
 
@@ -258,15 +243,7 @@ DeviceStateService
 
 Runtime application API остаётся protocol-neutral, но Device Editor должен редактировать реальные настройки протокола.
 
-Поэтому S09A использует:
-
-```text
-/api/configuration/modbus/...
-```
-
-и Modbus-specific DTO.
-
-Это не нарушает `Protocol → logical Tag → Application`, потому что protocol details видит только configuration/editor service, а monitoring/mimic runtime продолжает работать через logical tags.
+Поэтому configuration API может иметь protocol-specific contracts/endpoints, тогда как Monitoring и Mimics продолжают работать с logical tags.
 
 ---
 
@@ -274,7 +251,7 @@ Runtime application API остаётся protocol-neutral, но Device Editor д
 
 **Status:** Accepted
 
-Редактирование свойств в S09B не вызывает server mutation автоматически.
+Редактирование свойств не вызывает server mutation автоматически.
 
 ```text
 configuration snapshot
@@ -296,3 +273,115 @@ live apply
 - Server остаётся authority по validation.
 
 Dirty draft явно обозначается, а смена выбранного объекта или refresh требует подтверждения потери несохранённых изменений.
+
+---
+
+## D-029 — Первый SNMP scope — v2c GET
+
+**Status:** Accepted
+
+S10A использует `Lextm.SharpSnmpLib 12.5.7`.
+
+Поддерживается:
+
+```text
+SNMP v2c
+GET
+UDP
+Community
+OID polling
+```
+
+Не добавляются пока:
+
+```text
+SNMP SET
+SNMP v3
+TRAP/INFORM receiver
+WALK discovery
+MIB browser
+```
+
+Причина: первый use case — polling конкретных OID в общие logical tags.
+
+---
+
+## D-030 — DeviceId и TagId глобально уникальны между протоколами
+
+**Status:** Accepted
+
+Modbus и SNMP не могут использовать одинаковые logical IDs.
+
+```text
+Modbus DeviceId ─┐
+SNMP DeviceId   ─┴─ unique
+
+Modbus TagId ────┐
+SNMP TagId ──────┴─ unique
+```
+
+Причина: `TagService` и `DeviceStateService` являются общими runtime stores и индексируются этими ID.
+
+---
+
+## D-031 — Global runtime state очищает только RuntimeConfigurationCoordinator
+
+**Status:** Accepted
+
+Individual protocol hosted services:
+
+```text
+ModbusRuntimeHostedService
+SnmpRuntimeHostedService
+```
+
+управляют только собственными polling loops.
+
+При configuration live apply общий coordinator выполняет:
+
+```text
+stop all protocol polling
+        ↓
+clear TagService / DeviceStateService
+        ↓
+start all protocol polling
+```
+
+Это предотвращает ситуацию, когда изменение одного протокола уничтожает current state другого и не запускает его заново.
+
+---
+
+## D-032 — SQLite schema v2 добавляет SNMP с миграцией v1 → v2
+
+**Status:** Accepted
+
+Schema version `2` добавляет:
+
+```text
+snmp_devices
+snmp_tags
+```
+
+При upgrade с version `1` Modbus tables и records сохраняются.
+
+Не допускается требование удалить существующую user database ради добавления второго протокола.
+
+---
+
+## D-033 — SNMP values нормализуются до обычных CLR values до TagService
+
+**Status:** Accepted
+
+`TagService` не хранит SharpSnmpLib-specific `ISnmpData`.
+
+Перед публикацией выполняется conversion:
+
+```text
+Integer32 / counters / gauge / timeticks / string
+        ↓
+CLR primitive / string
+        ↓
+TagService
+```
+
+Таким образом Server/Web/mimics не зависят от SNMP library types.

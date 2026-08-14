@@ -17,27 +17,29 @@ public sealed class ConfigurationInitializationHostedService
         _logger = logger;
     }
 
-    public async Task StartAsync(
-        CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await _store.InitializeAsync(
+        await _store.InitializeAsync(cancellationToken);
+
+        var modbusDevices = await _store.LoadAsync(
+            cancellationToken);
+        var snmpDevices = await _store.LoadSnmpAsync(
             cancellationToken);
 
-        var devices =
-            await _store.LoadAsync(
-                cancellationToken);
-
-        _catalog.Replace(devices);
+        _catalog.ReplaceAll(
+            modbusDevices,
+            snmpDevices);
 
         _logger.LogInformation(
-            "Loaded {DeviceCount} device(s) and {TagCount} tag(s) from configuration database {DatabasePath}.",
-            devices.Count,
-            devices.Sum(device => device.Tags.Count),
+            "Loaded {ModbusDeviceCount} Modbus device(s), {ModbusTagCount} Modbus tag(s), {SnmpDeviceCount} SNMP device(s), and {SnmpTagCount} SNMP tag(s) from configuration database {DatabasePath}.",
+            modbusDevices.Count,
+            modbusDevices.Sum(device => device.Tags.Count),
+            snmpDevices.Count,
+            snmpDevices.Sum(device => device.Tags.Count),
             _store.DatabasePath);
     }
 
-    public Task StopAsync(
-        CancellationToken cancellationToken)
+    public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
     }

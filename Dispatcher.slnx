@@ -4,11 +4,13 @@
     <Project Path="src/Dispatcher.Core/Dispatcher.Core.csproj" />
     <Project Path="src/Dispatcher.Modbus/Dispatcher.Modbus.csproj" />
     <Project Path="src/Dispatcher.Server/Dispatcher.Server.csproj" />
+    <Project Path="src/Dispatcher.Snmp/Dispatcher.Snmp.csproj" />
     <Project Path="src/Dispatcher.Web/Dispatcher.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Dispatcher.Core.Tests/Dispatcher.Core.Tests.csproj" />
     <Project Path="tests/Dispatcher.Modbus.Tests/Dispatcher.Modbus.Tests.csproj" />
     <Project Path="tests/Dispatcher.Server.Tests/Dispatcher.Server.Tests.csproj" />
+    <Project Path="tests/Dispatcher.Snmp.Tests/Dispatcher.Snmp.Tests.csproj" />
   </Folder>
 </Solution>

@@ -4,11 +4,11 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Dispatcher.Contracts\Dispatcher.Contracts.csproj" />
     <ProjectReference Include="..\Dispatcher.Core\Dispatcher.Core.csproj" />
     <ProjectReference Include="..\Dispatcher.Modbus\Dispatcher.Modbus.csproj" />
+    <ProjectReference Include="..\Dispatcher.Snmp\Dispatcher.Snmp.csproj" />
     <ProjectReference Include="..\Dispatcher.Web\Dispatcher.Web.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

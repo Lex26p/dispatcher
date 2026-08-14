@@ -24,43 +24,11 @@
 - [x] **S07A — Hosted Modbus polling**
 - [x] **S07B — Write path Web → Modbus**
 
-### Результат Phase 1
-
-Рабочая система подключается к настроенному Modbus TCP устройству, читает `UInt16` Holding Registers, показывает их в Web в реальном времени и записывает явно разрешённые значения обратно.
-
 ## Phase 2 — Редактор устройств
 
 - [x] **S08 — Постоянная конфигурация**
-  - модели Modbus devices/tags;
-  - SQLite;
-  - schema version;
-  - загрузка configuration при старте;
-  - in-memory `ConfigurationCatalog`;
-  - persistent configuration отделена от runtime state.
-
 - [x] **S09A — Configuration CRUD API и live apply**
-  - REST snapshot Modbus configuration;
-  - создать/редактировать/удалить устройство;
-  - создать/редактировать/удалить тег;
-  - server-side validation и duplicate checks;
-  - сохранение snapshot в SQLite;
-  - замена `ConfigurationCatalog`;
-  - остановка и перезапуск polling loops без перезапуска Server;
-  - сброс устаревшего runtime state;
-  - SignalR `ConfigurationChanged`;
-  - integration tests persistence/live apply.
-
 - [x] **S09B — Blazor Device Editor**
-  - глобальная навигация `Редактор устройств`;
-  - локальное дерево устройств и тегов;
-  - создать/редактировать/удалить через S09A API;
-  - центральная таблица тегов выбранного устройства;
-  - свойства выбранного объекта справа;
-  - компактный toolbar;
-  - explicit Save поверх client-side draft;
-  - отображение validation/server errors;
-  - предупреждение о несохранённых изменениях;
-  - ручная проверка полного сценария через Web.
 
 ### Результат Phase 2
 
@@ -68,12 +36,33 @@ Modbus-устройство и его точки можно полностью �
 
 ## Phase 3 — SNMP
 
-- [ ] **S10 — SNMP как второй протокол**
-  - SNMP-компонент;
+- [x] **S10A — SNMP runtime и persistent configuration**
+  - новый `Dispatcher.Snmp`;
+  - SNMP v2c GET;
   - polling OID;
-  - преобразование SNMP-данных в общие теги;
-  - интеграция SNMP-настроек в редактор устройств;
-  - одновременная работа Modbus и SNMP.
+  - преобразование SNMP values в общие runtime values;
+  - Online/Offline через общий `DeviceStateService`;
+  - SQLite schema v2;
+  - миграция schema v1 → v2 без потери Modbus data;
+  - persistent `snmp_devices` / `snmp_tags`;
+  - `ConfigurationCatalog` содержит Modbus + SNMP;
+  - глобальная уникальность `DeviceId` / `TagId`;
+  - одновременный Modbus/SNMP runtime;
+  - общий `RuntimeConfigurationCoordinator`;
+  - protocol и hosted integration tests.
+
+- [ ] **S10B — SNMP configuration API и Device Editor**
+  - SNMP configuration DTO/contracts;
+  - CRUD SNMP devices/tags;
+  - protocol selection в Device Editor;
+  - SNMP v2c properties;
+  - OID editor;
+  - live apply через общий coordinator;
+  - одновременная ручная проверка Modbus + SNMP в Monitoring.
+
+### Результат Phase 3
+
+Modbus и SNMP одновременно опрашиваются, настраиваются через общий Device Editor и публикуют данные через единую runtime-модель тегов.
 
 ## Phase 4 — Простая мнемосхема
 

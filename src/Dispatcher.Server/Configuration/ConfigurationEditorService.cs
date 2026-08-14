@@ -1,7 +1,5 @@
 using Dispatcher.Contracts.Configuration;
 using Dispatcher.Contracts.Realtime;
-using Dispatcher.Core.Devices;
-using Dispatcher.Core.Tags;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
 using Microsoft.AspNetCore.SignalR;
@@ -12,31 +10,25 @@ public sealed class ConfigurationEditorService
 {
     private readonly SqliteConfigurationStore _store;
     private readonly ConfigurationCatalog _catalog;
-    private readonly ModbusRuntimeHostedService _runtime;
-    private readonly TagService _tagService;
-    private readonly DeviceStateService _deviceStateService;
+    private readonly RuntimeConfigurationCoordinator _runtime;
     private readonly IHubContext<RuntimeHub> _hubContext;
     private readonly SemaphoreSlim _mutationLock = new(1, 1);
 
     public ConfigurationEditorService(
         SqliteConfigurationStore store,
         ConfigurationCatalog catalog,
-        ModbusRuntimeHostedService runtime,
-        TagService tagService,
-        DeviceStateService deviceStateService,
+        RuntimeConfigurationCoordinator runtime,
         IHubContext<RuntimeHub> hubContext)
     {
         _store = store;
         _catalog = catalog;
         _runtime = runtime;
-        _tagService = tagService;
-        _deviceStateService = deviceStateService;
         _hubContext = hubContext;
     }
 
     public IReadOnlyList<ModbusDeviceConfiguration> GetDevices()
     {
-        return _catalog.Devices;
+        return _catalog.ModbusDevices;
     }
 
     public async Task<ModbusDeviceConfiguration> CreateDeviceAsync(
@@ -46,11 +38,7 @@ public sealed class ConfigurationEditorService
         return await MutateAsync(
             devices =>
             {
-                if (devices.Any(device =>
-                        string.Equals(
-                            device.DeviceId,
-                            request.DeviceId,
-                            StringComparison.Ordinal)))
+                if (_catalog.ContainsDeviceId(request.DeviceId))
                 {
                     throw new ConfigurationConflictException(
                         $"Устройство '{request.DeviceId}' уже существует.");
@@ -90,23 +78,23 @@ public sealed class ConfigurationEditorService
                         deviceId,
                         request.DeviceId,
                         StringComparison.Ordinal)
-                    && devices.Any(device =>
-                        string.Equals(
-                            device.DeviceId,
-                            request.DeviceId,
-                            StringComparison.Ordinal)))
+                    && _catalog.ContainsDeviceId(
+                        request.DeviceId))
                 {
                     throw new ConfigurationConflictException(
                         $"Устройство '{request.DeviceId}' уже существует.");
                 }
 
-                var current = devices[index];
+                var current =
+                    devices[index];
+
                 var updated =
                     ConfigurationContractMapper.ToConfiguration(
                         request,
                         current.Tags);
 
-                devices[index] = updated;
+                devices[index] =
+                    updated;
 
                 return updated;
             },
@@ -131,7 +119,8 @@ public sealed class ConfigurationEditorService
                         $"Устройство '{deviceId}' не найдено.");
                 }
 
-                devices.RemoveAt(index);
+                devices.RemoveAt(
+                    index);
 
                 return true;
             },
@@ -157,8 +146,7 @@ public sealed class ConfigurationEditorService
                         $"Устройство '{deviceId}' не найдено.");
                 }
 
-                if (ContainsTagId(
-                        devices,
+                if (_catalog.ContainsTagId(
                         request.TagId))
                 {
                     throw new ConfigurationConflictException(
@@ -169,14 +157,17 @@ public sealed class ConfigurationEditorService
                     ConfigurationContractMapper.ToConfiguration(
                         request);
 
-                var device = devices[index];
+                var device =
+                    devices[index];
 
-                devices[index] = device with
-                {
-                    Tags = device.Tags
-                        .Append(created)
-                        .ToArray()
-                };
+                devices[index] =
+                    device with
+                    {
+                        Tags =
+                            device.Tags
+                                .Append(created)
+                                .ToArray()
+                    };
 
                 return created;
             },
@@ -203,8 +194,10 @@ public sealed class ConfigurationEditorService
                         $"Устройство '{deviceId}' не найдено.");
                 }
 
-                var device = devices[deviceIndex];
-                var tags = device.Tags.ToList();
+                var device =
+                    devices[deviceIndex];
+                var tags =
+                    device.Tags.ToList();
 
                 var tagIndex =
                     tags.FindIndex(tag =>
@@ -223,8 +216,7 @@ public sealed class ConfigurationEditorService
                         tagId,
                         request.TagId,
                         StringComparison.Ordinal)
-                    && ContainsTagId(
-                        devices,
+                    && _catalog.ContainsTagId(
                         request.TagId))
                 {
                     throw new ConfigurationConflictException(
@@ -235,12 +227,15 @@ public sealed class ConfigurationEditorService
                     ConfigurationContractMapper.ToConfiguration(
                         request);
 
-                tags[tagIndex] = updated;
+                tags[tagIndex] =
+                    updated;
 
-                devices[deviceIndex] = device with
-                {
-                    Tags = tags.ToArray()
-                };
+                devices[deviceIndex] =
+                    device with
+                    {
+                        Tags =
+                            tags.ToArray()
+                    };
 
                 return updated;
             },
@@ -266,8 +261,10 @@ public sealed class ConfigurationEditorService
                         $"Устройство '{deviceId}' не найдено.");
                 }
 
-                var device = devices[deviceIndex];
-                var tags = device.Tags.ToList();
+                var device =
+                    devices[deviceIndex];
+                var tags =
+                    device.Tags.ToList();
 
                 var removed =
                     tags.RemoveAll(tag =>
@@ -282,10 +279,12 @@ public sealed class ConfigurationEditorService
                         $"Тег '{tagId}' не найден у устройства '{deviceId}'.");
                 }
 
-                devices[deviceIndex] = device with
-                {
-                    Tags = tags.ToArray()
-                };
+                devices[deviceIndex] =
+                    device with
+                    {
+                        Tags =
+                            tags.ToArray()
+                    };
 
                 return true;
             },
@@ -302,33 +301,36 @@ public sealed class ConfigurationEditorService
         try
         {
             var devices =
-                _catalog.Devices
-                    .Select(device => device with
-                    {
-                        Tags = device.Tags.ToArray()
-                    })
+                _catalog.ModbusDevices
+                    .Select(device =>
+                        device with
+                        {
+                            Tags =
+                                device.Tags.ToArray()
+                        })
                     .ToList();
 
             var result =
                 mutation(devices);
 
-            ModbusConfigurationValidator.Validate(
-                devices);
+            ConfigurationSetValidator.Validate(
+                devices,
+                _catalog.SnmpDevices);
 
             await _store.ReplaceAsync(
                 devices,
                 cancellationToken);
 
-            _catalog.Replace(
+            _catalog.ReplaceModbus(
                 devices);
 
             await _runtime.ApplyAsync(
-                _catalog.Devices,
                 CancellationToken.None);
 
             await _hubContext.Clients.All.SendAsync(
                 RuntimeHubContract.ConfigurationChanged,
-                cancellationToken: CancellationToken.None);
+                cancellationToken:
+                    CancellationToken.None);
 
             return result;
         }
@@ -342,7 +344,9 @@ public sealed class ConfigurationEditorService
         IReadOnlyList<ModbusDeviceConfiguration> devices,
         string deviceId)
     {
-        for (var index = 0; index < devices.Count; index++)
+        for (var index = 0;
+             index < devices.Count;
+             index++)
         {
             if (string.Equals(
                     devices[index].DeviceId,
@@ -354,17 +358,5 @@ public sealed class ConfigurationEditorService
         }
 
         return -1;
-    }
-
-    private static bool ContainsTagId(
-        IEnumerable<ModbusDeviceConfiguration> devices,
-        string tagId)
-    {
-        return devices.Any(device =>
-            device.Tags.Any(tag =>
-                string.Equals(
-                    tag.TagId,
-                    tagId,
-                    StringComparison.Ordinal)));
     }
 }

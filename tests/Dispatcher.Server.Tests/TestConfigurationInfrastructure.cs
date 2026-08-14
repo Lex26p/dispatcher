@@ -13,22 +13,35 @@ internal sealed class TestConfigurationDatabase : IDisposable
         string directory,
         string databasePath)
     {
-        _directory = directory;
-        DatabasePath = databasePath;
+        _directory =
+            directory;
+        DatabasePath =
+            databasePath;
     }
 
     public string DatabasePath { get; }
 
-    public static async Task<TestConfigurationDatabase> CreateAsync(
+    public static Task<TestConfigurationDatabase> CreateAsync(
         params ModbusDeviceConfiguration[] devices)
+    {
+        return CreateAsync(
+            devices,
+            Array.Empty<SnmpDeviceConfiguration>());
+    }
+
+    public static async Task<TestConfigurationDatabase> CreateAsync(
+        IReadOnlyCollection<ModbusDeviceConfiguration> modbusDevices,
+        IReadOnlyCollection<SnmpDeviceConfiguration> snmpDevices)
     {
         var directory =
             Path.Combine(
                 Path.GetTempPath(),
                 "dispatcher-tests",
-                Guid.NewGuid().ToString("N"));
+                Guid.NewGuid().ToString(
+                    "N"));
 
-        Directory.CreateDirectory(directory);
+        Directory.CreateDirectory(
+            directory);
 
         var databasePath =
             Path.Combine(
@@ -45,14 +58,18 @@ internal sealed class TestConfigurationDatabase : IDisposable
                 databasePath);
 
         await store.InitializeAsync();
-        await store.ReplaceAsync(devices);
+        await store.ReplaceAsync(
+            modbusDevices);
+        await store.ReplaceSnmpAsync(
+            snmpDevices);
 
         return database;
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(_directory))
+        if (Directory.Exists(
+                _directory))
         {
             Directory.Delete(
                 _directory,
@@ -67,19 +84,20 @@ internal static class TestDispatcherFactory
         string databasePath)
     {
         return new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureAppConfiguration(
-                    (_, configuration) =>
-                    {
-                        configuration.AddInMemoryCollection(
-                            new Dictionary<string, string?>
-                            {
-                                ["ConfigurationDatabase:Path"] =
-                                    databasePath
-                            });
-                    });
-            });
+            .WithWebHostBuilder(
+                builder =>
+                {
+                    builder.ConfigureAppConfiguration(
+                        (_, configuration) =>
+                        {
+                            configuration.AddInMemoryCollection(
+                                new Dictionary<string, string?>
+                                {
+                                    ["ConfigurationDatabase:Path"] =
+                                        databasePath
+                                });
+                        });
+                });
     }
 }
 
@@ -91,21 +109,69 @@ internal static class TestModbusConfiguration
         bool writable = false)
     {
         return new ModbusDeviceConfiguration(
-            DeviceId: "device01",
-            Name: "Test device",
-            Enabled: enabled,
-            Host: "127.0.0.1",
-            Port: port,
-            UnitId: 1,
-            PollIntervalMilliseconds: 10000,
-            RequestTimeoutMilliseconds: 1000,
+            DeviceId:
+                "device01",
+            Name:
+                "Test device",
+            Enabled:
+                enabled,
+            Host:
+                "127.0.0.1",
+            Port:
+                port,
+            UnitId:
+                1,
+            PollIntervalMilliseconds:
+                10000,
+            RequestTimeoutMilliseconds:
+                1000,
             Tags:
             [
                 new ModbusTagConfiguration(
-                    TagId: "device01.register100",
-                    Name: "Register 100",
-                    Address: 100,
-                    Writable: writable)
+                    TagId:
+                        "device01.register100",
+                    Name:
+                        "Register 100",
+                    Address:
+                        100,
+                    Writable:
+                        writable)
+            ]);
+    }
+}
+
+internal static class TestSnmpConfiguration
+{
+    public static SnmpDeviceConfiguration CreateDevice(
+        int port,
+        bool enabled = true)
+    {
+        return new SnmpDeviceConfiguration(
+            DeviceId:
+                "snmp01",
+            Name:
+                "Test SNMP device",
+            Enabled:
+                enabled,
+            Host:
+                "127.0.0.1",
+            Port:
+                port,
+            Community:
+                "public",
+            PollIntervalMilliseconds:
+                10000,
+            RequestTimeoutMilliseconds:
+                1000,
+            Tags:
+            [
+                new SnmpTagConfiguration(
+                    TagId:
+                        "snmp01.sysName",
+                    Name:
+                        "sysName",
+                    Oid:
+                        "1.3.6.1.2.1.1.5.0")
             ]);
     }
 }

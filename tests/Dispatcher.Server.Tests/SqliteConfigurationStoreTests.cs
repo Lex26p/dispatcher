@@ -1,4 +1,5 @@
 using Dispatcher.Server.Configuration;
+using Microsoft.Data.Sqlite;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Dispatcher.Server.Tests;
@@ -48,7 +49,8 @@ public sealed class SqliteConfigurationStoreTests
 
         Assert.AreEqual(1, loaded.Count);
 
-        var loadedDevice = loaded[0];
+        var loadedDevice =
+            loaded[0];
 
         Assert.AreEqual("plc01", loadedDevice.DeviceId);
         Assert.AreEqual("PLC 01", loadedDevice.Name);
@@ -58,15 +60,212 @@ public sealed class SqliteConfigurationStoreTests
         Assert.AreEqual(7, loadedDevice.UnitId);
         Assert.AreEqual(250, loadedDevice.PollIntervalMilliseconds);
         Assert.AreEqual(900, loadedDevice.RequestTimeoutMilliseconds);
-
         Assert.AreEqual(2, loadedDevice.Tags.Count);
 
         var setpoint =
             loadedDevice.Tags.Single(
-                tag => tag.TagId == "plc01.setpoint");
+                tag =>
+                    tag.TagId
+                    == "plc01.setpoint");
 
         Assert.AreEqual("Setpoint", setpoint.Name);
         Assert.AreEqual(101, setpoint.Address);
         Assert.IsTrue(setpoint.Writable);
+    }
+
+    [TestMethod]
+    public async Task ReplaceSnmpAsync_PersistsSnmpDevicesAndTags_AcrossStoreInstances()
+    {
+        var device =
+            new SnmpDeviceConfiguration(
+                DeviceId: "switch01",
+                Name: "Switch 01",
+                Enabled: true,
+                Host: "192.168.1.20",
+                Port: 1161,
+                Community: "monitoring",
+                PollIntervalMilliseconds: 5000,
+                RequestTimeoutMilliseconds: 1500,
+                Tags:
+                [
+                    new SnmpTagConfiguration(
+                        TagId: "switch01.sysName",
+                        Name: "sysName",
+                        Oid: "1.3.6.1.2.1.1.5.0")
+                ]);
+
+        using var database =
+            await TestConfigurationDatabase.CreateAsync(
+                Array.Empty<ModbusDeviceConfiguration>(),
+                [device]);
+
+        var reopenedStore =
+            new SqliteConfigurationStore(
+                database.DatabasePath);
+
+        await reopenedStore.InitializeAsync();
+
+        var loaded =
+            await reopenedStore.LoadSnmpAsync();
+
+        Assert.AreEqual(1, loaded.Count);
+
+        var loadedDevice =
+            loaded[0];
+
+        Assert.AreEqual("switch01", loadedDevice.DeviceId);
+        Assert.AreEqual("Switch 01", loadedDevice.Name);
+        Assert.IsTrue(loadedDevice.Enabled);
+        Assert.AreEqual("192.168.1.20", loadedDevice.Host);
+        Assert.AreEqual(1161, loadedDevice.Port);
+        Assert.AreEqual("monitoring", loadedDevice.Community);
+        Assert.AreEqual(5000, loadedDevice.PollIntervalMilliseconds);
+        Assert.AreEqual(1500, loadedDevice.RequestTimeoutMilliseconds);
+        Assert.AreEqual(1, loadedDevice.Tags.Count);
+        Assert.AreEqual(
+            "1.3.6.1.2.1.1.5.0",
+            loadedDevice.Tags[0].Oid);
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_MigratesVersion1Database_ToVersion2WithoutLosingModbusData()
+    {
+        var directory =
+            Path.Combine(
+                Path.GetTempPath(),
+                "dispatcher-tests",
+                Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(
+            directory);
+
+        var databasePath =
+            Path.Combine(
+                directory,
+                "dispatcher-v1.db");
+
+        try
+        {
+            var connectionString =
+                new SqliteConnectionStringBuilder
+                {
+                    DataSource = databasePath,
+                    Pooling = false
+                }
+                .ToString();
+
+            await using (var connection =
+                new SqliteConnection(
+                    connectionString))
+            {
+                await connection.OpenAsync();
+
+                await using var command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    """
+                    CREATE TABLE modbus_devices (
+                        device_id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        enabled INTEGER NOT NULL,
+                        host TEXT NOT NULL,
+                        port INTEGER NOT NULL,
+                        unit_id INTEGER NOT NULL,
+                        poll_interval_ms INTEGER NOT NULL,
+                        request_timeout_ms INTEGER NOT NULL
+                    );
+
+                    CREATE TABLE modbus_tags (
+                        tag_id TEXT NOT NULL PRIMARY KEY,
+                        device_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        address INTEGER NOT NULL,
+                        writable INTEGER NOT NULL
+                    );
+
+                    INSERT INTO modbus_devices (
+                        device_id,
+                        name,
+                        enabled,
+                        host,
+                        port,
+                        unit_id,
+                        poll_interval_ms,
+                        request_timeout_ms)
+                    VALUES (
+                        'plc01',
+                        'PLC 01',
+                        0,
+                        '127.0.0.1',
+                        502,
+                        1,
+                        1000,
+                        1000);
+
+                    INSERT INTO modbus_tags (
+                        tag_id,
+                        device_id,
+                        name,
+                        address,
+                        writable)
+                    VALUES (
+                        'plc01.hr0',
+                        'plc01',
+                        'HR 0',
+                        0,
+                        0);
+
+                    PRAGMA user_version = 1;
+                    """;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var store =
+                new SqliteConfigurationStore(
+                    databasePath);
+
+            await store.InitializeAsync();
+
+            var modbus =
+                await store.LoadAsync();
+            var snmp =
+                await store.LoadSnmpAsync();
+
+            Assert.AreEqual(1, modbus.Count);
+            Assert.AreEqual(
+                "plc01.hr0",
+                modbus[0].Tags[0].TagId);
+            Assert.AreEqual(0, snmp.Count);
+
+            await using var verify =
+                new SqliteConnection(
+                    connectionString);
+
+            await verify.OpenAsync();
+
+            await using var versionCommand =
+                verify.CreateCommand();
+
+            versionCommand.CommandText =
+                "PRAGMA user_version;";
+
+            var version =
+                Convert.ToInt32(
+                    await versionCommand.ExecuteScalarAsync());
+
+            Assert.AreEqual(2, version);
+        }
+        finally
+        {
+            if (Directory.Exists(
+                    directory))
+            {
+                Directory.Delete(
+                    directory,
+                    recursive: true);
+            }
+        }
     }
 }

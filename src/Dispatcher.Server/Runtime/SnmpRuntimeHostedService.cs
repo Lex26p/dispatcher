@@ -1,23 +1,23 @@
-using Dispatcher.Modbus;
-using Dispatcher.Modbus.Configuration;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Snmp;
+using Dispatcher.Snmp.Configuration;
 
 namespace Dispatcher.Server.Runtime;
 
-public sealed class ModbusRuntimeHostedService : IHostedService
+public sealed class SnmpRuntimeHostedService : IHostedService
 {
     private readonly ConfigurationCatalog _configuration;
-    private readonly ModbusPollingService _pollingService;
+    private readonly SnmpPollingService _pollingService;
     private readonly IHostApplicationLifetime _applicationLifetime;
-    private readonly ILogger<ModbusRuntimeHostedService> _logger;
+    private readonly ILogger<SnmpRuntimeHostedService> _logger;
     private readonly SemaphoreSlim _stateLock = new(1, 1);
     private readonly List<RunningPollingLoop> _running = [];
 
-    public ModbusRuntimeHostedService(
+    public SnmpRuntimeHostedService(
         ConfigurationCatalog configuration,
-        ModbusPollingService pollingService,
+        SnmpPollingService pollingService,
         IHostApplicationLifetime applicationLifetime,
-        ILogger<ModbusRuntimeHostedService> logger)
+        ILogger<SnmpRuntimeHostedService> logger)
     {
         _configuration = configuration;
         _pollingService = pollingService;
@@ -29,7 +29,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
         CancellationToken cancellationToken)
     {
         return StartPollingAsync(
-            _configuration.ModbusDevices,
+            _configuration.SnmpDevices,
             cancellationToken);
     }
 
@@ -41,7 +41,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
     }
 
     public async Task StartPollingAsync(
-        IReadOnlyCollection<ModbusDeviceConfiguration> devices,
+        IReadOnlyCollection<SnmpDeviceConfiguration> devices,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(devices);
@@ -49,9 +49,9 @@ public sealed class ModbusRuntimeHostedService : IHostedService
         var plans =
             devices
                 .Select(
-                    ModbusConfigurationMapper.CreatePollingPlan)
+                    SnmpConfigurationMapper.CreatePollingPlan)
                 .Where(plan => plan is not null)
-                .Cast<ModbusPollingPlan>()
+                .Cast<SnmpPollingPlan>()
                 .ToArray();
 
         await _stateLock.WaitAsync(
@@ -62,7 +62,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
             if (_running.Count != 0)
             {
                 throw new InvalidOperationException(
-                    "Modbus polling is already running.");
+                    "SNMP polling is already running.");
             }
 
             foreach (var plan in plans)
@@ -74,7 +74,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
             if (plans.Length == 0)
             {
                 _logger.LogInformation(
-                    "No enabled Modbus devices with polling tags are configured.");
+                    "No enabled SNMP devices with polling OIDs are configured.");
             }
         }
         finally
@@ -100,7 +100,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
     }
 
     private void StartPollingLocked(
-        ModbusPollingPlan plan)
+        SnmpPollingPlan plan)
     {
         var cancellation =
             CancellationTokenSource.CreateLinkedTokenSource(
@@ -117,17 +117,16 @@ public sealed class ModbusRuntimeHostedService : IHostedService
                 task));
 
         _logger.LogInformation(
-            "Started Modbus polling for {DeviceId} at {Host}:{Port}, UnitId {UnitId}, {PointCount} point(s), interval {PollIntervalMs} ms.",
+            "Started SNMP v2c polling for {DeviceId} at {Host}:{Port}, {PointCount} OID(s), interval {PollIntervalMs} ms.",
             plan.Device.DeviceId,
             plan.Device.Host,
             plan.Device.Port,
-            plan.Device.UnitId,
             plan.Points.Count,
             plan.PollInterval.TotalMilliseconds);
     }
 
     private async Task RunPollingAsync(
-        ModbusPollingPlan plan,
+        SnmpPollingPlan plan,
         CancellationToken cancellationToken)
     {
         try
@@ -144,7 +143,7 @@ public sealed class ModbusRuntimeHostedService : IHostedService
         {
             _logger.LogError(
                 exception,
-                "Modbus polling loop for {DeviceId} terminated unexpectedly.",
+                "SNMP polling loop for {DeviceId} terminated unexpectedly.",
                 plan.Device.DeviceId);
         }
     }
