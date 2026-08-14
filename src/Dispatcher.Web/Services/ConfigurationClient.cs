@@ -121,6 +121,113 @@ public sealed class ConfigurationClient
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<SnmpDeviceConfigurationDto>> GetSnmpDevicesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<
+            SnmpDeviceConfigurationDto[]>(
+                "/api/configuration/snmp/devices",
+                cancellationToken)
+            ?? [];
+    }
+
+    public async Task<SnmpDeviceConfigurationDto> CreateSnmpDeviceAsync(
+        SnmpDeviceUpsertRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.PostAsJsonAsync(
+                "/api/configuration/snmp/devices",
+                request,
+                cancellationToken);
+
+        return await ReadRequiredAsync<
+            SnmpDeviceConfigurationDto>(
+                response,
+                cancellationToken);
+    }
+
+    public async Task<SnmpDeviceConfigurationDto> UpdateSnmpDeviceAsync(
+        string deviceId,
+        SnmpDeviceUpsertRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.PutAsJsonAsync(
+                $"/api/configuration/snmp/devices/{Escape(deviceId)}",
+                request,
+                cancellationToken);
+
+        return await ReadRequiredAsync<
+            SnmpDeviceConfigurationDto>(
+                response,
+                cancellationToken);
+    }
+
+    public async Task DeleteSnmpDeviceAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.DeleteAsync(
+                $"/api/configuration/snmp/devices/{Escape(deviceId)}",
+                cancellationToken);
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+    }
+
+    public async Task<SnmpTagConfigurationDto> CreateSnmpTagAsync(
+        string deviceId,
+        SnmpTagUpsertRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.PostAsJsonAsync(
+                $"/api/configuration/snmp/devices/{Escape(deviceId)}/tags",
+                request,
+                cancellationToken);
+
+        return await ReadRequiredAsync<
+            SnmpTagConfigurationDto>(
+                response,
+                cancellationToken);
+    }
+
+    public async Task<SnmpTagConfigurationDto> UpdateSnmpTagAsync(
+        string deviceId,
+        string tagId,
+        SnmpTagUpsertRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.PutAsJsonAsync(
+                $"/api/configuration/snmp/devices/{Escape(deviceId)}/tags/{Escape(tagId)}",
+                request,
+                cancellationToken);
+
+        return await ReadRequiredAsync<
+            SnmpTagConfigurationDto>(
+                response,
+                cancellationToken);
+    }
+
+    public async Task DeleteSnmpTagAsync(
+        string deviceId,
+        string tagId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.DeleteAsync(
+                $"/api/configuration/snmp/devices/{Escape(deviceId)}/tags/{Escape(tagId)}",
+                cancellationToken);
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+    }
+
     private static string Escape(
         string value)
     {

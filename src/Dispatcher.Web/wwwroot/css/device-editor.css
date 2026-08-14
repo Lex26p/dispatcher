@@ -96,6 +96,14 @@
     gap: 1px;
 }
 
+.editor-tree-name-row,
+.editor-work-title-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .editor-tree-name,
 .editor-tree-id {
     overflow: hidden;
@@ -104,6 +112,7 @@
 }
 
 .editor-tree-name {
+    min-width: 0;
     font-size: 12px;
     font-weight: 600;
 }
@@ -124,6 +133,37 @@
     color: #a5adb7;
     font-family: monospace;
     font-size: 11px;
+}
+
+.config-enabled-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    justify-self: center;
+}
+
+.config-enabled-dot.enabled {
+    background: #2f8f46;
+}
+
+.config-enabled-dot.disabled {
+    background: #9aa3ad;
+}
+
+.protocol-badge {
+    flex: 0 0 auto;
+    padding: 1px 4px;
+    border: 1px solid #c8ced7;
+    border-radius: 3px;
+    background: #f4f6f8;
+    color: #56616e;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.protocol-badge.strong {
+    font-size: 10px;
 }
 
 .editor-workspace {
@@ -301,23 +341,23 @@
 }
 
 .editor-data-table th:nth-child(1) {
-    width: 30%;
+    width: 27%;
 }
 
 .editor-data-table th:nth-child(2) {
-    width: 28%;
+    width: 23%;
 }
 
 .editor-data-table th:nth-child(3) {
-    width: 17%;
+    width: 15%;
 }
 
 .editor-data-table th:nth-child(4) {
-    width: 13%;
+    width: 25%;
 }
 
 .editor-data-table th:nth-child(5) {
-    width: 12%;
+    width: 10%;
 }
 
 .editor-data-table tbody tr {
@@ -334,6 +374,11 @@
 
 .numeric-cell {
     font-variant-numeric: tabular-nums;
+}
+
+.address-cell,
+.monospace-input {
+    font-family: "Cascadia Code", "Consolas", monospace;
 }
 
 .property-form {
@@ -356,7 +401,8 @@
     font-weight: 650;
 }
 
-.property-field input {
+.property-field input,
+.property-field select {
     width: 100%;
     height: 28px;
     min-width: 0;
@@ -367,14 +413,23 @@
     color: var(--text);
 }
 
-.property-field input:focus {
+.property-field input:focus,
+.property-field select:focus {
     outline: 1px solid var(--accent);
     border-color: var(--accent);
 }
 
-.property-field input:disabled {
+.property-field input:disabled,
+.property-field select:disabled {
     background: #eceff3;
     color: var(--text-muted);
+}
+
+.property-inline-note {
+    margin: -3px 0 9px;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.35;
 }
 
 .property-grid-two {

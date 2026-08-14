@@ -385,3 +385,59 @@ TagService
 ```
 
 Таким образом Server/Web/mimics не зависят от SNMP library types.
+
+---
+
+## D-034 — Modbus и SNMP configuration mutations сериализуются одним lock
+
+**Status:** Accepted
+
+После появления второго protocol editor Modbus и SNMP mutations выполняет один singleton `ConfigurationEditorService` с одним `SemaphoreSlim`.
+
+Причина:
+
+- оба протокола разделяют `ConfigurationCatalog`;
+- `DeviceId` и `TagId` имеют cross-protocol uniqueness;
+- после каждой mutation перезапускается общий protocol runtime;
+- независимые locks позволили бы двум параллельным mutation работать от разных snapshots и применять runtime в недетерминированном порядке.
+
+Storage остаётся protocol-specific:
+
+```text
+ReplaceAsync(modbus)
+ReplaceSnmpAsync(snmp)
+```
+
+но sequencing configuration changes является общим.
+
+---
+
+## D-035 — Protocol существующего устройства не конвертируется field update-ом
+
+**Status:** Accepted
+
+В Device Editor protocol выбирается при создании:
+
+```text
+Modbus TCP
+SNMP v2c
+```
+
+Для persisted устройства protocol selector read-only.
+
+Причина: Modbus и SNMP имеют разные protocol-specific свойства и tag schemas. Изменение одного enum-поля не определяет, как преобразовать:
+
+```text
+UnitId / Address / Writable
+        ↕
+Community / OID
+```
+
+Текущий явный workflow смены протокола:
+
+```text
+delete device
+create device with another protocol
+```
+
+Если в будущем потребуется migration/conversion wizard, это будет отдельная операция, а не обычный update.

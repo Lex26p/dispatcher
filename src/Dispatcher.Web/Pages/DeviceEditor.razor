@@ -29,11 +29,15 @@
                     <button type="button"
                             class="editor-tree-device @DeviceSelectionClass(device)"
                             @onclick="() => SelectDeviceAsync(device)">
-                        <span class="status-dot @(device.Enabled ? "online" : "unknown")"
+                        <span class="config-enabled-dot @(device.Enabled ? "enabled" : "disabled")"
+                              title="@(device.Enabled ? "Enabled" : "Disabled")"
                               aria-hidden="true"></span>
 
                         <span class="editor-tree-main">
-                            <span class="editor-tree-name">@device.Name</span>
+                            <span class="editor-tree-name-row">
+                                <span class="editor-tree-name">@device.Name</span>
+                                <span class="protocol-badge">@device.ProtocolShortLabel</span>
+                            </span>
                             <span class="editor-tree-id">@device.DeviceId</span>
                         </span>
 
@@ -125,7 +129,7 @@
                         Выберите устройство
                     </div>
                     <div class="editor-empty-text">
-                        Или создайте новое устройство через toolbar.
+                        Или создайте новое Modbus TCP / SNMP v2c устройство через toolbar.
                     </div>
                 </div>
             }
@@ -137,7 +141,7 @@
                         Новое устройство
                     </div>
                     <div class="editor-empty-text">
-                        Заполните свойства справа и сохраните устройство.
+                        Выберите протокол и заполните свойства справа.
                         После сохранения можно добавить теги.
                     </div>
                 </div>
@@ -146,13 +150,16 @@
             {
                 <div class="editor-device-summary">
                     <div>
-                        <div class="editor-work-title">
-                            @SelectedDevice.Name
+                        <div class="editor-work-title-row">
+                            <div class="editor-work-title">
+                                @SelectedDevice.Name
+                            </div>
+                            <span class="protocol-badge strong">
+                                @SelectedDevice.ProtocolLabel
+                            </span>
                         </div>
                         <div class="editor-work-subtitle">
-                            @SelectedDevice.DeviceId ·
-                            @SelectedDevice.Host:@SelectedDevice.Port ·
-                            Unit @SelectedDevice.UnitId
+                            @SelectedDevice.DeviceId · @DeviceConnectionSummary(SelectedDevice)
                         </div>
                     </div>
 
@@ -168,7 +175,7 @@
                                 <th>Tag ID</th>
                                 <th>Имя</th>
                                 <th>Тип</th>
-                                <th>Address</th>
+                                <th>Address / OID</th>
                                 <th>Write</th>
                             </tr>
                         </thead>
@@ -190,8 +197,11 @@
                                         @onclick="() => SelectTagAsync(SelectedDevice, tag)">
                                         <td class="tag-id">@tag.TagId</td>
                                         <td>@tag.Name</td>
-                                        <td>HR UInt16</td>
-                                        <td class="numeric-cell">@tag.Address</td>
+                                        <td>@tag.TypeLabel</td>
+                                        <td class="address-cell"
+                                            title="@tag.AddressLabel">
+                                            @tag.AddressLabel
+                                        </td>
                                         <td>
                                             @(tag.Writable ? "Да" : "Нет")
                                         </td>
@@ -220,6 +230,23 @@
         {
             <div class="property-form">
                 <label class="property-field">
+                    <span>Protocol</span>
+                    <select @bind="_deviceDraft.Protocol"
+                            @bind:after="OnProtocolChanged"
+                            disabled="@(!_isNewDevice)">
+                        <option value="ModbusTcp">Modbus TCP</option>
+                        <option value="SnmpV2c">SNMP v2c</option>
+                    </select>
+                </label>
+
+                @if (!_isNewDevice)
+                {
+                    <div class="property-inline-note">
+                        Протокол существующего устройства не меняется.
+                    </div>
+                }
+
+                <label class="property-field">
                     <span>Device ID</span>
                     <input type="text"
                            @bind="_deviceDraft.DeviceId"
@@ -242,7 +269,9 @@
                     <span>Устройство включено</span>
                 </label>
 
-                <div class="property-section-title">Modbus TCP</div>
+                <div class="property-section-title">
+                    @ProtocolSectionTitle(_deviceDraft.Protocol)
+                </div>
 
                 <label class="property-field">
                     <span>Host</span>
@@ -252,9 +281,32 @@
                            @bind:after="MarkDirty" />
                 </label>
 
-                <div class="property-grid-two">
+                @if (_deviceDraft.Protocol == DeviceProtocol.ModbusTcp)
+                {
+                    <div class="property-grid-two">
+                        <label class="property-field">
+                            <span>Port</span>
+                            <input type="number"
+                                   min="1"
+                                   max="65535"
+                                   @bind="_deviceDraft.Port"
+                                   @bind:after="MarkDirty" />
+                        </label>
+
+                        <label class="property-field">
+                            <span>Unit ID</span>
+                            <input type="number"
+                                   min="0"
+                                   max="255"
+                                   @bind="_deviceDraft.UnitId"
+                                   @bind:after="MarkDirty" />
+                        </label>
+                    </div>
+                }
+                else
+                {
                     <label class="property-field">
-                        <span>Port</span>
+                        <span>UDP Port</span>
                         <input type="number"
                                min="1"
                                max="65535"
@@ -263,14 +315,14 @@
                     </label>
 
                     <label class="property-field">
-                        <span>Unit ID</span>
-                        <input type="number"
-                               min="0"
-                               max="255"
-                               @bind="_deviceDraft.UnitId"
+                        <span>Community</span>
+                        <input type="text"
+                               autocomplete="off"
+                               @bind="_deviceDraft.Community"
+                               @bind:event="oninput"
                                @bind:after="MarkDirty" />
                     </label>
-                </div>
+                }
 
                 <div class="property-section-title">Polling</div>
 
@@ -310,45 +362,75 @@
                            @bind:after="MarkDirty" />
                 </label>
 
-                <div class="property-section-title">Modbus</div>
+                @if (_tagDraft.Protocol == DeviceProtocol.ModbusTcp)
+                {
+                    <div class="property-section-title">Modbus TCP</div>
 
-                <label class="property-field">
-                    <span>Area / type</span>
-                    <input type="text"
-                           value="Holding Register / UInt16"
-                           disabled />
-                </label>
+                    <label class="property-field">
+                        <span>Area / type</span>
+                        <input type="text"
+                               value="Holding Register / UInt16"
+                               disabled />
+                    </label>
 
-                <label class="property-field">
-                    <span>Raw address</span>
-                    <input type="number"
-                           min="0"
-                           max="65535"
-                           @bind="_tagDraft.Address"
-                           @bind:after="MarkDirty" />
-                </label>
+                    <label class="property-field">
+                        <span>Raw address</span>
+                        <input type="number"
+                               min="0"
+                               max="65535"
+                               @bind="_tagDraft.Address"
+                               @bind:after="MarkDirty" />
+                    </label>
 
-                <label class="property-checkbox">
-                    <input type="checkbox"
-                           @bind="_tagDraft.Writable"
-                           @bind:after="MarkDirty" />
-                    <span>Разрешить запись FC06</span>
-                </label>
+                    <label class="property-checkbox">
+                        <input type="checkbox"
+                               @bind="_tagDraft.Writable"
+                               @bind:after="MarkDirty" />
+                        <span>Разрешить запись FC06</span>
+                    </label>
 
-                <div class="property-help">
-                    Address — raw 0-based protocol address,
-                    передаваемый в Modbus-запрос.
-                </div>
+                    <div class="property-help">
+                        Address — raw 0-based protocol address,
+                        передаваемый в Modbus-запрос.
+                    </div>
+                }
+                else
+                {
+                    <div class="property-section-title">SNMP v2c GET</div>
+
+                    <label class="property-field">
+                        <span>OID</span>
+                        <input type="text"
+                               class="monospace-input"
+                               placeholder="1.3.6.1.2.1.1.5.0"
+                               @bind="_tagDraft.Oid"
+                               @bind:event="oninput"
+                               @bind:after="MarkDirty" />
+                    </label>
+
+                    <label class="property-field">
+                        <span>Runtime value</span>
+                        <input type="text"
+                               value="SMI value → CLR value"
+                               disabled />
+                    </label>
+
+                    <div class="property-help">
+                        SNMP-теги S10 являются read-only и опрашиваются через GET.
+                        OID задаётся в числовой dotted-форме.
+                    </div>
+                }
             </div>
         }
     </aside>
 </div>
 
 @code {
-    private IReadOnlyList<ModbusDeviceConfigurationDto> _devices =
-        Array.Empty<ModbusDeviceConfigurationDto>();
+    private IReadOnlyList<DeviceItem> _devices =
+        Array.Empty<DeviceItem>();
 
     private SelectionKind _selectionKind;
+    private DeviceProtocol? _selectedProtocol;
     private string? _selectedDeviceId;
     private string? _selectedTagId;
 
@@ -362,11 +444,13 @@
     private bool _busy;
     private string? _error;
 
-    private ModbusDeviceConfigurationDto? SelectedDevice =>
-        _selectedDeviceId is null
+    private DeviceItem? SelectedDevice =>
+        _selectedProtocol is null
+        || _selectedDeviceId is null
             ? null
             : _devices.FirstOrDefault(device =>
-                string.Equals(
+                device.Protocol == _selectedProtocol.Value
+                && string.Equals(
                     device.DeviceId,
                     _selectedDeviceId,
                     StringComparison.Ordinal));
@@ -413,53 +497,55 @@
         }
 
         _selectionKind = SelectionKind.Device;
+        _selectedProtocol = null;
         _selectedDeviceId = null;
         _selectedTagId = null;
         _isNewDevice = true;
         _isNewTag = false;
-        _deviceDraft = new DeviceDraft
-        {
-            Host = "127.0.0.1",
-            Port = 502,
-            UnitId = 1,
-            PollIntervalMilliseconds = 1000,
-            RequestTimeoutMilliseconds = 1000
-        };
+        _deviceDraft = DeviceDraft.CreateDefault(
+            DeviceProtocol.ModbusTcp);
         _dirty = true;
         _error = null;
     }
 
     private async Task CreateTagAsync()
     {
-        if (SelectedDevice is null
+        var device = SelectedDevice;
+
+        if (device is null
             || !await ConfirmDiscardAsync())
         {
             return;
         }
 
         _selectionKind = SelectionKind.Tag;
+        _selectedProtocol = device.Protocol;
         _selectedTagId = null;
         _isNewDevice = false;
         _isNewTag = true;
-        _tagDraft = new TagDraft();
+        _tagDraft = new TagDraft
+        {
+            Protocol = device.Protocol
+        };
         _dirty = true;
         _error = null;
     }
 
     private async Task SelectDeviceAsync(
-        ModbusDeviceConfigurationDto device)
+        DeviceItem device)
     {
         if (!await ConfirmDiscardAsync())
         {
             return;
         }
 
-        ApplyDeviceSelection(device);
+        ApplyDeviceSelection(
+            device);
     }
 
     private async Task SelectTagAsync(
-        ModbusDeviceConfigurationDto device,
-        ModbusTagConfigurationDto tag)
+        DeviceItem device,
+        TagItem tag)
     {
         if (!await ConfirmDiscardAsync())
         {
@@ -472,28 +558,32 @@
     }
 
     private void ApplyDeviceSelection(
-        ModbusDeviceConfigurationDto device)
+        DeviceItem device)
     {
         _selectionKind = SelectionKind.Device;
+        _selectedProtocol = device.Protocol;
         _selectedDeviceId = device.DeviceId;
         _selectedTagId = null;
         _isNewDevice = false;
         _isNewTag = false;
-        _deviceDraft = DeviceDraft.From(device);
+        _deviceDraft = DeviceDraft.From(
+            device);
         _dirty = false;
         _error = null;
     }
 
     private void ApplyTagSelection(
-        ModbusDeviceConfigurationDto device,
-        ModbusTagConfigurationDto tag)
+        DeviceItem device,
+        TagItem tag)
     {
         _selectionKind = SelectionKind.Tag;
+        _selectedProtocol = device.Protocol;
         _selectedDeviceId = device.DeviceId;
         _selectedTagId = tag.TagId;
         _isNewDevice = false;
         _isNewTag = false;
-        _tagDraft = TagDraft.From(tag);
+        _tagDraft = TagDraft.From(
+            tag);
         _dirty = false;
         _error = null;
     }
@@ -531,80 +621,161 @@
 
     private async Task SaveDeviceAsync()
     {
-        var request =
-            new ModbusDeviceUpsertRequest(
+        if (_deviceDraft.Protocol == DeviceProtocol.ModbusTcp)
+        {
+            var request =
+                new ModbusDeviceUpsertRequest(
+                    _deviceDraft.DeviceId,
+                    _deviceDraft.Name,
+                    _deviceDraft.Enabled,
+                    _deviceDraft.Host,
+                    _deviceDraft.Port,
+                    _deviceDraft.UnitId,
+                    _deviceDraft.PollIntervalMilliseconds,
+                    _deviceDraft.RequestTimeoutMilliseconds);
+
+            ModbusDeviceConfigurationDto saved;
+
+            if (_isNewDevice)
+            {
+                saved =
+                    await Configuration.CreateDeviceAsync(
+                        request);
+            }
+            else
+            {
+                saved =
+                    await Configuration.UpdateDeviceAsync(
+                        _selectedDeviceId!,
+                        request);
+            }
+
+            _dirty = false;
+            _isNewDevice = false;
+
+            await ReloadAsync(
+                DeviceProtocol.ModbusTcp,
+                saved.DeviceId,
+                tagId: null);
+
+            return;
+        }
+
+        var snmpRequest =
+            new SnmpDeviceUpsertRequest(
                 _deviceDraft.DeviceId,
                 _deviceDraft.Name,
                 _deviceDraft.Enabled,
                 _deviceDraft.Host,
                 _deviceDraft.Port,
-                _deviceDraft.UnitId,
+                _deviceDraft.Community,
                 _deviceDraft.PollIntervalMilliseconds,
                 _deviceDraft.RequestTimeoutMilliseconds);
 
-        ModbusDeviceConfigurationDto saved;
+        SnmpDeviceConfigurationDto savedSnmp;
 
         if (_isNewDevice)
         {
-            saved =
-                await Configuration.CreateDeviceAsync(
-                    request);
+            savedSnmp =
+                await Configuration.CreateSnmpDeviceAsync(
+                    snmpRequest);
         }
         else
         {
-            saved =
-                await Configuration.UpdateDeviceAsync(
+            savedSnmp =
+                await Configuration.UpdateSnmpDeviceAsync(
                     _selectedDeviceId!,
-                    request);
+                    snmpRequest);
         }
 
         _dirty = false;
         _isNewDevice = false;
 
         await ReloadAsync(
-            saved.DeviceId,
+            DeviceProtocol.SnmpV2c,
+            savedSnmp.DeviceId,
             tagId: null);
     }
 
     private async Task SaveTagAsync()
     {
-        if (SelectedDevice is null)
+        var device = SelectedDevice;
+
+        if (device is null)
         {
             throw new InvalidOperationException(
                 "Сначала выберите сохранённое устройство.");
         }
 
-        var request =
-            new ModbusTagUpsertRequest(
+        if (device.Protocol == DeviceProtocol.ModbusTcp)
+        {
+            var request =
+                new ModbusTagUpsertRequest(
+                    _tagDraft.TagId,
+                    _tagDraft.Name,
+                    _tagDraft.Address,
+                    _tagDraft.Writable);
+
+            ModbusTagConfigurationDto saved;
+
+            if (_isNewTag)
+            {
+                saved =
+                    await Configuration.CreateTagAsync(
+                        device.DeviceId,
+                        request);
+            }
+            else
+            {
+                saved =
+                    await Configuration.UpdateTagAsync(
+                        device.DeviceId,
+                        _selectedTagId!,
+                        request);
+            }
+
+            _dirty = false;
+            _isNewTag = false;
+
+            await ReloadAsync(
+                device.Protocol,
+                device.DeviceId,
+                saved.TagId);
+
+            return;
+        }
+
+        var snmpRequest =
+            new SnmpTagUpsertRequest(
                 _tagDraft.TagId,
                 _tagDraft.Name,
-                _tagDraft.Address,
-                _tagDraft.Writable);
+                _tagDraft.Oid);
 
-        ModbusTagConfigurationDto saved;
+        SnmpTagConfigurationDto savedSnmp;
 
         if (_isNewTag)
         {
-            saved =
-                await Configuration.CreateTagAsync(
-                    SelectedDevice.DeviceId,
-                    request);
+            savedSnmp =
+                await Configuration.CreateSnmpTagAsync(
+                    device.DeviceId,
+                    snmpRequest);
         }
         else
         {
-            saved =
-                await Configuration.UpdateTagAsync(
-                    SelectedDevice.DeviceId,
+            savedSnmp =
+                await Configuration.UpdateSnmpTagAsync(
+                    device.DeviceId,
                     _selectedTagId!,
-                    request);
+                    snmpRequest);
         }
 
         _dirty = false;
         _isNewTag = false;
 
         await ReloadAsync(
-            SelectedDevice.DeviceId,
-            saved.TagId);
+            device.Protocol,
+            device.DeviceId,
+            savedSnmp.TagId);
     }
 
     private async Task DeleteAsync()
@@ -615,7 +786,8 @@
             return;
         }
 
-        if (_selectionKind == SelectionKind.None)
+        if (_selectionKind == SelectionKind.None
+            || _selectedProtocol is null)
         {
             return;
         }
@@ -642,12 +814,26 @@
         {
             if (_selectionKind == SelectionKind.Device)
             {
-                await Configuration.DeleteDeviceAsync(
-                    _selectedDeviceId!);
+                if (_selectedProtocol == DeviceProtocol.ModbusTcp)
+                {
+                    await Configuration.DeleteDeviceAsync(
+                        _selectedDeviceId!);
+                }
+                else
+                {
+                    await Configuration.DeleteSnmpDeviceAsync(
+                        _selectedDeviceId!);
+                }
+            }
+            else if (_selectedProtocol == DeviceProtocol.ModbusTcp)
+            {
+                await Configuration.DeleteTagAsync(
+                    _selectedDeviceId!,
+                    _selectedTagId!);
             }
             else
             {
-                await Configuration.DeleteTagAsync(
+                await Configuration.DeleteSnmpTagAsync(
                     _selectedDeviceId!,
                     _selectedTagId!);
             }
@@ -673,11 +859,13 @@
         }
 
         await ReloadAsync(
+            _selectedProtocol,
             _selectedDeviceId,
             _selectedTagId);
     }
 
     private async Task ReloadAsync(
+        DeviceProtocol? protocol = null,
         string? deviceId = null,
         string? tagId = null)
     {
@@ -686,10 +874,26 @@
 
         try
         {
-            _devices =
+            var modbusDevices =
                 await Configuration.GetDevicesAsync();
 
-            if (deviceId is null)
+            var snmpDevices =
+                await Configuration.GetSnmpDevicesAsync();
+
+            _devices =
+                modbusDevices
+                    .Select(device =>
+                        DeviceItem.From(device))
+                    .Concat(
+                        snmpDevices.Select(device =>
+                            DeviceItem.From(device)))
+                    .OrderBy(
+                        device => device.DeviceId,
+                        StringComparer.Ordinal)
+                    .ToArray();
+
+            if (protocol is null
+                || deviceId is null)
             {
                 if (_selectionKind != SelectionKind.None)
                 {
@@ -701,7 +905,8 @@
 
             var device =
                 _devices.FirstOrDefault(candidate =>
-                    string.Equals(
+                    candidate.Protocol == protocol.Value
+                    && string.Equals(
                         candidate.DeviceId,
                         deviceId,
                         StringComparison.Ordinal));
@@ -714,7 +919,8 @@
 
             if (tagId is null)
             {
-                ApplyDeviceSelection(device);
+                ApplyDeviceSelection(
+                    device);
                 return;
             }
 
@@ -727,7 +933,8 @@
 
             if (tag is null)
             {
-                ApplyDeviceSelection(device);
+                ApplyDeviceSelection(
+                    device);
                 return;
             }
 
@@ -761,6 +968,7 @@
     private void ClearSelection()
     {
         _selectionKind = SelectionKind.None;
+        _selectedProtocol = null;
         _selectedDeviceId = null;
         _selectedTagId = null;
         _isNewDevice = false;
@@ -788,11 +996,47 @@
         _error = null;
     }
 
+    private void OnProtocolChanged()
+    {
+        if (_isNewDevice)
+        {
+            if (_deviceDraft.Protocol == DeviceProtocol.ModbusTcp)
+            {
+                _deviceDraft.Port = 502;
+                _deviceDraft.UnitId = 1;
+            }
+            else
+            {
+                _deviceDraft.Port = 161;
+                _deviceDraft.Community = "public";
+            }
+        }
+
+        MarkDirty();
+    }
+
+    private static string ProtocolSectionTitle(
+        DeviceProtocol protocol)
+    {
+        return protocol == DeviceProtocol.ModbusTcp
+            ? "Modbus TCP"
+            : "SNMP v2c";
+    }
+
+    private static string DeviceConnectionSummary(
+        DeviceItem device)
+    {
+        return device.Protocol == DeviceProtocol.ModbusTcp
+            ? $"{device.Host}:{device.Port} · Unit {device.Modbus!.UnitId}"
+            : $"{device.Host}:{device.Port} · SNMP v2c";
+    }
+
     private string DeviceSelectionClass(
-        ModbusDeviceConfigurationDto device)
+        DeviceItem device)
     {
         return _selectionKind == SelectionKind.Device
                && !_isNewDevice
+               && _selectedProtocol == device.Protocol
                && string.Equals(
                    device.DeviceId,
                    _selectedDeviceId,
@@ -802,10 +1046,11 @@
     }
 
     private string TagSelectionClass(
-        ModbusDeviceConfigurationDto device,
-        ModbusTagConfigurationDto tag)
+        DeviceItem device,
+        TagItem tag)
     {
         return _selectionKind == SelectionKind.Tag
+               && _selectedProtocol == device.Protocol
                && string.Equals(
                    device.DeviceId,
                    _selectedDeviceId,
@@ -819,7 +1064,7 @@
     }
 
     private string TagRowClass(
-        ModbusTagConfigurationDto tag)
+        TagItem tag)
     {
         return _selectionKind == SelectionKind.Tag
                && string.Equals(
@@ -837,53 +1082,225 @@
         Tag
     }
 
+    private enum DeviceProtocol
+    {
+        ModbusTcp,
+        SnmpV2c
+    }
+
     private sealed class DeviceDraft
     {
+        public DeviceProtocol Protocol { get; set; } =
+            DeviceProtocol.ModbusTcp;
         public string DeviceId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; }
         public string Host { get; set; } = string.Empty;
         public int Port { get; set; } = 502;
         public int UnitId { get; set; } = 1;
+        public string Community { get; set; } = "public";
         public int PollIntervalMilliseconds { get; set; } = 1000;
         public int RequestTimeoutMilliseconds { get; set; } = 1000;
 
-        public static DeviceDraft From(
-            ModbusDeviceConfigurationDto device)
+        public static DeviceDraft CreateDefault(
+            DeviceProtocol protocol)
         {
             return new DeviceDraft
             {
-                DeviceId = device.DeviceId,
-                Name = device.Name,
-                Enabled = device.Enabled,
-                Host = device.Host,
-                Port = device.Port,
-                UnitId = device.UnitId,
+                Protocol = protocol,
+                Host = "127.0.0.1",
+                Port = protocol == DeviceProtocol.ModbusTcp
+                    ? 502
+                    : 161,
+                UnitId = 1,
+                Community = "public",
+                PollIntervalMilliseconds = 1000,
+                RequestTimeoutMilliseconds = 1000
+            };
+        }
+
+        public static DeviceDraft From(
+            DeviceItem device)
+        {
+            if (device.Protocol == DeviceProtocol.ModbusTcp)
+            {
+                var source =
+                    device.Modbus!;
+
+                return new DeviceDraft
+                {
+                    Protocol = DeviceProtocol.ModbusTcp,
+                    DeviceId = source.DeviceId,
+                    Name = source.Name,
+                    Enabled = source.Enabled,
+                    Host = source.Host,
+                    Port = source.Port,
+                    UnitId = source.UnitId,
+                    Community = "public",
+                    PollIntervalMilliseconds =
+                        source.PollIntervalMilliseconds,
+                    RequestTimeoutMilliseconds =
+                        source.RequestTimeoutMilliseconds
+                };
+            }
+
+            var snmp =
+                device.Snmp!;
+
+            return new DeviceDraft
+            {
+                Protocol = DeviceProtocol.SnmpV2c,
+                DeviceId = snmp.DeviceId,
+                Name = snmp.Name,
+                Enabled = snmp.Enabled,
+                Host = snmp.Host,
+                Port = snmp.Port,
+                UnitId = 1,
+                Community = snmp.Community,
                 PollIntervalMilliseconds =
-                    device.PollIntervalMilliseconds,
+                    snmp.PollIntervalMilliseconds,
                 RequestTimeoutMilliseconds =
-                    device.RequestTimeoutMilliseconds
+                    snmp.RequestTimeoutMilliseconds
             };
         }
     }
 
     private sealed class TagDraft
     {
+        public DeviceProtocol Protocol { get; set; } =
+            DeviceProtocol.ModbusTcp;
         public string TagId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public int Address { get; set; }
         public bool Writable { get; set; }
+        public string Oid { get; set; } = string.Empty;
 
         public static TagDraft From(
-            ModbusTagConfigurationDto tag)
+            TagItem tag)
         {
+            if (tag.Protocol == DeviceProtocol.ModbusTcp)
+            {
+                var source =
+                    tag.Modbus!;
+
+                return new TagDraft
+                {
+                    Protocol = DeviceProtocol.ModbusTcp,
+                    TagId = source.TagId,
+                    Name = source.Name,
+                    Address = source.Address,
+                    Writable = source.Writable
+                };
+            }
+
+            var snmp =
+                tag.Snmp!;
+
             return new TagDraft
             {
-                TagId = tag.TagId,
-                Name = tag.Name,
-                Address = tag.Address,
-                Writable = tag.Writable
+                Protocol = DeviceProtocol.SnmpV2c,
+                TagId = snmp.TagId,
+                Name = snmp.Name,
+                Oid = snmp.Oid,
+                Writable = false
             };
+        }
+    }
+
+    private sealed record DeviceItem(
+        DeviceProtocol Protocol,
+        string DeviceId,
+        string Name,
+        bool Enabled,
+        string Host,
+        int Port,
+        IReadOnlyList<TagItem> Tags,
+        ModbusDeviceConfigurationDto? Modbus,
+        SnmpDeviceConfigurationDto? Snmp)
+    {
+        public string ProtocolLabel =>
+            Protocol == DeviceProtocol.ModbusTcp
+                ? "Modbus TCP"
+                : "SNMP v2c";
+
+        public string ProtocolShortLabel =>
+            Protocol == DeviceProtocol.ModbusTcp
+                ? "MODBUS"
+                : "SNMP";
+
+        public static DeviceItem From(
+            ModbusDeviceConfigurationDto device)
+        {
+            return new DeviceItem(
+                DeviceProtocol.ModbusTcp,
+                device.DeviceId,
+                device.Name,
+                device.Enabled,
+                device.Host,
+                device.Port,
+                device.Tags
+                    .Select(tag =>
+                        TagItem.From(tag))
+                    .ToArray(),
+                device,
+                Snmp: null);
+        }
+
+        public static DeviceItem From(
+            SnmpDeviceConfigurationDto device)
+        {
+            return new DeviceItem(
+                DeviceProtocol.SnmpV2c,
+                device.DeviceId,
+                device.Name,
+                device.Enabled,
+                device.Host,
+                device.Port,
+                device.Tags
+                    .Select(tag =>
+                        TagItem.From(tag))
+                    .ToArray(),
+                Modbus: null,
+                Snmp: device);
+        }
+    }
+
+    private sealed record TagItem(
+        DeviceProtocol Protocol,
+        string TagId,
+        string Name,
+        string TypeLabel,
+        string AddressLabel,
+        bool Writable,
+        ModbusTagConfigurationDto? Modbus,
+        SnmpTagConfigurationDto? Snmp)
+    {
+        public static TagItem From(
+            ModbusTagConfigurationDto tag)
+        {
+            return new TagItem(
+                DeviceProtocol.ModbusTcp,
+                tag.TagId,
+                tag.Name,
+                "HR UInt16",
+                tag.Address.ToString(),
+                tag.Writable,
+                tag,
+                Snmp: null);
+        }
+
+        public static TagItem From(
+            SnmpTagConfigurationDto tag)
+        {
+            return new TagItem(
+                DeviceProtocol.SnmpV2c,
+                tag.TagId,
+                tag.Name,
+                "SNMP value",
+                tag.Oid,
+                Writable: false,
+                Modbus: null,
+                Snmp: tag);
         }
     }
 }

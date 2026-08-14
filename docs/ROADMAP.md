@@ -30,39 +30,33 @@
 - [x] **S09A — Configuration CRUD API и live apply**
 - [x] **S09B — Blazor Device Editor**
 
-### Результат Phase 2
-
-Modbus-устройство и его точки можно полностью настроить через Web без ручного редактирования файлов.
-
 ## Phase 3 — SNMP
 
 - [x] **S10A — SNMP runtime и persistent configuration**
-  - новый `Dispatcher.Snmp`;
+  - `Dispatcher.Snmp`;
   - SNMP v2c GET;
   - polling OID;
-  - преобразование SNMP values в общие runtime values;
-  - Online/Offline через общий `DeviceStateService`;
-  - SQLite schema v2;
-  - миграция schema v1 → v2 без потери Modbus data;
-  - persistent `snmp_devices` / `snmp_tags`;
-  - `ConfigurationCatalog` содержит Modbus + SNMP;
-  - глобальная уникальность `DeviceId` / `TagId`;
-  - одновременный Modbus/SNMP runtime;
-  - общий `RuntimeConfigurationCoordinator`;
-  - protocol и hosted integration tests.
+  - общий `TagService` / `DeviceStateService`;
+  - SQLite schema v2 и migration;
+  - simultaneous Modbus/SNMP runtime;
+  - `RuntimeConfigurationCoordinator`.
 
-- [ ] **S10B — SNMP configuration API и Device Editor**
+- [x] **S10B — SNMP configuration API и Device Editor**
   - SNMP configuration DTO/contracts;
   - CRUD SNMP devices/tags;
-  - protocol selection в Device Editor;
-  - SNMP v2c properties;
+  - единый mutation lock для Modbus/SNMP configuration;
+  - protocol selection при создании device;
+  - SNMP v2c Host/Port/Community properties;
   - OID editor;
+  - explicit Save;
   - live apply через общий coordinator;
-  - одновременная ручная проверка Modbus + SNMP в Monitoring.
+  - единое дерево Modbus/SNMP devices;
+  - protocol badges;
+  - integration tests CRUD, validation, cross-protocol ID и live apply.
 
 ### Результат Phase 3
 
-Modbus и SNMP одновременно опрашиваются, настраиваются через общий Device Editor и публикуют данные через единую runtime-модель тегов.
+Modbus TCP и SNMP v2c одновременно опрашиваются, полностью настраиваются через общий Device Editor и публикуют данные через единую runtime-модель тегов.
 
 ## Phase 4 — Простая мнемосхема
 
