@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Phase 1 Modbus → Web, Phase 2 Device Editor, Phase 3 SNMP и Phase 4 простая мнемосхема завершены.
+Базовый цикл S00–S12 завершён. Roadmap v2 начат с Historian foundation.
 
 ## Рабочая цепочка
 
@@ -15,7 +15,7 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
                          Monitoring / Mimic runtime / Device Editor
 ```
 
-После S11 система умеет:
+Система умеет:
 
 1. Читать Modbus Holding Register `UInt16` через FC03.
 2. Записывать разрешённые Modbus Holding Register через FC06.
@@ -101,6 +101,93 @@ elements_json
 ```
 
 Elements сохраняются как internal configuration JSON. Это позволяет S12 добавить editor без смены runtime API.
+
+## Historian foundation
+
+V2-S01 добавляет отдельное operational storage:
+
+```text
+TagService.Changed
+      ↓ TryWrite
+bounded Channel<HistorySample>
+      ↓ background writer
+dispatcher-operational.db
+```
+
+Configuration database и operational database разделены:
+
+```text
+dispatcher.db
+    configuration
+
+dispatcher-operational.db
+    high-frequency operational records
+```
+
+Operational database имеет собственную schema version:
+
+```text
+1
+```
+
+Первая table:
+
+```text
+history_samples
+├── sample_id
+├── tag_id
+├── timestamp_utc_ticks
+├── value_type
+└── value_text
+```
+
+`HistoryValueType`:
+
+```text
+Null
+Boolean
+Int64
+UInt64
+Double
+Decimal
+String
+Json
+```
+
+Historian подписывается на protocol-neutral `TagService.Changed`, поэтому не знает Modbus address или SNMP OID.
+
+Callback protocol/runtime path не пишет SQLite. Он только пытается положить sample в bounded channel через `TryWrite`.
+
+Если buffer заполнен:
+
+- polling/runtime callback не блокируется;
+- новый sample отбрасывается;
+- `DroppedSampleCount` увеличивается;
+- потеря не скрывается и логируется.
+
+Background writer сохраняет samples batch-ами. При transient persistence error текущий batch не выбрасывается, а повторяется.
+
+На V2-S01 historian пишет все изменения TagService. Policies `OnChange/Periodic`, retention и cleanup появятся в V2-S02.
+
+Configuration:
+
+```json
+"OperationalDatabase": {
+  "Path": ""
+},
+"Historian": {
+  "BufferCapacity": 10000,
+  "BatchSize": 256
+}
+```
+
+Default operational database:
+
+```text
+%LOCALAPPDATA%\Dispatcher\dispatcher-operational.db
+```
+
+или `data/dispatcher-operational.db`, если LocalApplicationData недоступен.
 
 ## Mimic contracts
 
@@ -271,20 +358,24 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 S11 не создаёт скрытую sample-мнемосхему. До S12 определение можно создать через configuration API.
 
-## Следующий этап
+## Roadmap v2
 
-Базовый roadmap S00–S12 завершён.
-
-Phase 5 намеренно не детализирован заранее. Следующие приоритеты выбираются после эксплуатации текущего vertical slice; возможные направления:
+Подробное продолжение:
 
 ```text
-historian
-alarms/events
-users/roles
-дополнительные протоколы
-расширение mimic graphics
-templates/scripting
-redundancy/distributed execution
+docs/ROADMAP_V2.md
+```
+
+Текущий завершённый шаг:
+
+```text
+V2-S01 — Historian storage и ingestion foundation
+```
+
+Следующий шаг:
+
+```text
+V2-S02 — Historian policies и retention
 ```
 
 ## Документы

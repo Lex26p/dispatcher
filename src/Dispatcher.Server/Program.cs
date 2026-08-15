@@ -5,6 +5,7 @@ using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
 using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Historian;
 using Dispatcher.Server.Mimics;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
@@ -25,6 +26,27 @@ builder.Services.AddSingleton(
 
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
+
+builder.Services.AddSingleton(
+    services =>
+        new SqliteOperationalStore(
+            ResolveOperationalDatabasePath(
+                services.GetRequiredService<IConfiguration>(),
+                services.GetRequiredService<IHostEnvironment>())));
+
+builder.Services.AddSingleton<IHistorySampleStore>(
+    services =>
+        services.GetRequiredService<SqliteOperationalStore>());
+
+builder.Services.AddSingleton(
+    services =>
+        HistorianOptions.Create(
+            services.GetRequiredService<IConfiguration>()));
+
+builder.Services.AddSingleton<HistorianService>();
+builder.Services.AddHostedService<HistorianService>(
+    services =>
+        services.GetRequiredService<HistorianService>());
 
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
@@ -264,6 +286,44 @@ static string ResolveConfigurationDatabasePath(
         AppContext.BaseDirectory,
         "data",
         "dispatcher.db");
+}
+
+static string ResolveOperationalDatabasePath(
+    IConfiguration configuration,
+    IHostEnvironment environment)
+{
+    var configuredPath =
+        configuration[
+            "OperationalDatabase:Path"];
+
+    if (!string.IsNullOrWhiteSpace(
+            configuredPath))
+    {
+        return Path.IsPathRooted(
+                configuredPath)
+            ? configuredPath
+            : Path.Combine(
+                environment.ContentRootPath,
+                configuredPath);
+    }
+
+    var localApplicationData =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+
+    if (!string.IsNullOrWhiteSpace(
+            localApplicationData))
+    {
+        return Path.Combine(
+            localApplicationData,
+            "Dispatcher",
+            "dispatcher-operational.db");
+    }
+
+    return Path.Combine(
+        AppContext.BaseDirectory,
+        "data",
+        "dispatcher-operational.db");
 }
 
 static bool TryGetUInt16(

@@ -586,3 +586,99 @@ Height
 - drag handles, snapping, zoom/pan и multi-select можно добавлять только при подтверждённой необходимости.
 
 Отсутствие drag-and-drop не меняет persistent/runtime contracts.
+
+---
+
+## D-042 — Operational data хранится отдельно от configuration database
+
+**Status:** Accepted
+
+Historian и будущие high-frequency operational records используют отдельную SQLite database:
+
+```text
+dispatcher.db
+    configuration
+
+dispatcher-operational.db
+    operational records
+```
+
+Причина:
+
+- history/event volume и write rate отличаются от configuration;
+- рост operational data не должен менять lifecycle configuration database;
+- будущая замена historian/event storage может выполняться независимо от device/mimic configuration.
+
+Operational database имеет собственный `PRAGMA user_version`, начиная с version `1`.
+
+---
+
+## D-043 — Historian ingestion использует bounded Channel и не блокирует TagService callback
+
+**Status:** Accepted
+
+`HistorianService` подписывается на synchronous `TagService.Changed`.
+
+Callback выполняет только normalization и:
+
+```text
+Channel.Writer.TryWrite(sample)
+```
+
+SQLite I/O выполняет отдельный background writer.
+
+Channel bounded, потому что бесконечная память при остановившемся disk writer недопустима.
+
+Baseline overflow behavior:
+
+```text
+buffer full
+    ↓
+drop incoming sample
+    ↓
+DroppedSampleCount++
+    ↓
+warning log
+```
+
+Polling/runtime callback не ждёт освобождения channel capacity.
+
+Текущий batch при persistence error retry-ится background writer-ом и не выбрасывается молча.
+
+---
+
+## D-044 — History sample хранит protocol-neutral typed canonical value
+
+**Status:** Accepted
+
+Historian record содержит:
+
+```text
+TagId
+Timestamp UTC
+HistoryValueType
+ValueText
+```
+
+Типы:
+
+```text
+Null
+Boolean
+Int64
+UInt64
+Double
+Decimal
+String
+Json
+```
+
+Причина:
+
+- Historian не должен зависеть от Modbus/SNMP library types;
+- `UInt64` не всегда помещается в SQLite signed INTEGER;
+- `decimal` не должен принудительно терять точность через `REAL`;
+- canonical text сохраняет точное исходное значение;
+- будущий query API может восстановить public typed value без изменения ingest boundary.
+
+Protocol address/OID в history record отсутствует.

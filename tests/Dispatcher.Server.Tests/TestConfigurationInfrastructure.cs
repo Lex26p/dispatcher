@@ -83,6 +83,10 @@ internal static class TestDispatcherFactory
     public static WebApplicationFactory<Program> Create(
         string databasePath)
     {
+        var operationalDatabasePath =
+            GetOperationalDatabasePath(
+                databasePath);
+
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(
                 builder =>
@@ -94,10 +98,27 @@ internal static class TestDispatcherFactory
                                 new Dictionary<string, string?>
                                 {
                                     ["ConfigurationDatabase:Path"] =
-                                        databasePath
+                                        databasePath,
+                                    ["OperationalDatabase:Path"] =
+                                        operationalDatabasePath
                                 });
                         });
                 });
+    }
+
+    public static string GetOperationalDatabasePath(
+        string configurationDatabasePath)
+    {
+        var directory =
+            Path.GetDirectoryName(
+                Path.GetFullPath(
+                    configurationDatabasePath))
+            ?? throw new InvalidOperationException(
+                "Configuration database directory could not be resolved.");
+
+        return Path.Combine(
+            directory,
+            "dispatcher-operational.db");
     }
 }
 

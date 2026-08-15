@@ -96,10 +96,12 @@ Templates
 Scripting
 ```
 
-Первый шаг новой дорожной карты:
+V2-S01 завершает foundation Historian.
+
+Следующий шаг новой дорожной карты:
 
 ```text
-V2-S01 — Historian storage и ingestion foundation
+V2-S02 — Historian policies и retention
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

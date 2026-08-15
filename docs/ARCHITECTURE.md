@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после S12
+## 1. Состояние после V2-S01
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -408,3 +408,225 @@ Mimic definition/editor/runtime
 ```
 
 Phase 5 выбирается после оценки эксплуатации, а не проектируется заранее.
+
+
+## 19. Historian operational boundary
+
+V2-S01 добавляет долговременное хранение runtime tag changes без изменения protocol drivers.
+
+Цепочка:
+
+```text
+Modbus / SNMP
+      ↓
+TagService.Set(...)
+      ↓
+TagService.Changed
+      ├────────────→ RuntimeHubPublisher
+      └────────────→ HistorianService
+                          ↓
+                    bounded Channel
+                          ↓
+                    background writer
+                          ↓
+                 Operational SQLite
+```
+
+Historian подписывается только на `TagService.Changed` и не знает protocol-specific addressing.
+
+## 20. Configuration DB и operational DB разделены
+
+Configuration database остаётся:
+
+```text
+dispatcher.db
+```
+
+и продолжает хранить низкочастотную configuration:
+
+```text
+devices
+tags
+mimics
+```
+
+V2-S01 вводит отдельную operational database:
+
+```text
+dispatcher-operational.db
+```
+
+Причина разделения:
+
+- history samples имеют существенно более высокую частоту записи;
+- configuration lifecycle не должен зависеть от роста operational data;
+- будущая замена historian/events storage не должна требовать переноса device/mimic configuration.
+
+Обе базы пока используют `Microsoft.Data.Sqlite`, но имеют независимые schema versions.
+
+## 21. Operational SQLite schema v1
+
+Первая operational schema:
+
+```text
+history_samples
+├── sample_id              INTEGER PK AUTOINCREMENT
+├── tag_id                 TEXT
+├── timestamp_utc_ticks    INTEGER
+├── value_type             INTEGER
+└── value_text             TEXT NULL
+```
+
+Index:
+
+```text
+(tag_id, timestamp_utc_ticks, sample_id)
+```
+
+`sample_id` обеспечивает однозначный порядок records даже при одинаковом timestamp.
+
+Operational schema version:
+
+```text
+PRAGMA user_version = 1
+```
+
+Неизвестная future schema version вызывает startup error вместо неявной попытки использовать несовместимую DB.
+
+## 22. Typed history value
+
+Historian не сохраняет protocol/library objects.
+
+До persistence runtime value нормализуется в:
+
+```text
+HistoryValueType
+ValueText
+```
+
+Поддерживаемые категории:
+
+```text
+Null
+Boolean
+Int64
+UInt64
+Double
+Decimal
+String
+Json
+```
+
+Каноническое строковое хранение сохраняет:
+
+- `UInt64`, который может не помещаться в SQLite signed INTEGER;
+- `decimal` без принудительного преобразования в binary floating point;
+- invariant numeric representation.
+
+Неизвестный CLR object сериализуется как JSON и получает `HistoryValueType.Json`.
+
+Timestamp нормализуется в UTC и хранится как ticks.
+
+## 23. Bounded asynchronous ingestion
+
+`TagService.Changed` является synchronous callback и может исполняться непосредственно в protocol polling path.
+
+Поэтому callback Historian не выполняет:
+
+```text
+SQLite open
+transaction
+disk write
+retry
+```
+
+Он выполняет только:
+
+```text
+TagValue
+   ↓ normalize
+HistorySample
+   ↓ Channel.Writer.TryWrite
+return
+```
+
+Channel bounded.
+
+Baseline V2-S01:
+
+```text
+BufferCapacity = 10000
+BatchSize      = 256
+```
+
+оба значения configurable через `Historian`.
+
+При заполненном buffer `TryWrite` возвращает `false`.
+
+Текущий incoming sample отбрасывается, а:
+
+```text
+DroppedSampleCount++
+warning log
+```
+
+Polling при этом не блокируется.
+
+Это baseline overflow behavior. Policies/retention и дальнейшая tuning выполняются в V2-S02.
+
+## 24. Background writer и retry
+
+Один reader собирает batch до `BatchSize`.
+
+Batch сохраняется одной SQLite transaction.
+
+Если persistence временно падает:
+
+```text
+same batch
+   ↓
+retry after delay
+```
+
+Batch не считается успешно обработанным до завершения `AppendAsync`.
+
+Пока writer занят retry, bounded buffer может заполниться; такие потери отражаются через `DroppedSampleCount`, а не скрываются.
+
+## 25. Startup order
+
+Hosted services регистрируются в порядке:
+
+```text
+ConfigurationInitializationHostedService
+HistorianService
+ModbusRuntimeHostedService
+SnmpRuntimeHostedService
+RuntimeHubPublisher
+```
+
+Historian:
+
+1. создаёт/проверяет operational schema;
+2. подписывается на `TagService.Changed`;
+3. запускает writer;
+4. только затем начинают стартовать protocol polling services.
+
+Это исключает нормальное startup-окно, в котором первый successful poll мог бы пройти до Historian subscription.
+
+## 26. V2-S01 scope boundary
+
+На этом шаге Historian сохраняет все `TagService.Changed`.
+
+Не реализуются ещё:
+
+```text
+Historian policies
+Periodic sampling
+Retention cleanup
+History query API
+Trend Web
+```
+
+Они остаются соответственно V2-S02, V2-S03 и V2-S04.
+
+Configuration schema v3 не меняется.

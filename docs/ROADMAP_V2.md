@@ -129,25 +129,39 @@ Device/tag templates
 
 # Phase 5 — Historian
 
-## [ ] V2-S01 — Historian storage и ingestion foundation
+## [x] V2-S01 — Historian storage и ingestion foundation
 
-Цель: начать надёжно сохранять runtime tag values без изменения protocol drivers.
-
-План:
+Реализовано:
 
 - отдельная operational SQLite database;
-- независимая schema version operational storage;
+- independent operational schema version `1`;
+- `history_samples`;
 - typed history record:
   - `TagId`;
-  - timestamp;
-  - value;
-  - value type;
+  - UTC timestamp;
+  - `HistoryValueType`;
+  - canonical `ValueText`;
 - `HistorianService`;
-- asynchronous background writer;
-- подписка на logical tag changes;
-- ingestion не блокирует protocol polling;
-- migration/startup tests;
-- tests без реального оборудования.
+- bounded `Channel<HistorySample>`;
+- `TryWrite` в synchronous `TagService.Changed` callback;
+- asynchronous batch writer;
+- retry текущего batch при persistence error;
+- `DroppedSampleCount`;
+- `RejectedSampleCount`;
+- Historian hosted service стартует до Modbus/SNMP polling;
+- startup/storage/overflow/integration tests без реального оборудования.
+
+Baseline overflow behavior:
+
+```text
+buffer full
+    ↓
+do not block TagService
+    ↓
+drop newest incoming sample
+    ↓
+increment diagnostics + warning
+```
 
 Первый scope не требует внешней time-series database.
 
@@ -156,8 +170,8 @@ Device/tag templates
 ```text
 TagService
    ↓ change
-Historian ingestion
-   ↓ async
+TryWrite bounded channel
+   ↓ async batch writer
 Operational SQLite
 ```
 
@@ -190,8 +204,8 @@ Periodic
 - retention days;
 - cleanup hosted service;
 - поведение при удалённом/переименованном TagId;
-- bounded queue overflow policy;
-- diagnostics lost/dropped samples, если это возможно.
+- настройку/tuning buffer и overflow diagnostics при необходимости;
+- retention cleanup diagnostics.
 
 ### Результат
 
