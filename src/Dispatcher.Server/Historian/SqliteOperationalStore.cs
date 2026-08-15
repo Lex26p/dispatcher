@@ -158,6 +158,107 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         transaction.Commit();
     }
 
+    public async Task<IReadOnlyList<HistorySample>> QueryAsync(
+        string tagId,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        bool ascending,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            tagId);
+
+        if (from > to)
+        {
+            throw new ArgumentException(
+                "'from' must be less than or equal to 'to'.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(limit),
+                "Query limit must be greater than zero.");
+        }
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            ascending
+                ? """
+                  SELECT
+                      sample_id,
+                      tag_id,
+                      timestamp_utc_ticks,
+                      value_type,
+                      value_text
+                  FROM history_samples
+                  WHERE tag_id = $tagId
+                    AND timestamp_utc_ticks >= $fromUtcTicks
+                    AND timestamp_utc_ticks <= $toUtcTicks
+                  ORDER BY
+                      timestamp_utc_ticks ASC,
+                      sample_id ASC
+                  LIMIT $limit;
+                  """
+                : """
+                  SELECT
+                      sample_id,
+                      tag_id,
+                      timestamp_utc_ticks,
+                      value_type,
+                      value_text
+                  FROM history_samples
+                  WHERE tag_id = $tagId
+                    AND timestamp_utc_ticks >= $fromUtcTicks
+                    AND timestamp_utc_ticks <= $toUtcTicks
+                  ORDER BY
+                      timestamp_utc_ticks DESC,
+                      sample_id DESC
+                  LIMIT $limit;
+                  """;
+
+        command.Parameters.AddWithValue(
+            "$tagId",
+            tagId);
+        command.Parameters.AddWithValue(
+            "$fromUtcTicks",
+            from
+                .UtcDateTime
+                .Ticks);
+        command.Parameters.AddWithValue(
+            "$toUtcTicks",
+            to
+                .UtcDateTime
+                .Ticks);
+        command.Parameters.AddWithValue(
+            "$limit",
+            limit);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var samples =
+            new List<HistorySample>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            samples.Add(
+                ReadSample(
+                    reader));
+        }
+
+        return samples;
+    }
+
     public async Task<int> DeleteBeforeAsync(
         string tagId,
         DateTimeOffset cutoff,
@@ -226,29 +327,36 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         while (await reader.ReadAsync(
             cancellationToken))
         {
-            var ticks =
-                reader.GetInt64(2);
-
             samples.Add(
-                new HistorySample(
-                    SampleId:
-                        reader.GetInt64(0),
-                    TagId:
-                        reader.GetString(1),
-                    Timestamp:
-                        new DateTimeOffset(
-                            new DateTime(
-                                ticks,
-                                DateTimeKind.Utc)),
-                    ValueType:
-                        (HistoryValueType)reader.GetInt32(3),
-                    ValueText:
-                        reader.IsDBNull(4)
-                            ? null
-                            : reader.GetString(4)));
+                ReadSample(
+                    reader));
         }
 
         return samples;
+    }
+
+    private static HistorySample ReadSample(
+        SqliteDataReader reader)
+    {
+        var ticks =
+            reader.GetInt64(2);
+
+        return new HistorySample(
+            SampleId:
+                reader.GetInt64(0),
+            TagId:
+                reader.GetString(1),
+            Timestamp:
+                new DateTimeOffset(
+                    new DateTime(
+                        ticks,
+                        DateTimeKind.Utc)),
+            ValueType:
+                (HistoryValueType)reader.GetInt32(3),
+            ValueText:
+                reader.IsDBNull(4)
+                    ? null
+                    : reader.GetString(4));
     }
 
     private async Task<SqliteConnection> OpenConnectionAsync(

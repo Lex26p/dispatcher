@@ -37,6 +37,7 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 18. Хранить historian policy отдельно от operational samples.
 19. Применять historian policy без restart protocol polling.
 20. Удалять history samples по per-tag `RetentionDays`.
+21. Запрашивать lossless history одного или нескольких `TagId` через ограниченный REST API.
 
 ## Базовый стек
 
@@ -210,6 +211,71 @@ DELETE /api/configuration/historian/policies/{tagId}
 `Enabled = false` также прекращает sampling, но retention продолжает действовать.
 
 Retention cleanup запускается hosted service и удаляет samples старше `RetentionDays` отдельно для каждого `TagId`.
+
+## History query API
+
+V2-S03 добавляет read boundary поверх operational storage:
+
+```text
+GET /api/history
+```
+
+Query parameters:
+
+```text
+tagId   repeated, 1..16 values
+from    required ISO-8601 timestamp
+to      required ISO-8601 timestamp
+order   asc | desc, default asc
+limit   max points per TagId, default 1000, max 2000
+```
+
+Пример:
+
+```text
+/api/history?tagId=plc01.temperature&tagId=switch01.uptime&from=2026-08-15T10:00:00Z&to=2026-08-15T11:00:00Z&order=asc&limit=1000
+```
+
+Диапазон времени inclusive:
+
+```text
+from <= Timestamp <= to
+```
+
+Response всегда группируется по series:
+
+```text
+HistoryQueryResponse
+├── From
+├── To
+├── Order
+├── Limit
+└── Series[]
+    ├── TagId
+    ├── Truncated
+    └── Samples[]
+        ├── Timestamp
+        ├── ValueType
+        └── ValueText
+```
+
+`Series` сохраняет порядок запрошенных `tagId`.
+
+`limit` применяется отдельно к каждой series. Query читает `limit + 1` запись, поэтому `Truncated=true` означает, что в запрошенном диапазоне существовали дополнительные samples.
+
+Для одинакового timestamp порядок стабилизируется internal `sample_id`, но storage ID наружу не публикуется.
+
+Query API не требует, чтобы `TagId` существовал в текущей device configuration или historian policy. Это позволяет читать сохранённую историю удалённых/stale tags.
+
+Public value остаётся lossless:
+
+```text
+ValueType + ValueText
+```
+
+вместо преобразования в общий JSON `number`, которое могло бы потерять точность `UInt64`/`Decimal`.
+
+Operational schema остаётся version `1`.
 
 Configuration:
 
@@ -415,13 +481,13 @@ docs/ROADMAP_V2.md
 Текущий завершённый шаг:
 
 ```text
-V2-S02 — Historian policies и retention
+V2-S03 — History query API
 ```
 
 Следующий шаг:
 
 ```text
-V2-S03 — History query API
+V2-S04 — Historian Web / Trends
 ```
 
 ## Документы

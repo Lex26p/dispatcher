@@ -317,6 +317,18 @@ public sealed class HistorianServiceTests
                 cancellationToken);
         }
 
+        public Task<IReadOnlyList<HistorySample>> QueryAsync(
+            string tagId,
+            DateTimeOffset from,
+            DateTimeOffset to,
+            bool ascending,
+            int limit,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<HistorySample>>(
+                Array.Empty<HistorySample>());
+        }
+
         public Task<int> DeleteBeforeAsync(
             string tagId,
             DateTimeOffset cutoff,

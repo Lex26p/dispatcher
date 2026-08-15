@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S02
+## 1. Состояние после V2-S03
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -834,3 +834,188 @@ Trend Web
 ```
 
 Следующий шаг V2-S03 вводит read/query boundary поверх существующего operational storage.
+
+
+## 33. History read boundary
+
+V2-S03 добавляет protocol-neutral read API поверх operational storage:
+
+```text
+Operational SQLite
+      ↓
+IHistorySampleStore.QueryAsync
+      ↓
+HistoryQueryService
+      ↓
+GET /api/history
+      ↓
+Dispatcher.Contracts.Historian
+```
+
+Query не обращается к protocol drivers и не преобразует `TagId` обратно в Modbus address/SNMP OID.
+
+## 34. History query contract
+
+Endpoint:
+
+```text
+GET /api/history
+```
+
+Query:
+
+```text
+tagId   repeated, required
+from    required
+to      required
+order   asc | desc
+limit   points per series
+```
+
+Limits:
+
+```text
+1 <= tag count <= 16
+1 <= limit <= 2000
+default limit = 1000
+```
+
+Таким образом один request возвращает не более:
+
+```text
+16 × 2000 = 32000 samples
+```
+
+Большие time ranges допускаются, потому что SQL query всё равно ограничен index-backed `LIMIT`.
+
+`from` и `to` inclusive.
+
+## 35. Multi-tag response format
+
+Ответ не смешивает samples разных tags в один неявный поток:
+
+```text
+HistoryQueryResponseDto
+├── From
+├── To
+├── Order
+├── Limit
+└── Series[]
+    ├── TagId
+    ├── Truncated
+    └── Samples[]
+```
+
+Порядок `Series` совпадает с порядком repeated `tagId` query parameters.
+
+Для запрошенного tag без samples возвращается empty series, а не пропускается весь TagId.
+
+Duplicate `tagId` считается invalid query и возвращает `400`.
+
+## 36. Stable sample order
+
+Operational index уже существует:
+
+```text
+(tag_id, timestamp_utc_ticks, sample_id)
+```
+
+Ascending query:
+
+```text
+ORDER BY timestamp_utc_ticks ASC, sample_id ASC
+```
+
+Descending query:
+
+```text
+ORDER BY timestamp_utc_ticks DESC, sample_id DESC
+```
+
+`sample_id` используется только как internal deterministic tie-breaker, когда несколько samples имеют одинаковый timestamp.
+
+Storage ID не входит в public contract.
+
+## 37. Per-series limit и Truncated
+
+`limit` означает maximum returned points **для каждого TagId**.
+
+Для определения truncation storage вызывается с:
+
+```text
+limit + 1
+```
+
+Если прочитано больше `limit`:
+
+```text
+Truncated = true
+return first limit samples
+```
+
+Полный `COUNT(*)` не выполняется, потому что first Web trend scope должен знать только факт существования дополнительных points, а не точное total count.
+
+## 38. Lossless public history value
+
+Public sample:
+
+```text
+Timestamp
+ValueType
+ValueText
+```
+
+`ValueText` сохраняет canonical representation V2-S01 без дополнительного преобразования в общий JSON numeric type.
+
+Причина:
+
+- `UInt64` может превышать безопасный range некоторых JSON consumers;
+- `Decimal` не должен терять precision;
+- `Json` должен сохранять исходный raw payload;
+- `Null/String/Boolean` остаются однозначны благодаря `ValueType`.
+
+V2-S04 Web преобразует `ValueText` для trend rendering только там, где `ValueType` является numeric.
+
+## 39. Query не зависит от current configuration
+
+History query intentionally не проверяет:
+
+```text
+ConfigurationCatalog.ContainsTagId
+HistorianPolicyCatalog.Contains
+```
+
+Причина: retained operational history должна оставаться читаемой после:
+
+```text
+tag delete
+tag rename
+policy delete
+policy stale
+```
+
+Current configuration определяет future sampling, но не право существования уже сохранённых samples.
+
+## 40. V2-S03 scope boundary
+
+После V2-S03 есть:
+
+```text
+Historian storage
+OnChange / Periodic policies
+Retention
+History REST query
+multi-tag response
+bounded response size
+```
+
+Ещё нет:
+
+```text
+History / Trends Web
+saved trend selections
+aggregation/downsampling
+historian realtime stream
+```
+
+Следующий шаг V2-S04 строит Web UI поверх `GET /api/history` без изменения protocol/Historian ingestion boundary.

@@ -217,29 +217,39 @@ Deadband не добавлен: два требуемых sampling modes зак�
 
 ---
 
-## [ ] V2-S03 — History query API
+## [x] V2-S03 — History query API
 
-Цель: получить стабильную application boundary для trend/history.
+Реализовано:
 
-API должен поддерживать как минимум:
-
-```text
-TagId
-from
-to
-order
-limit / max points
-```
-
-Для нескольких тегов должен быть определён один однозначный формат результата.
-
-Server обязан ограничивать чрезмерно большие ответы.
-
-Не добавлять protocol-specific поля.
+- `GET /api/history`;
+- repeated `tagId`;
+- обязательные `from` / `to`;
+- inclusive time range;
+- `order=asc|desc`;
+- default `limit=1000`;
+- maximum `limit=2000` points per series;
+- maximum `16` tags per request;
+- duplicate `tagId` rejected;
+- deterministic ordering by:
+  - `timestamp`;
+  - internal `sample_id` tie-breaker;
+- response grouped as `Series[]`;
+- one series returned for every requested `TagId`, including empty series;
+- `Series` preserves requested tag order;
+- `Truncated` per series via `limit + 1` query;
+- public sample:
+  - `Timestamp`;
+  - `ValueType`;
+  - lossless canonical `ValueText`;
+- no protocol-specific fields;
+- query does not depend on current configuration/policy, so retained history of deleted/stale tags remains readable;
+- existing operational index is reused;
+- operational schema remains version `1`;
+- excessive response size is bounded to at most `16 × 2000 = 32000` returned samples.
 
 ### Результат
 
-Историю можно запросить независимо от Web UI.
+Историю одного или нескольких logical tags можно запросить независимо от Web UI через стабильный REST contract.
 
 ---
 

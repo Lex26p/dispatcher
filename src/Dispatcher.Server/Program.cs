@@ -51,6 +51,7 @@ builder.Services.AddHostedService<HistorianService>(
 
 builder.Services.AddHostedService<HistorianRetentionHostedService>();
 builder.Services.AddSingleton<HistorianPolicyService>();
+builder.Services.AddSingleton<HistoryQueryService>();
 
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
@@ -133,6 +134,7 @@ app.MapPost(
 
 app.MapConfigurationEndpoints();
 app.MapHistorianPolicyEndpoints();
+app.MapHistoryEndpoints();
 app.MapMimicEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(

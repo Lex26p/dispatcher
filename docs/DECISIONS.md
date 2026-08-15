@@ -760,3 +760,93 @@ TagExists = false
 Удаление самой policy не удаляет history немедленно и прекращает automatic cleanup для этого `TagId`.
 
 Такое удаление данных должно оставаться отдельным явным действием, если оно понадобится позже.
+
+---
+
+## D-048 — History query возвращает series per TagId и ограничивает points per series
+
+**Status:** Accepted
+
+V2-S03 вводит:
+
+```text
+GET /api/history
+```
+
+с repeated `tagId`, обязательными `from/to`, `order` и `limit`.
+
+`limit` трактуется как maximum points на одну series.
+
+Baseline limits:
+
+```text
+MaxTagCount = 16
+DefaultLimit = 1000
+MaxLimit = 2000
+```
+
+Ответ группируется:
+
+```text
+Series[]
+├── TagId
+├── Truncated
+└── Samples[]
+```
+
+а не возвращает один смешанный поток нескольких tags.
+
+Причина:
+
+- trend UI работает естественно с отдельными series;
+- semantics limit остаётся одинаковой независимо от частоты разных tags;
+- пустой TagId range можно представить empty series;
+- maximum response заранее ограничен.
+
+---
+
+## D-049 — History API публикует ValueType + canonical ValueText вместо общего object
+
+**Status:** Accepted
+
+Public history sample:
+
+```text
+Timestamp
+ValueType
+ValueText
+```
+
+не преобразует canonical history value в общий `object`.
+
+Причина:
+
+- сохранить полный `UInt64`;
+- сохранить `Decimal` precision;
+- не зависеть от numeric behaviour JavaScript/JSON clients;
+- оставить `Json` payload lossless;
+- public contract явно сообщает семантический type.
+
+V2-S04 самостоятельно преобразует numeric `ValueText` в display/chart representation.
+
+---
+
+## D-050 — History query допускает deleted/stale TagId
+
+**Status:** Accepted
+
+Read API не требует current device tag или active historian policy.
+
+Сохранённая history должна оставаться доступной после удаления/rename configuration.
+
+Разделение:
+
+```text
+current configuration / policy
+    → определяет future sampling
+
+operational history
+    → определяется фактически сохранённым TagId
+```
+
+Это сохраняет диагностическую ценность history и соответствует stale-policy semantics V2-S02.
