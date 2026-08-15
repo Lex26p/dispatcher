@@ -6,4 +6,5 @@ public static class RuntimeHubContract
     public const string TagChanged = "TagChanged";
     public const string DeviceStateChanged = "DeviceStateChanged";
     public const string ConfigurationChanged = "ConfigurationChanged";
+    public const string EventAdded = "EventAdded";
 }

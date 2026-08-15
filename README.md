@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian завершена, Phase 6 Events начата.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены.
 
 ## Рабочая цепочка
 
@@ -12,7 +12,7 @@ Modbus TCP ─→ Dispatcher.Modbus ─┐
 SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
                                          REST / SignalR
                                                ↓
-                 Monitoring / History / Mimic runtime / Device Editor
+          Monitoring / History / Events / Mimic runtime / Device Editor
 ```
 
 Система умеет:
@@ -40,6 +40,8 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 21. Запрашивать lossless history одного или нескольких `TagId` через ограниченный REST API.
 22. Просматривать history как SVG trend и плотную таблицу через Web `/history`.
 23. Записывать immutable operational events для system/device/command/configuration producers.
+24. Запрашивать Events по времени/category/severity/source/text с server-side paging.
+25. Просматривать Events в Web `/events` и получать новые persisted events через SignalR.
 
 ## Базовый стек
 
@@ -447,17 +449,115 @@ Configuration event создаётся после успешного runtime app
 
 Event Journal не имеет update/delete API.
 
-На V2-S05 ещё нет:
+## Events query API
+
+V2-S06 добавляет read-only endpoint:
 
 ```text
-Events REST query
-Events Web
-Events SignalR
-AlarmService
-Audit actor identity
+GET /api/events
 ```
 
-Это остаётся следующим V2-S06 и последующими security/alarm steps.
+Query parameters:
+
+```text
+from       required ISO-8601
+to         required ISO-8601
+category   optional: System | Device | Command | Configuration
+severity   optional: Information | Warning | Error
+source     optional exact case-sensitive source
+text       optional case-sensitive substring in Type / Source / Message / DataJson
+page       default 1, max 100000
+limit      default 200, max 500
+```
+
+Порядок всегда newest-first:
+
+```text
+timestamp DESC
+event_id DESC
+```
+
+Response:
+
+```text
+EventQueryResponse
+├── Page
+├── Limit
+├── HasMore
+└── Items[]
+    ├── EventId
+    ├── Timestamp
+    ├── Category
+    ├── Type
+    ├── Severity
+    ├── Source
+    ├── Message
+    └── DataJson
+```
+
+`HasMore` определяется чтением `limit + 1`, без `COUNT(*)`.
+
+API остаётся immutable/read-only.
+
+## Events Web
+
+URL:
+
+```text
+/events
+```
+
+Компоновка:
+
+```text
+слева  → category / severity / source / text filters
+центр  → time toolbar + dense event table + paging
+справа → details selected event
+```
+
+Global navigation:
+
+```text
+События
+```
+
+Web поддерживает:
+
+- presets `15 min / 1 h / 6 h / 24 h`;
+- arbitrary local `from/to`;
+- server-side paging `100 / 200 / 500`;
+- severity/category/source/type/message columns;
+- formatted `DataJson` справа;
+- Live mode;
+- realtime status.
+
+Realtime использует существующий:
+
+```text
+/hubs/runtime
+```
+
+с отдельным message:
+
+```text
+EventAdded
+```
+
+Event realtime публикуется только **после успешной SQLite persistence**, поэтому Web получает настоящий `EventId`.
+
+Исторические страницы читаются только через REST. SignalR не используется для исторического replay.
+
+При Live mode новые matching events merge-ятся только в page `1`; на других страницах Web показывает счётчик `Новые`.
+
+На V2-S06 ещё нет:
+
+```text
+AlarmService
+Audit actor identity
+event retention policy
+```
+
+Они остаются последующим security/alarm scope.
 
 ## Mimic contracts
 
@@ -586,6 +686,7 @@ S11 не добавляет Web-editor. PUT нужен для persistence/integr
 Редактор устройств
 Мнемосхемы
 История / Тренды
+События
 ```
 
 URL runtime:
@@ -640,13 +741,13 @@ docs/ROADMAP_V2.md
 Текущий завершённый шаг:
 
 ```text
-V2-S05 — Event Journal
+V2-S06 — Events API и Web
 ```
 
 Следующий шаг:
 
 ```text
-V2-S06 — Events API и Web
+V2-S07 — Authentication foundation
 ```
 
 ## Документы

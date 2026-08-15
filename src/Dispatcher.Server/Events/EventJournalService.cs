@@ -59,6 +59,8 @@ public sealed class EventJournalService : IHostedService
         Interlocked.Read(
             ref _rejectedEventCount);
 
+    public event Action<EventRecord>? Persisted;
+
     public async Task StartAsync(
         CancellationToken cancellationToken)
     {
@@ -318,6 +320,35 @@ public sealed class EventJournalService : IHostedService
         }
     }
 
+    private void NotifyPersisted(
+        EventRecord record)
+    {
+        var handlers =
+            Persisted;
+
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (Action<EventRecord> handler
+                 in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(
+                    record);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Event Journal persisted subscriber failed for event {EventId}.",
+                    record.EventId);
+            }
+        }
+    }
+
     private async Task PersistWithRetryAsync(
         IReadOnlyList<EventRecord> batch,
         CancellationToken cancellationToken)
@@ -326,9 +357,16 @@ public sealed class EventJournalService : IHostedService
         {
             try
             {
-                await _store.AppendEventsAsync(
-                    batch,
-                    cancellationToken);
+                var persisted =
+                    await _store.AppendEventsAsync(
+                        batch,
+                        cancellationToken);
+
+                foreach (var record in persisted)
+                {
+                    NotifyPersisted(
+                        record);
+                }
 
                 return;
             }

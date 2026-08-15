@@ -241,6 +241,90 @@ public sealed class EventJournalServiceTests
             CancellationToken.None);
     }
 
+    [TestMethod]
+    public async Task PersistedNotification_ContainsStoredEventId()
+    {
+        var directory =
+            CreateTempDirectory();
+
+        try
+        {
+            var store =
+                new SqliteOperationalStore(
+                    Path.Combine(
+                        directory,
+                        "operational.db"));
+
+            var service =
+                new EventJournalService(
+                    new DeviceStateService(),
+                    store,
+                    new EventJournalOptions(
+                        32,
+                        8),
+                    NullLogger<EventJournalService>.Instance);
+
+            await service.StartAsync(
+                CancellationToken.None);
+
+            var persisted =
+                new TaskCompletionSource<EventRecord>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+
+            service.Persisted +=
+                record =>
+                {
+                    if (string.Equals(
+                            record.Type,
+                            "PersistedTest",
+                            StringComparison.Ordinal))
+                    {
+                        persisted.TrySetResult(
+                            record);
+                    }
+                };
+
+            var accepted =
+                service.Publish(
+                    EventCategory.System,
+                    "PersistedTest",
+                    EventSeverity.Information,
+                    "test",
+                    "Persisted event.");
+
+            Assert.IsTrue(
+                accepted);
+
+            var notified =
+                await persisted.Task.WaitAsync(
+                    TimeSpan.FromSeconds(2));
+
+            Assert.IsTrue(
+                notified.EventId > 0);
+
+            var stored =
+                (await store.LoadAllEventsAsync())
+                    .Single(record =>
+                        record.EventId == notified.EventId);
+
+            Assert.AreEqual(
+                "PersistedTest",
+                stored.Type);
+            Assert.AreEqual(
+                notified.Timestamp,
+                stored.Timestamp);
+
+            await service.StopAsync(
+                CancellationToken.None);
+        }
+        finally
+        {
+            Directory.Delete(
+                directory,
+                recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var directory =
@@ -272,7 +356,7 @@ public sealed class EventJournalServiceTests
             return Task.CompletedTask;
         }
 
-        public async Task AppendEventsAsync(
+        public async Task<IReadOnlyList<EventRecord>> AppendEventsAsync(
             IReadOnlyList<EventRecord> events,
             CancellationToken cancellationToken = default)
         {
@@ -281,6 +365,32 @@ public sealed class EventJournalServiceTests
 
             await Release.Task.WaitAsync(
                 cancellationToken);
+
+            return events
+                .Select((record, index) =>
+                    record with
+                    {
+                        EventId =
+                            index + 1,
+                        Timestamp =
+                            record.Timestamp.ToUniversalTime()
+                    })
+                .ToArray();
+        }
+
+        public Task<IReadOnlyList<EventRecord>> QueryEventsAsync(
+            DateTimeOffset from,
+            DateTimeOffset to,
+            EventCategory? category,
+            EventSeverity? severity,
+            string? source,
+            string? text,
+            int offset,
+            int limit,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<EventRecord>>(
+                Array.Empty<EventRecord>());
         }
 
         public Task<IReadOnlyList<EventRecord>> LoadAllEventsAsync(

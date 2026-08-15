@@ -68,6 +68,8 @@ builder.Services.AddHostedService<EventJournalService>(
     services =>
         services.GetRequiredService<EventJournalService>());
 
+builder.Services.AddSingleton<EventQueryService>();
+
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
 builder.Services.AddSingleton<ModbusTcpRegisterWriter>();
@@ -77,6 +79,7 @@ builder.Services.AddSingleton<SnmpGetClient>();
 builder.Services.AddSingleton<SnmpPollingService>();
 
 builder.Services.AddSignalR();
+builder.Services.AddHostedService<EventHubPublisher>();
 
 builder.Services.AddSingleton<ModbusRuntimeHostedService>();
 builder.Services.AddHostedService<ModbusRuntimeHostedService>(
@@ -152,6 +155,7 @@ app.MapPost(
 app.MapConfigurationEndpoints();
 app.MapHistorianPolicyEndpoints();
 app.MapHistoryEndpoints();
+app.MapEventEndpoints();
 app.MapMimicEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(

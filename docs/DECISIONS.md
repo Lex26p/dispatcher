@@ -1003,3 +1003,106 @@ Configuration
 ```
 
 Event Journal не является AlarmService. Alarm states/transitions появятся отдельной subsystem после Event Journal и security foundation.
+
+---
+
+## D-057 — Events query использует newest-first page/limit и HasMore без COUNT
+
+**Status:** Accepted
+
+`GET /api/events` имеет required `from/to` и optional:
+
+```text
+category
+severity
+source
+text
+```
+
+Первый paging contract:
+
+```text
+page
+limit
+HasMore
+```
+
+Default/max:
+
+```text
+DefaultLimit = 200
+MaxLimit = 500
+```
+
+Ordering:
+
+```text
+Timestamp DESC
+EventId DESC
+```
+
+`HasMore` определяется чтением `limit + 1`.
+
+Причина:
+
+- плотный journal UI не требует total count;
+- `COUNT(*)` не нужен для каждой фильтрации;
+- простой page contract закрывает первый Events Web use case.
+
+---
+
+## D-058 — EventAdded отправляется через существующий RuntimeHub только после persistence
+
+**Status:** Accepted
+
+Event producer не отправляет SignalR напрямую.
+
+Realtime chain:
+
+```text
+Publish
+ ↓ bounded queue
+SQLite persistence
+ ↓
+EventJournalService.Persisted
+ ↓
+EventHubPublisher
+ ↓
+RuntimeHubContract.EventAdded
+```
+
+`EventAdded` содержит уже назначенный SQLite `EventId`.
+
+Причина:
+
+- Web не должен видеть event до durable journal persistence;
+- существующий `/hubs/runtime` уже является realtime transport Dispatcher;
+- отдельный Events hub сейчас не даёт функциональной пользы.
+
+Historical events всегда читаются REST.
+
+---
+
+## D-059 — Events Web разделяет server filters/paging и realtime Live merge
+
+**Status:** Accepted
+
+Events Web:
+
+```text
+/events
+```
+
+использует server-side filters/paging для historical state.
+
+SignalR применяется только к новым persisted events.
+
+В Live mode новые matching records merge-ятся в page 1 по `EventId` и сортируются newest-first.
+
+На historical pages новые events не перестраивают текущую страницу; Web показывает pending counter.
+
+Причина:
+
+- оператор не теряет контекст при просмотре старой страницы;
+- realtime не заменяет REST как источник исторической истины;
+- UI остаётся bounded и предсказуемым.

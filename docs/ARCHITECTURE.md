@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S05
+## 1. Состояние после V2-S06
 
-В application layer появляется третий пользовательский runtime service:
+Application layer содержит несколько пользовательских operational services:
 
 ```text
 Protocol workers
@@ -11,9 +11,9 @@ TagService / DeviceStateService
       ↓
 REST + SignalR
       ↓
-┌────────────┬──────────────────┬───────────────┐
-│ Monitoring │ History / Trends │ Mimic runtime │
-└────────────┴──────────────────┴───────────────┘
+┌────────────┬──────────────────┬──────────┬───────────────┐
+│ Monitoring │ History / Trends │ Events   │ Mimic runtime │
+└────────────┴──────────────────┴──────────┴───────────────┘
 
 Device Editor → device configuration
 Mimic Editor  → mimic definition
@@ -1538,3 +1538,303 @@ event retention
 ```
 
 Следующий шаг V2-S06 добавляет read/query + Web UI поверх Event Journal.
+
+
+## 55. Events read/query boundary
+
+V2-S06 добавляет read-only boundary поверх immutable Event Journal:
+
+```text
+Operational SQLite events
+        ↓
+IEventJournalStore.QueryEventsAsync
+        ↓
+EventQueryService
+        ↓
+GET /api/events
+        ↓
+Dispatcher.Contracts.Events
+```
+
+Public DTO:
+
+```text
+EventRecordDto
+├── EventId
+├── Timestamp
+├── Category
+├── Type
+├── Severity
+├── Source
+├── Message
+└── DataJson
+```
+
+Public enums сериализуются строками:
+
+```text
+EventCategoryDto
+EventSeverityDto
+```
+
+Server не публикует internal integer enum codes как application contract.
+
+## 56. Events query semantics
+
+Endpoint:
+
+```text
+GET /api/events
+```
+
+Required:
+
+```text
+from
+to
+```
+
+Optional:
+
+```text
+category
+severity
+source
+text
+```
+
+Paging:
+
+```text
+page  = 1..100000
+limit = 1..500
+default limit = 200
+```
+
+Time range inclusive:
+
+```text
+from <= Timestamp <= to
+```
+
+Ordering фиксирован как:
+
+```text
+timestamp_utc_ticks DESC
+event_id DESC
+```
+
+Поэтому журнал отображается newest-first, а `event_id` стабилизирует порядок records с одинаковым timestamp.
+
+`source` — exact case-sensitive match.
+
+`text` использует SQLite `instr` и ищет case-sensitive Unicode substring в:
+
+```text
+type
+source
+message
+data_json
+```
+
+Paging на первом scope реализован через `LIMIT/OFFSET`.
+
+Для определения следующей страницы query запрашивает:
+
+```text
+limit + 1
+```
+
+и возвращает:
+
+```text
+HasMore
+```
+
+Полный `COUNT(*)` не выполняется.
+
+## 57. Persisted-event realtime
+
+V2-S05 producer записывал `EventRecord(EventId=0)` в bounded channel.
+
+V2-S06 меняет persistence boundary:
+
+```text
+AppendEventsAsync
+    ↓ SQLite INSERT
+SELECT last_insert_rowid()
+    ↓
+persisted EventRecord with real EventId
+```
+
+После successful transaction `EventJournalService` публикует internal notification:
+
+```text
+Persisted(EventRecord)
+```
+
+Notification не вызывается до successful persistence.
+
+Отдельный hosted service:
+
+```text
+EventHubPublisher
+```
+
+подписывается на `Persisted` и отправляет через существующий hub:
+
+```text
+/hubs/runtime
+RuntimeHubContract.EventAdded
+```
+
+Цепочка:
+
+```text
+producer
+   ↓
+EventJournal channel
+   ↓
+SQLite commit
+   ↓
+Persisted
+   ↓
+EventHubPublisher
+   ↓
+SignalR EventAdded
+   ↓
+EventClient
+```
+
+Это исключает состояние, когда Web показывает event, которого ещё нет в operational database.
+
+SignalR не используется для historical replay.
+
+## 58. Events Web service
+
+Web route:
+
+```text
+/events
+```
+
+Spatial model:
+
+```text
+┌──────────────┬───────────────────────────────────────────┬───────────────┐
+│ filters      │ time toolbar / realtime state             │ event details │
+│ category     ├───────────────────────────────────────────┤ DataJson      │
+│ severity     │ dense event table                         │               │
+│ source/text  ├───────────────────────────────────────────┤               │
+│              │ server paging                             │               │
+└──────────────┴───────────────────────────────────────────┴───────────────┘
+```
+
+Left filters:
+
+```text
+Category
+Severity
+Source
+Text
+```
+
+Center:
+
+```text
+15 min / 1 h / 6 h / 24 h
+from / to
+100 / 200 / 500 rows
+Refresh
+Live
+realtime connection state
+dense table
+Previous / Next
+```
+
+Right properties:
+
+```text
+EventId
+Timestamp
+Category
+Type
+Severity
+Source
+Message
+pretty DataJson
+```
+
+## 59. Live-mode semantics
+
+`EventClient` использует отдельную hub connection, но тот же:
+
+```text
+RuntimeHubContract.Path
+```
+
+Это не смешивает event query state с `RuntimeStateClient` tag/device snapshots.
+
+В `Live` mode:
+
+```text
+page == 1
+matching EventAdded
+    ↓
+merge by EventId
+    ↓
+sort Timestamp DESC / EventId DESC
+    ↓
+keep current Web limit
+```
+
+Если user находится на historical page или Live выключен, matching realtime events не меняют текущую страницу, а увеличивают:
+
+```text
+Новые: N
+```
+
+Нажатие `Новые` возвращает page 1, двигает `to` к current local time и перечитывает диапазон через REST.
+
+Таким образом:
+
+```text
+historical truth → REST
+new notification → SignalR
+```
+
+Reconnect не является historical replay; оператор всегда может выполнить refresh REST.
+
+## 60. V2-S06 scope boundary
+
+После V2-S06 Phase 6 завершена:
+
+```text
+Event Journal persistence
+device/command/config/system producers
+Events REST filters
+server-side paging
+persisted-event SignalR
+Events Web
+```
+
+Operational schema остаётся:
+
+```text
+2
+```
+
+Не реализуются пока:
+
+```text
+event retention policy
+audit actor identity
+AlarmService
+alarm transitions
+```
+
+Следующий шаг:
+
+```text
+V2-S07 — Authentication foundation
+```

@@ -52,6 +52,13 @@
                          @onclick="CloseGlobalNavigation">
                     История / Тренды
                 </NavLink>
+
+                <NavLink class="global-nav-link"
+                         ActiveClass="active"
+                         href="events"
+                         @onclick="CloseGlobalNavigation">
+                    События
+                </NavLink>
             </nav>
         </div>
     }
@@ -90,6 +97,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "История / Тренды";
+            }
+
+            if (path.StartsWith(
+                    "events",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "События";
             }
 
             return "Мониторинг";

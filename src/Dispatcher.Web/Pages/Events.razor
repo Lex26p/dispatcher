@@ -1,0 +1,914 @@
+@page "/events"
+@implements IDisposable
+@using System.Globalization
+@inject EventClient EventApi
+
+<PageTitle>Dispatcher — События</PageTitle>
+
+<div class="events-shell">
+    <aside class="events-filters">
+        <div class="events-panel-heading">
+            <span>Фильтры</span>
+        </div>
+
+        <div class="events-filter-form">
+            <label class="events-filter-field">
+                <span>Категория</span>
+                <select @bind="_categoryFilter">
+                    <option value="">Все</option>
+                    <option value="System">System</option>
+                    <option value="Device">Device</option>
+                    <option value="Command">Command</option>
+                    <option value="Configuration">Configuration</option>
+                </select>
+            </label>
+
+            <label class="events-filter-field">
+                <span>Severity</span>
+                <select @bind="_severityFilter">
+                    <option value="">Все</option>
+                    <option value="Information">Information</option>
+                    <option value="Warning">Warning</option>
+                    <option value="Error">Error</option>
+                </select>
+            </label>
+
+            <label class="events-filter-field">
+                <span>Source</span>
+                <input type="text"
+                       placeholder="Точное совпадение"
+                       @bind="_sourceFilter"
+                       @bind:event="oninput" />
+            </label>
+
+            <label class="events-filter-field">
+                <span>Текст</span>
+                <input type="search"
+                       placeholder="Type / source / message / data"
+                       @bind="_textFilter"
+                       @bind:event="oninput" />
+            </label>
+
+            <button type="button"
+                    class="toolbar-button primary events-filter-apply"
+                    disabled="@_querying"
+                    @onclick="QueryFromFirstPageAsync">
+                Применить
+            </button>
+
+            <button type="button"
+                    class="events-filter-clear"
+                    @onclick="ClearFiltersAsync">
+                Сбросить фильтры
+            </button>
+        </div>
+
+        <div class="events-filter-help">
+            `Source` фильтруется точно с учётом регистра. `Текст` ищет подстроку с учётом регистра в Type, Source, Message и DataJson.
+        </div>
+    </aside>
+
+    <main class="events-workspace">
+        <div class="events-toolbar">
+            <div class="events-toolbar-left">
+                <button type="button"
+                        class="events-preset-button"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromMinutes(15))">
+                    15 мин
+                </button>
+
+                <button type="button"
+                        class="events-preset-button"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(1))">
+                    1 ч
+                </button>
+
+                <button type="button"
+                        class="events-preset-button"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(6))">
+                    6 ч
+                </button>
+
+                <button type="button"
+                        class="events-preset-button"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(24))">
+                    24 ч
+                </button>
+
+                <span class="events-toolbar-divider"></span>
+
+                <label class="events-toolbar-field">
+                    <span>От</span>
+                    <input type="datetime-local"
+                           step="1"
+                           value="@_fromLocalText"
+                           @onchange="OnFromLocalChanged" />
+                </label>
+
+                <label class="events-toolbar-field">
+                    <span>До</span>
+                    <input type="datetime-local"
+                           step="1"
+                           value="@_toLocalText"
+                           @onchange="OnToLocalChanged" />
+                </label>
+
+                <label class="events-toolbar-field compact">
+                    <span>Строк</span>
+                    <select @bind="_limit">
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </label>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@_querying"
+                        @onclick="QueryFromFirstPageAsync">
+                    @(_querying ? "Запрос…" : "Обновить")
+                </button>
+            </div>
+
+            <div class="events-toolbar-right">
+                <label class="events-live-toggle"
+                       title="В Live режиме новые matching events добавляются через SignalR на первую страницу.">
+                    <input type="checkbox"
+                           checked="@_live"
+                           @onchange="OnLiveChanged" />
+                    <span>Live</span>
+                </label>
+
+                @if (_pendingRealtimeCount > 0)
+                {
+                    <button type="button"
+                            class="events-new-button"
+                            @onclick="ShowNewAsync">
+                        Новые: @_pendingRealtimeCount
+                    </button>
+                }
+
+                <span class="events-realtime-state @RealtimeCssClass"
+                      title="@EventApi.LastError">
+                    @RealtimeLabel
+                </span>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="events-error">
+                @_error
+            </div>
+        }
+
+        <div class="events-summary">
+            <span>
+                @_fromLocalText.Replace("T", " ")
+                —
+                @_toLocalText.Replace("T", " ")
+            </span>
+
+            <span>
+                страница @_page
+            </span>
+
+            <span>
+                @CurrentItems.Count событий
+            </span>
+
+            @if (_result?.HasMore == true)
+            {
+                <span class="events-more-state">
+                    есть следующая страница
+                </span>
+            }
+        </div>
+
+        <div class="events-table-wrap">
+            @if (_result is null && _querying)
+            {
+                <div class="events-empty">
+                    Загрузка событий…
+                </div>
+            }
+            else if (CurrentItems.Count == 0)
+            {
+                <div class="events-empty">
+                    В выбранном диапазоне и фильтрах событий нет.
+                </div>
+            }
+            else
+            {
+                <table class="events-table">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Severity</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th>Source</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in CurrentItems)
+                        {
+                            <tr class="@(IsSelected(item.EventId) ? "selected" : string.Empty)"
+                                @onclick="() => SelectEvent(item.EventId)">
+                                <td class="events-time-cell">
+                                    @item.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")
+                                </td>
+                                <td>
+                                    <span class="events-severity @SeverityCss(item.Severity)">
+                                        @item.Severity
+                                    </span>
+                                </td>
+                                <td>@item.Category</td>
+                                <td class="events-type-cell">@item.Type</td>
+                                <td class="events-source-cell"
+                                    title="@item.Source">
+                                    @item.Source
+                                </td>
+                                <td class="events-message-cell"
+                                    title="@item.Message">
+                                    @item.Message
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <div class="events-pagination">
+            <button type="button"
+                    class="events-page-button"
+                    disabled="@(_querying || _page <= 1)"
+                    @onclick="PreviousPageAsync">
+                ← Предыдущая
+            </button>
+
+            <span>Страница @_page</span>
+
+            <button type="button"
+                    class="events-page-button"
+                    disabled="@(_querying || _result?.HasMore != true)"
+                    @onclick="NextPageAsync">
+                Следующая →
+            </button>
+        </div>
+    </main>
+
+    <aside class="events-properties">
+        <div class="events-panel-heading">
+            Детали события
+        </div>
+
+        @if (SelectedEvent is null)
+        {
+            <div class="events-properties-empty">
+                Выберите строку события.
+            </div>
+        }
+        else
+        {
+            <div class="events-property-form">
+                <div class="events-property-grid">
+                    <div class="events-property-field">
+                        <span>EventId</span>
+                        <strong>@SelectedEvent.EventId</strong>
+                    </div>
+
+                    <div class="events-property-field">
+                        <span>Severity</span>
+                        <strong>@SelectedEvent.Severity</strong>
+                    </div>
+                </div>
+
+                <div class="events-property-field">
+                    <span>Время</span>
+                    <strong>@SelectedEvent.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")</strong>
+                </div>
+
+                <div class="events-property-grid">
+                    <div class="events-property-field">
+                        <span>Category</span>
+                        <strong>@SelectedEvent.Category</strong>
+                    </div>
+
+                    <div class="events-property-field">
+                        <span>Type</span>
+                        <strong>@SelectedEvent.Type</strong>
+                    </div>
+                </div>
+
+                <div class="events-property-field">
+                    <span>Source</span>
+                    <strong class="events-property-mono">@SelectedEvent.Source</strong>
+                </div>
+
+                <div class="events-property-field">
+                    <span>Message</span>
+                    <strong>@SelectedEvent.Message</strong>
+                </div>
+
+                <div class="events-property-section">
+                    DataJson
+                </div>
+
+                <pre class="events-json">@SelectedDataJson</pre>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions PrettyJsonOptions =
+        new()
+        {
+            WriteIndented = true
+        };
+
+    private string _fromLocalText = string.Empty;
+    private string _toLocalText = string.Empty;
+    private string _categoryFilter = string.Empty;
+    private string _severityFilter = string.Empty;
+    private string _sourceFilter = string.Empty;
+    private string _textFilter = string.Empty;
+
+    private int _page = 1;
+    private int _limit = 200;
+    private bool _querying;
+    private bool _live = true;
+    private int _pendingRealtimeCount;
+    private long? _selectedEventId;
+    private string? _error;
+    private EventQueryResponseDto? _result;
+
+    private IReadOnlyList<EventRecordDto> CurrentItems =>
+        _result?.Items
+        ?? Array.Empty<EventRecordDto>();
+
+    private EventRecordDto? SelectedEvent =>
+        _selectedEventId is null
+            ? null
+            : CurrentItems.FirstOrDefault(record =>
+                record.EventId == _selectedEventId.Value);
+
+    private string SelectedDataJson =>
+        FormatDataJson(
+            SelectedEvent?.DataJson);
+
+    private string RealtimeLabel =>
+        EventApi.ConnectionState switch
+        {
+            EventRealtimeConnectionState.Connected =>
+                "Realtime",
+            EventRealtimeConnectionState.Connecting =>
+                "Подключение…",
+            EventRealtimeConnectionState.Reconnecting =>
+                "Переподключение…",
+            _ =>
+                "Offline"
+        };
+
+    private string RealtimeCssClass =>
+        EventApi.ConnectionState switch
+        {
+            EventRealtimeConnectionState.Connected =>
+                "connected",
+            EventRealtimeConnectionState.Connecting or
+            EventRealtimeConnectionState.Reconnecting =>
+                "connecting",
+            _ =>
+                "disconnected"
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        EventApi.EventAdded +=
+            OnEventAdded;
+
+        EventApi.ConnectionChanged +=
+            OnConnectionChanged;
+
+        SetPreset(
+            TimeSpan.FromHours(1));
+
+        await EventApi.StartRealtimeAsync();
+        await QueryAsync();
+    }
+
+    private async Task QueryFromFirstPageAsync()
+    {
+        _page = 1;
+        _pendingRealtimeCount = 0;
+
+        if (_live)
+        {
+            SetToNow();
+        }
+
+        await QueryAsync();
+    }
+
+    private async Task QueryAsync()
+    {
+        if (_querying)
+        {
+            return;
+        }
+
+        if (!TryParseLocalInput(
+                _fromLocalText,
+                out var from)
+            || !TryParseLocalInput(
+                _toLocalText,
+                out var to))
+        {
+            _error =
+                "Диапазон времени задан неверно.";
+
+            return;
+        }
+
+        if (from > to)
+        {
+            _error =
+                "Поле «От» должно быть раньше или равно полю «До».";
+
+            return;
+        }
+
+        _querying = true;
+        _error = null;
+
+        try
+        {
+            _result =
+                await EventApi.QueryAsync(
+                    from,
+                    to,
+                    ParseCategory(),
+                    ParseSeverity(),
+                    _sourceFilter,
+                    _textFilter,
+                    _page,
+                    _limit);
+
+            if (_selectedEventId is null
+                || !CurrentItems.Any(record =>
+                    record.EventId == _selectedEventId.Value))
+            {
+                _selectedEventId =
+                    CurrentItems.FirstOrDefault()?.EventId;
+            }
+        }
+        catch (Exception exception)
+        {
+            _error =
+                exception.Message;
+        }
+        finally
+        {
+            _querying = false;
+        }
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_page <= 1)
+        {
+            return;
+        }
+
+        _page--;
+        await QueryAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (_result?.HasMore != true)
+        {
+            return;
+        }
+
+        _page++;
+        await QueryAsync();
+    }
+
+    private async Task ApplyPresetAsync(
+        TimeSpan duration)
+    {
+        _live = true;
+        _page = 1;
+        _pendingRealtimeCount = 0;
+
+        SetPreset(
+            duration);
+
+        await QueryAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _categoryFilter =
+            string.Empty;
+        _severityFilter =
+            string.Empty;
+        _sourceFilter =
+            string.Empty;
+        _textFilter =
+            string.Empty;
+        _page =
+            1;
+        _pendingRealtimeCount =
+            0;
+
+        await QueryAsync();
+    }
+
+    private async Task ShowNewAsync()
+    {
+        _live = true;
+        _page = 1;
+        _pendingRealtimeCount = 0;
+        SetToNow();
+
+        await QueryAsync();
+    }
+
+    private void OnFromLocalChanged(
+        ChangeEventArgs eventArgs)
+    {
+        _fromLocalText =
+            eventArgs.Value?.ToString()
+            ?? string.Empty;
+
+        _live =
+            false;
+    }
+
+    private void OnToLocalChanged(
+        ChangeEventArgs eventArgs)
+    {
+        _toLocalText =
+            eventArgs.Value?.ToString()
+            ?? string.Empty;
+
+        _live =
+            false;
+    }
+
+    private void OnLiveChanged(
+        ChangeEventArgs eventArgs)
+    {
+        _live =
+            eventArgs.Value is true
+            || string.Equals(
+                eventArgs.Value?.ToString(),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (_live)
+        {
+            _page =
+                1;
+
+            SetToNow();
+        }
+    }
+
+    private void OnEventAdded(
+        EventRecordDto record)
+    {
+        _ =
+            InvokeAsync(
+                () =>
+                {
+                    HandleRealtimeEvent(
+                        record);
+
+                    StateHasChanged();
+                });
+    }
+
+    private void HandleRealtimeEvent(
+        EventRecordDto record)
+    {
+        if (!MatchesNonTimeFilters(
+                record)
+            || !TryParseLocalInput(
+                _fromLocalText,
+                out var from)
+            || record.Timestamp < from)
+        {
+            return;
+        }
+
+        if (!_live
+            || _page != 1
+            || _result is null)
+        {
+            _pendingRealtimeCount++;
+            return;
+        }
+
+        var byId =
+            _result.Items.ToDictionary(
+                item => item.EventId);
+
+        byId[record.EventId] =
+            record;
+
+        var ordered =
+            byId.Values
+                .OrderByDescending(item =>
+                    item.Timestamp)
+                .ThenByDescending(item =>
+                    item.EventId)
+                .ToArray();
+
+        var overflow =
+            ordered.Length > _limit;
+
+        _result =
+            new EventQueryResponseDto(
+                Page:
+                    1,
+                Limit:
+                    _limit,
+                HasMore:
+                    _result.HasMore || overflow,
+                Items:
+                    ordered
+                        .Take(
+                            _limit)
+                        .ToArray());
+
+        if (_selectedEventId is null)
+        {
+            _selectedEventId =
+                record.EventId;
+        }
+
+        var currentTo =
+            TryParseLocalInput(
+                _toLocalText,
+                out var parsedTo)
+                ? parsedTo
+                : DateTimeOffset.MinValue;
+
+        if (record.Timestamp > currentTo)
+        {
+            _toLocalText =
+                FormatLocalInput(
+                    record.Timestamp
+                        .ToLocalTime()
+                        .DateTime);
+        }
+    }
+
+    private bool MatchesNonTimeFilters(
+        EventRecordDto record)
+    {
+        var category =
+            ParseCategory();
+
+        if (category is not null
+            && record.Category != category.Value)
+        {
+            return false;
+        }
+
+        var severity =
+            ParseSeverity();
+
+        if (severity is not null
+            && record.Severity != severity.Value)
+        {
+            return false;
+        }
+
+        var source =
+            _sourceFilter.Trim();
+
+        if (!string.IsNullOrWhiteSpace(
+                source)
+            && !string.Equals(
+                record.Source,
+                source,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var text =
+            _textFilter.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                text))
+        {
+            return true;
+        }
+
+        return record.Type.Contains(
+                   text,
+                   StringComparison.Ordinal)
+               || record.Source.Contains(
+                   text,
+                   StringComparison.Ordinal)
+               || record.Message.Contains(
+                   text,
+                   StringComparison.Ordinal)
+               || (record.DataJson?.Contains(
+                       text,
+                       StringComparison.Ordinal)
+                   ?? false);
+    }
+
+    private EventCategoryDto? ParseCategory()
+    {
+        return Enum.TryParse<EventCategoryDto>(
+                _categoryFilter,
+                ignoreCase:
+                    false,
+                out var value)
+            ? value
+            : null;
+    }
+
+    private EventSeverityDto? ParseSeverity()
+    {
+        return Enum.TryParse<EventSeverityDto>(
+                _severityFilter,
+                ignoreCase:
+                    false,
+                out var value)
+            ? value
+            : null;
+    }
+
+    private void SetPreset(
+        TimeSpan duration)
+    {
+        var now =
+            DateTime.Now;
+
+        var to =
+            new DateTime(
+                now.Year,
+                now.Month,
+                now.Day,
+                now.Hour,
+                now.Minute,
+                0,
+                DateTimeKind.Unspecified);
+
+        _toLocalText =
+            FormatLocalInput(
+                to);
+
+        _fromLocalText =
+            FormatLocalInput(
+                to.Subtract(
+                    duration));
+    }
+
+    private void SetToNow()
+    {
+        var now =
+            DateTime.Now;
+
+        _toLocalText =
+            FormatLocalInput(
+                new DateTime(
+                    now.Year,
+                    now.Month,
+                    now.Day,
+                    now.Hour,
+                    now.Minute,
+                    now.Second,
+                    DateTimeKind.Unspecified));
+    }
+
+    private static string FormatLocalInput(
+        DateTime value)
+    {
+        return value.ToString(
+            "yyyy-MM-ddTHH:mm:ss",
+            CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseLocalInput(
+        string value,
+        out DateTimeOffset result)
+    {
+        var formats =
+            new[]
+            {
+                "yyyy-MM-ddTHH:mm",
+                "yyyy-MM-ddTHH:mm:ss"
+            };
+
+        if (!DateTime.TryParseExact(
+                value,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var local))
+        {
+            result =
+                default;
+
+            return false;
+        }
+
+        var unspecified =
+            DateTime.SpecifyKind(
+                local,
+                DateTimeKind.Unspecified);
+
+        var offset =
+            TimeZoneInfo.Local.GetUtcOffset(
+                unspecified);
+
+        result =
+            new DateTimeOffset(
+                unspecified,
+                offset);
+
+        return true;
+    }
+
+    private void SelectEvent(
+        long eventId)
+    {
+        _selectedEventId =
+            eventId;
+    }
+
+    private bool IsSelected(
+        long eventId)
+    {
+        return _selectedEventId == eventId;
+    }
+
+    private static string SeverityCss(
+        EventSeverityDto severity)
+    {
+        return severity switch
+        {
+            EventSeverityDto.Information =>
+                "information",
+            EventSeverityDto.Warning =>
+                "warning",
+            EventSeverityDto.Error =>
+                "error",
+            _ =>
+                string.Empty
+        };
+    }
+
+    private static string FormatDataJson(
+        string? dataJson)
+    {
+        if (string.IsNullOrWhiteSpace(
+                dataJson))
+        {
+            return "—";
+        }
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(
+                    dataJson);
+
+            return JsonSerializer.Serialize(
+                document.RootElement,
+                PrettyJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return dataJson;
+        }
+    }
+
+    private void OnConnectionChanged()
+    {
+        _ =
+            InvokeAsync(
+                StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        EventApi.EventAdded -=
+            OnEventAdded;
+
+        EventApi.ConnectionChanged -=
+            OnConnectionChanged;
+    }
+}

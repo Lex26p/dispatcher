@@ -1,3 +1,4 @@
+using System.Text;
 using Dispatcher.Server.Events;
 using Microsoft.Data.Sqlite;
 
@@ -165,7 +166,7 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
         transaction.Commit();
     }
 
-    public async Task AppendEventsAsync(
+    public async Task<IReadOnlyList<EventRecord>> AppendEventsAsync(
         IReadOnlyList<EventRecord> events,
         CancellationToken cancellationToken = default)
     {
@@ -174,7 +175,7 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
 
         if (events.Count == 0)
         {
-            return;
+            return Array.Empty<EventRecord>();
         }
 
         await using var connection =
@@ -244,6 +245,18 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 "$dataJson",
                 SqliteType.Text);
 
+        await using var idCommand =
+            connection.CreateCommand();
+
+        idCommand.Transaction =
+            transaction;
+        idCommand.CommandText =
+            "SELECT last_insert_rowid();";
+
+        var persisted =
+            new List<EventRecord>(
+                events.Count);
+
         foreach (var record in events)
         {
             ArgumentNullException.ThrowIfNull(
@@ -282,9 +295,181 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
 
             await command.ExecuteNonQueryAsync(
                 cancellationToken);
+
+            var eventId =
+                Convert.ToInt64(
+                    await idCommand.ExecuteScalarAsync(
+                        cancellationToken));
+
+            persisted.Add(
+                record with
+                {
+                    EventId =
+                        eventId,
+                    Timestamp =
+                        record.Timestamp.ToUniversalTime()
+                });
         }
 
         transaction.Commit();
+
+        return persisted;
+    }
+
+    public async Task<IReadOnlyList<EventRecord>> QueryEventsAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        EventCategory? category,
+        EventSeverity? severity,
+        string? source,
+        string? text,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (from > to)
+        {
+            throw new ArgumentException(
+                "'from' must be less than or equal to 'to'.");
+        }
+
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(offset),
+                "Event query offset cannot be negative.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(limit),
+                "Event query limit must be greater than zero.");
+        }
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        var sql =
+            new StringBuilder(
+                """
+                SELECT
+                    event_id,
+                    timestamp_utc_ticks,
+                    category,
+                    type,
+                    severity,
+                    source,
+                    message,
+                    data_json
+                FROM events
+                WHERE timestamp_utc_ticks >= $fromUtcTicks
+                  AND timestamp_utc_ticks <= $toUtcTicks
+                """);
+
+        sql.AppendLine();
+
+        command.Parameters.AddWithValue(
+            "$fromUtcTicks",
+            from
+                .UtcDateTime
+                .Ticks);
+
+        command.Parameters.AddWithValue(
+            "$toUtcTicks",
+            to
+                .UtcDateTime
+                .Ticks);
+
+        if (category is not null)
+        {
+            sql.AppendLine(
+                "  AND category = $category");
+
+            command.Parameters.AddWithValue(
+                "$category",
+                (int)category.Value);
+        }
+
+        if (severity is not null)
+        {
+            sql.AppendLine(
+                "  AND severity = $severity");
+
+            command.Parameters.AddWithValue(
+                "$severity",
+                (int)severity.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                source))
+        {
+            sql.AppendLine(
+                "  AND source = $source");
+
+            command.Parameters.AddWithValue(
+                "$source",
+                source);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                text))
+        {
+            sql.AppendLine(
+                """
+                  AND (
+                      instr(type, $text) > 0
+                      OR instr(source, $text) > 0
+                      OR instr(message, $text) > 0
+                      OR instr(COALESCE(data_json, ''), $text) > 0
+                  )
+                """);
+
+            command.Parameters.AddWithValue(
+                "$text",
+                text);
+        }
+
+        sql.Append(
+            """
+            ORDER BY
+                timestamp_utc_ticks DESC,
+                event_id DESC
+            LIMIT $limit
+            OFFSET $offset;
+            """);
+
+        command.Parameters.AddWithValue(
+            "$limit",
+            limit);
+
+        command.Parameters.AddWithValue(
+            "$offset",
+            offset);
+
+        command.CommandText =
+            sql.ToString();
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var events =
+            new List<EventRecord>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            events.Add(
+                ReadEvent(
+                    reader));
+        }
+
+        return events;
     }
 
     public async Task<IReadOnlyList<EventRecord>> LoadAllEventsAsync(

@@ -394,30 +394,101 @@ Event Journal не является AlarmService и не имеет update/delet
 
 ---
 
-## [ ] V2-S06 — Events API и Web
+## [x] V2-S06 — Events API и Web
 
-Новый Web service:
+Реализовано:
+
+### REST query
 
 ```text
-Events
+GET /api/events
 ```
 
-Минимум:
+Filters:
 
-- time range;
-- category;
-- severity;
-- source;
-- text filter;
-- dense table;
-- server-side limit/paging;
-- детали выбранного event справа.
+```text
+from
+to
+category?
+severity?
+source?
+text?
+page
+limit
+```
 
-Realtime добавляется только для новых events, исторический диапазон читается REST.
+Semantics:
+
+- `from/to` required и inclusive;
+- newest-first;
+- stable tie-breaker `event_id DESC`;
+- `source` — exact case-sensitive match;
+- `text` — case-sensitive Unicode substring в:
+  - Type;
+  - Source;
+  - Message;
+  - DataJson;
+- default page `1`;
+- default limit `200`;
+- maximum limit `500`;
+- `HasMore` через `limit + 1`;
+- без `COUNT(*)`;
+- journal остаётся read-only/immutable.
+
+### Realtime
+
+Существующий RuntimeHub расширен:
+
+```text
+EventAdded
+```
+
+Event отправляется только после successful SQLite persistence и имеет реальный `EventId`.
+
+Historical replay через SignalR не добавлен.
+
+### Web
+
+Новый service:
+
+```text
+/events
+```
+
+Компоновка:
+
+```text
+слева  → category / severity / source / text filters
+центр  → time range / dense table / paging
+справа → selected event details / DataJson
+```
+
+Web:
+
+- presets:
+  - 15 min;
+  - 1 h;
+  - 6 h;
+  - 24 h;
+- local `from/to`;
+- limits:
+  - 100;
+  - 200;
+  - 500;
+- server-side paging;
+- severity state visible in table;
+- realtime connection state;
+- Live mode;
+- new persisted events merge into page 1 when they match filters;
+- on historical pages new matching events are counted as `Новые`;
+- `DataJson` pretty-printed in details;
+- global navigation `События`.
+
+Operational SQLite schema остаётся version `2`.
 
 ### Результат Phase 6
 
-Инженер может диагностировать, что происходило в системе, даже до появления Alarm rules.
+Инженер может диагностировать исторические и новые operational события системы до появления Alarm rules.
 
 ---
 

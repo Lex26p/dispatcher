@@ -17,5 +17,6 @@ builder.Services.AddScoped<RuntimeStateClient>();
 builder.Services.AddScoped<ConfigurationClient>();
 builder.Services.AddScoped<MimicClient>();
 builder.Services.AddScoped<HistoryClient>();
+builder.Services.AddScoped<EventClient>();
 
 await builder.Build().RunAsync();

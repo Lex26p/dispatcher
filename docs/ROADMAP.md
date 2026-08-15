@@ -98,12 +98,12 @@ Scripting
 
 V2-S01…V2-S04 завершают первый полный Historian vertical slice.
 
-V2-S05 создаёт foundation Phase 6 — immutable Event Journal в operational storage.
+V2-S05 и V2-S06 завершают Phase 6: immutable Event Journal, Events REST/paging, realtime новых events и Web Events.
 
 Следующий шаг новой дорожной карты:
 
 ```text
-V2-S06 — Events API и Web
+V2-S07 — Authentication foundation
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.
