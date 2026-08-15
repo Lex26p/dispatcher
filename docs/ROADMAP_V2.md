@@ -177,39 +177,43 @@ Operational SQLite
 
 ---
 
-## [ ] V2-S02 — Historian policies и retention
+## [x] V2-S02 — Historian policies и retention
 
-Цель: не писать все значения бесконтрольно.
+Реализовано:
 
-Минимальная policy на TagId:
+- persistent `historian_policies` в configuration SQLite schema v4;
+- policy:
+  - `TagId`;
+  - `Enabled`;
+  - `Mode`;
+  - `PeriodMilliseconds`;
+  - `RetentionDays`;
+- modes:
+  - `OnChange`;
+  - `Periodic`;
+- минимальный Periodic interval `100 ms`;
+- live policy catalog без restart protocol polling;
+- configuration API GET/PUT/DELETE;
+- отсутствие policy означает «не архивировать»;
+- `Enabled=false` выключает sampling, но не retention;
+- stale policy сохраняется после удаления/переименования TagId;
+- stale policy возвращается API с `TagExists=false`;
+- stale policy не выполняет sampling;
+- periodic sampling использует current TagService value и timestamp времени sample;
+- retention cleanup hosted service;
+- retention применяется per TagId;
+- disabled/stale policy продолжает удалять слишком старую историю;
+- удаление policy не удаляет существующую history автоматически;
+- cleanup diagnostics:
+  - `CleanupRunCount`;
+  - `DeletedSampleCount`;
+- baseline buffer overflow diagnostics V2-S01 сохраняются.
 
-```text
-Enabled
-Mode
-Retention
-```
-
-Начальные режимы:
-
-```text
-OnChange
-Periodic
-```
-
-Для numeric tags допускается добавить deadband, если он реально нужен при реализации.
-
-Нужно определить:
-
-- период periodic sampling;
-- retention days;
-- cleanup hosted service;
-- поведение при удалённом/переименованном TagId;
-- настройку/tuning buffer и overflow diagnostics при необходимости;
-- retention cleanup diagnostics.
+Deadband не добавлен: два требуемых sampling modes закрывают текущий use case без дополнительной numeric-only semantics.
 
 ### Результат
 
-Инженер явно выбирает, какие теги архивируются и с какой политикой.
+Инженер явно выбирает, какие logical tags архивируются, в каком режиме и сколько дней хранится история.
 
 ---
 

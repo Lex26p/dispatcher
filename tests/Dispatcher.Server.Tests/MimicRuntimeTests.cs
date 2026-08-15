@@ -177,7 +177,7 @@ public sealed class MimicRuntimeTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion2Database_ToVersion3WithoutLosingProtocolData()
+    public async Task InitializeAsync_MigratesVersion2Database_ToVersion4WithoutLosingProtocolData()
     {
         var directory =
             Path.Combine(
@@ -316,6 +316,8 @@ public sealed class MimicRuntimeTests
                 await store.LoadSnmpAsync();
             var mimics =
                 await store.LoadMimicsAsync();
+            var policies =
+                await store.LoadHistorianPoliciesAsync();
 
             Assert.AreEqual(
                 1,
@@ -329,6 +331,9 @@ public sealed class MimicRuntimeTests
             Assert.AreEqual(
                 0,
                 mimics.Count);
+            Assert.AreEqual(
+                0,
+                policies.Count);
 
             await using var verify =
                 new SqliteConnection(
@@ -347,7 +352,7 @@ public sealed class MimicRuntimeTests
                     await versionCommand.ExecuteScalarAsync());
 
             Assert.AreEqual(
-                3,
+                4,
                 version);
         }
         finally

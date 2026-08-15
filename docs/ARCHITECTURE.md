@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S01
+## 1. Состояние после V2-S02
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -78,34 +78,32 @@ Public boundary находится в `Dispatcher.Contracts.Mimics`.
 
 ## 4. Persistence
 
-SQLite schema version:
+Configuration SQLite schema version:
 
 ```text
-3
+4
 ```
 
-Новая table:
+Tables, добавленные после базовой protocol configuration:
 
 ```text
 mimics
-├── mimic_id
-├── name
-├── width
-├── height
-└── elements_json
+historian_policies
 ```
 
 Schema migration:
 
 ```text
 v1
- ↓ existing migration
-v2
- ↓ create mimics
-v3
+ ↓
+v2  SNMP
+ ↓
+v3  mimics
+ ↓
+v4  historian_policies
 ```
 
-При `v2 → v3` Modbus/SNMP tables не перестраиваются и не очищаются.
+При `v3 → v4` protocol/mimic tables не перестраиваются и не очищаются.
 
 ## 5. Почему elements_json
 
@@ -448,6 +446,7 @@ dispatcher.db
 devices
 tags
 mimics
+historian policies
 ```
 
 V2-S01 вводит отдельную operational database:
@@ -615,18 +614,223 @@ Historian:
 
 ## 26. V2-S01 scope boundary
 
-На этом шаге Historian сохраняет все `TagService.Changed`.
+V2-S01 создал bounded asynchronous ingestion и operational SQLite.
 
-Не реализуются ещё:
+V2-S02 поверх этой границы добавляет policy-driven sampling и retention.
+
+History query API и Trend Web по-прежнему остаются V2-S03/V2-S04.
+
+
+## 27. Historian policy configuration
+
+V2-S02 добавляет в configuration database:
 
 ```text
-Historian policies
-Periodic sampling
-Retention cleanup
+historian_policies
+├── tag_id
+├── enabled
+├── mode
+├── period_ms
+└── retention_days
+```
+
+Configuration schema version становится:
+
+```text
+4
+```
+
+Policy не имеет SQL foreign key на protocol tag tables.
+
+Причина:
+
+- logical `TagId` глобален между протоколами;
+- Modbus/SNMP configuration заменяется whole-snapshot операциями;
+- policy должна пережить временное удаление/переименование тега как явный stale binding;
+- автоматический cascade delete уничтожил бы retention configuration и скрыл бы факт сломанного binding.
+
+`HistorianPolicyCatalog` является thread-safe in-memory snapshot для hot runtime path.
+
+Startup:
+
+```text
+SqliteConfigurationStore.Initialize
+        ↓
+load devices/tags
+load historian policies
+        ↓
+ConfigurationCatalog
+HistorianPolicyCatalog
+        ↓
+HistorianService start
+```
+
+## 28. Policy API и live apply
+
+Configuration boundary:
+
+```text
+GET    /api/configuration/historian/policies
+PUT    /api/configuration/historian/policies/{tagId}
+DELETE /api/configuration/historian/policies/{tagId}
+```
+
+Новая policy создаётся только для существующего configured `TagId`.
+
+Если policy уже существует, а tag позже удалён, policy остаётся доступной для update/delete.
+
+DTO возвращает:
+
+```text
+TagExists
+```
+
+чтобы stale binding был явным.
+
+Policy mutation:
+
+```text
+validate
+   ↓
+SQLite upsert/delete
+   ↓
+HistorianPolicyCatalog.ReplaceAll
+   ↓
+HistorianService sees new snapshot
+```
+
+Protocol polling не перезапускается.
+
+## 29. Sampling modes
+
+### OnChange
+
+```text
+TagService.Changed
+      ↓
+find enabled policy
+      ↓ mode == OnChange
+      ↓ configured TagId still exists
+      ↓
+bounded channel
+```
+
+Сохраняется timestamp исходного `TagValue`.
+
+### Periodic
+
+Policy требует:
+
+```text
+100 ms <= PeriodMilliseconds <= 24 h
+```
+
+Отдельный lightweight periodic sampler сканирует enabled periodic policies.
+
+Scan interval configurable как `Historian:PeriodicScanMilliseconds` в диапазоне `10..100 ms`, поэтому scan granularity не может быть медленнее минимального policy interval.
+
+Когда policy due:
+
+```text
+ConfigurationCatalog.ContainsTagId
+        ↓
+TagService.Get(TagId)
+        ↓
+current Value
+        ↓
+HistorySample(timestamp = sample time)
+        ↓
+bounded channel
+```
+
+Periodic mode не создаёт catch-up burst после задержки. Следующий due рассчитывается от фактического текущего scan time.
+
+Если current value ещё отсутствует, sample пропускается до следующего периода.
+
+Deadband в V2-S02 не добавляется.
+
+## 30. Stale/disabled policy semantics
+
+Отсутствие policy:
+
+```text
+no sampling
+no automatic retention cleanup for that TagId
+```
+
+`Enabled=false`:
+
+```text
+sampling off
+retention still active
+```
+
+Stale policy (`TagExists=false`):
+
+```text
+sampling off
+retention still active
+policy remains manageable
+```
+
+При rename старый `TagId` не переносит policy автоматически на новый `TagId`.
+
+Это требует явного инженерного решения и не создаёт скрытый change of archival identity.
+
+Удаление policy не удаляет накопленные samples и прекращает automatic retention для этого `TagId`.
+
+## 31. Retention cleanup
+
+`HistorianRetentionHostedService` запускается после Historian operational store initialization.
+
+Default interval:
+
+```text
+60 minutes
+```
+
+Для каждой сохранённой policy:
+
+```text
+cutoff = now UTC - RetentionDays
+        ↓
+DELETE history_samples
+WHERE tag_id = policy.TagId
+  AND timestamp < cutoff
+```
+
+Retention применяется независимо от `Enabled` и `TagExists`.
+
+Diagnostics:
+
+```text
+CleanupRunCount
+DeletedSampleCount
+```
+
+Ошибка cleanup логируется и не останавливает основной protocol/Historian ingestion runtime.
+
+Operational schema остаётся version `1`: retention использует уже существующий индекс `(tag_id, timestamp_utc_ticks, sample_id)` и не требует изменения table layout.
+
+## 32. V2-S02 scope boundary
+
+После V2-S02 есть:
+
+```text
+persistent policy
+OnChange
+Periodic
+retention
+configuration API
+live apply
+```
+
+Ещё нет:
+
+```text
 History query API
+public history DTO
 Trend Web
 ```
 
-Они остаются соответственно V2-S02, V2-S03 и V2-S04.
-
-Configuration schema v3 не меняется.
+Следующий шаг V2-S03 вводит read/query boundary поверх существующего operational storage.

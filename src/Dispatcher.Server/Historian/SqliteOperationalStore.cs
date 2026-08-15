@@ -158,6 +158,42 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         transaction.Commit();
     }
 
+    public async Task<int> DeleteBeforeAsync(
+        string tagId,
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            tagId);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DELETE FROM history_samples
+            WHERE tag_id = $tagId
+              AND timestamp_utc_ticks < $cutoffUtcTicks;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$tagId",
+            tagId);
+
+        command.Parameters.AddWithValue(
+            "$cutoffUtcTicks",
+            cutoff
+                .UtcDateTime
+                .Ticks);
+
+        return await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<HistorySample>> LoadAllAsync(
         CancellationToken cancellationToken = default)
     {

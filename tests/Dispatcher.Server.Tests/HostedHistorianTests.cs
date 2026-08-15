@@ -1,4 +1,5 @@
 using Dispatcher.Core.Tags;
+using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Historian;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -9,10 +10,28 @@ namespace Dispatcher.Server.Tests;
 public sealed class HostedHistorianTests
 {
     [TestMethod]
-    public async Task ServerStartup_SubscribesHistorianBeforeRuntimeTagChanges()
+    public async Task ServerStartup_LoadsPolicyBeforeRuntimeTagChanges()
     {
+        var device =
+            TestModbusConfiguration.CreateDevice(
+                port: 502,
+                enabled: false);
+
         using var database =
-            await TestConfigurationDatabase.CreateAsync();
+            await TestConfigurationDatabase.CreateAsync(
+                device);
+
+        var configurationStore =
+            new SqliteConfigurationStore(
+                database.DatabasePath);
+
+        await configurationStore.UpsertHistorianPolicyAsync(
+            new HistorianPolicyConfiguration(
+                "device01.register100",
+                true,
+                HistorianSamplingMode.OnChange,
+                null,
+                30));
 
         var operationalPath =
             TestDispatcherFactory.GetOperationalDatabasePath(
@@ -33,7 +52,7 @@ public sealed class HostedHistorianTests
                 2026, 8, 15, 16, 0, 0, TimeSpan.Zero);
 
         tags.Set(
-            "historian.integration",
+            "device01.register100",
             "online",
             timestamp);
 
@@ -50,14 +69,14 @@ public sealed class HostedHistorianTests
                     await store.LoadAllAsync();
 
                 return samples.Any(sample =>
-                    sample.TagId == "historian.integration");
+                    sample.TagId == "device01.register100");
             },
             TimeSpan.FromSeconds(2));
 
         var persisted =
             (await store.LoadAllAsync())
                 .Single(sample =>
-                    sample.TagId == "historian.integration");
+                    sample.TagId == "device01.register100");
 
         Assert.AreEqual(
             HistoryValueType.String,

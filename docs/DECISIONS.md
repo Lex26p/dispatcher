@@ -682,3 +682,81 @@ Json
 - будущий query API может восстановить public typed value без изменения ingest boundary.
 
 Protocol address/OID в history record отсутствует.
+
+---
+
+## D-045 — Historian policies хранятся в configuration DB schema v4 и не имеют FK на protocol tags
+
+**Status:** Accepted
+
+V2-S02 добавляет:
+
+```text
+historian_policies
+```
+
+в `dispatcher.db` и повышает configuration schema до version `4`.
+
+Policy идентифицируется logical `TagId`.
+
+SQL foreign key на `modbus_tags` или `snmp_tags` не создаётся.
+
+Причина:
+
+- `TagId` protocol-neutral;
+- policy должна переживать whole-snapshot replacement protocol configuration;
+- удалённый/переименованный tag должен оставлять явный stale policy, а не silently cascade-delete archival intent.
+
+API сообщает stale state через `TagExists=false`.
+
+---
+
+## D-046 — Historian sampling policy поддерживает OnChange и Periodic с live apply
+
+**Status:** Accepted
+
+Отсутствие policy означает:
+
+```text
+не архивировать
+```
+
+Enabled policy имеет mode:
+
+```text
+OnChange
+Periodic
+```
+
+`OnChange` сохраняет timestamp runtime change.
+
+`Periodic` требует interval `100 ms .. 24 h`, читает current value из `TagService` и ставит timestamp фактического sample time.
+
+Policy mutation обновляет `HistorianPolicyCatalog` без restart Modbus/SNMP polling.
+
+Stale policy и disabled policy sampling не выполняют.
+
+Deadband в V2-S02 не вводится, потому что он добавляет numeric-specific semantics, не требуемую для закрытия двух базовых sampling modes.
+
+---
+
+## D-047 — Retention применяется к сохранённой policy независимо от Enabled/TagExists
+
+**Status:** Accepted
+
+`RetentionDays` принадлежит historian policy.
+
+Cleanup удаляет operational samples per `TagId` старше cutoff.
+
+Retention продолжает работать если:
+
+```text
+Enabled = false
+TagExists = false
+```
+
+Причина: остановка нового sampling или временно сломанный binding не должны превращать накопленную историю в бесконтрольно растущие данные.
+
+Удаление самой policy не удаляет history немедленно и прекращает automatic cleanup для этого `TagId`.
+
+Такое удаление данных должно оставаться отдельным явным действием, если оно понадобится позже.

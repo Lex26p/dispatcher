@@ -33,6 +33,10 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 14. Редактировать координаты и размеры элементов справа.
 15. Выбирать logical `TagId` из Modbus/SNMP configuration.
 16. Сохранять editor draft в тот же definition, который исполняет runtime.
+17. Архивировать выбранные logical tags по `OnChange` или `Periodic` policy.
+18. Хранить historian policy отдельно от operational samples.
+19. Применять historian policy без restart protocol polling.
+20. Удалять history samples по per-tag `RetentionDays`.
 
 ## Базовый стек
 
@@ -72,10 +76,10 @@ TagId
 
 ## SQLite schema
 
-Schema version после S11:
+Configuration SQLite schema version после V2-S02:
 
 ```text
-3
+4
 ```
 
 Таблицы:
@@ -86,9 +90,10 @@ modbus_tags
 snmp_devices
 snmp_tags
 mimics
+historian_policies
 ```
 
-Существующая schema version `2` автоматически мигрируется в `3` без удаления Modbus/SNMP configuration.
+Существующая schema `1/2/3` автоматически мигрируется в `4` без удаления protocol/mimic configuration.
 
 Таблица `mimics` хранит:
 
@@ -167,7 +172,44 @@ Callback protocol/runtime path не пишет SQLite. Он только пыт�
 
 Background writer сохраняет samples batch-ами. При transient persistence error текущий batch не выбрасывается, а повторяется.
 
-На V2-S01 historian пишет все изменения TagService. Policies `OnChange/Periodic`, retention и cleanup появятся в V2-S02.
+Начиная с V2-S02 Historian пишет только теги, для которых существует enabled policy.
+
+Policy:
+
+```text
+TagId
+Enabled
+Mode
+PeriodMilliseconds?
+RetentionDays
+```
+
+Modes:
+
+```text
+OnChange
+Periodic
+```
+
+`OnChange` сохраняет исходный timestamp `TagValue`.
+
+`Periodic` снимает current value с заданным периодом и использует время periodic sample. Минимальный период — `100 ms`.
+
+Policy хранится в configuration DB, а samples — в operational DB.
+
+Configuration API:
+
+```text
+GET    /api/configuration/historian/policies
+PUT    /api/configuration/historian/policies/{tagId}
+DELETE /api/configuration/historian/policies/{tagId}
+```
+
+Если tag удалён/переименован, policy не удаляется автоматически. API возвращает `TagExists = false`, sampling прекращается, но retention старой истории продолжает работать.
+
+`Enabled = false` также прекращает sampling, но retention продолжает действовать.
+
+Retention cleanup запускается hosted service и удаляет samples старше `RetentionDays` отдельно для каждого `TagId`.
 
 Configuration:
 
@@ -177,9 +219,13 @@ Configuration:
 },
 "Historian": {
   "BufferCapacity": 10000,
-  "BatchSize": 256
+  "BatchSize": 256,
+  "PeriodicScanMilliseconds": 100,
+  "RetentionCleanupIntervalMinutes": 60
 }
 ```
+
+`PeriodicScanMilliseconds` допускается в диапазоне `10..100`; policy interval — `100..86400000 ms`.
 
 Default operational database:
 
@@ -369,13 +415,13 @@ docs/ROADMAP_V2.md
 Текущий завершённый шаг:
 
 ```text
-V2-S01 — Historian storage и ingestion foundation
+V2-S02 — Historian policies и retention
 ```
 
 Следующий шаг:
 
 ```text
-V2-S02 — Historian policies и retention
+V2-S03 — History query API
 ```
 
 ## Документы

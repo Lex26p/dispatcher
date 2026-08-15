@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Dispatcher.Core.Tags;
+using Dispatcher.Server.Configuration;
 
 namespace Dispatcher.Server.Historian;
 
@@ -10,12 +12,20 @@ public sealed class HistorianService : IHostedService
 
     private readonly TagService _tagService;
     private readonly IHistorySampleStore _store;
+    private readonly ConfigurationCatalog _configuration;
+    private readonly HistorianPolicyCatalog _policies;
     private readonly HistorianOptions _options;
     private readonly ILogger<HistorianService> _logger;
     private readonly Channel<HistorySample> _channel;
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _nextPeriodicDue =
+        new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _periodicIntervals =
+        new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _writerCancellation = new();
+    private readonly CancellationTokenSource _periodicCancellation = new();
 
     private Task? _writerTask;
+    private Task? _periodicTask;
     private int _started;
     private long _droppedSampleCount;
     private long _rejectedSampleCount;
@@ -23,6 +33,8 @@ public sealed class HistorianService : IHostedService
     public HistorianService(
         TagService tagService,
         IHistorySampleStore store,
+        ConfigurationCatalog configuration,
+        HistorianPolicyCatalog policies,
         HistorianOptions options,
         ILogger<HistorianService> logger)
     {
@@ -30,6 +42,10 @@ public sealed class HistorianService : IHostedService
             tagService;
         _store =
             store;
+        _configuration =
+            configuration;
+        _policies =
+            policies;
         _options =
             options;
         _logger =
@@ -75,10 +91,16 @@ public sealed class HistorianService : IHostedService
             RunWriterAsync(
                 _writerCancellation.Token);
 
+        _periodicTask =
+            RunPeriodicSamplerAsync(
+                _periodicCancellation.Token);
+
         _logger.LogInformation(
-            "Historian started with buffer capacity {BufferCapacity}, batch size {BatchSize}.",
+            "Historian started with {PolicyCount} policy/policies, buffer capacity {BufferCapacity}, batch size {BatchSize}, and periodic scan {PeriodicScanMilliseconds} ms.",
+            _policies.Policies.Count,
             _options.BufferCapacity,
-            _options.BatchSize);
+            _options.BatchSize,
+            _options.PeriodicScanMilliseconds);
     }
 
     public async Task StopAsync(
@@ -92,6 +114,20 @@ public sealed class HistorianService : IHostedService
 
         _tagService.Changed -=
             OnTagChanged;
+
+        _periodicCancellation.Cancel();
+
+        if (_periodicTask is not null)
+        {
+            try
+            {
+                await _periodicTask;
+            }
+            catch (OperationCanceledException)
+                when (_periodicCancellation.IsCancellationRequested)
+            {
+            }
+        }
 
         _channel.Writer.TryComplete();
 
@@ -122,6 +158,139 @@ public sealed class HistorianService : IHostedService
     }
 
     private void OnTagChanged(
+        TagValue tagValue)
+    {
+        var policy =
+            _policies.Find(
+                tagValue.TagId);
+
+        if (policy is not
+            {
+                Enabled: true,
+                Mode: HistorianSamplingMode.OnChange
+            }
+            || !_configuration.ContainsTagId(
+                tagValue.TagId))
+        {
+            return;
+        }
+
+        TryEnqueue(
+            tagValue);
+    }
+
+    private async Task RunPeriodicSamplerAsync(
+        CancellationToken cancellationToken)
+    {
+        var scanDelay =
+            TimeSpan.FromMilliseconds(
+                _options.PeriodicScanMilliseconds);
+
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var now =
+                    DateTimeOffset.UtcNow;
+
+                var activeTagIds =
+                    new HashSet<string>(
+                        StringComparer.Ordinal);
+
+                foreach (var policy in _policies.Policies)
+                {
+                    if (!policy.Enabled
+                        || policy.Mode != HistorianSamplingMode.Periodic
+                        || policy.PeriodMilliseconds is null)
+                    {
+                        continue;
+                    }
+
+                    if (!_configuration.ContainsTagId(
+                            policy.TagId))
+                    {
+                        continue;
+                    }
+
+                    activeTagIds.Add(
+                        policy.TagId);
+
+                    var periodMilliseconds =
+                        policy.PeriodMilliseconds.Value;
+
+                    if (!_periodicIntervals.TryGetValue(
+                            policy.TagId,
+                            out var previousPeriod)
+                        || previousPeriod != periodMilliseconds)
+                    {
+                        _periodicIntervals[
+                            policy.TagId] =
+                            periodMilliseconds;
+
+                        _nextPeriodicDue[
+                            policy.TagId] =
+                            now;
+                    }
+
+                    var nextDue =
+                        _nextPeriodicDue.GetOrAdd(
+                            policy.TagId,
+                            now);
+
+                    if (now < nextDue)
+                    {
+                        continue;
+                    }
+
+                    _nextPeriodicDue[
+                        policy.TagId] =
+                        now.AddMilliseconds(
+                            periodMilliseconds);
+
+                    var current =
+                        _tagService.Get(
+                            policy.TagId);
+
+                    if (current is null)
+                    {
+                        continue;
+                    }
+
+                    TryEnqueue(
+                        new TagValue(
+                            current.TagId,
+                            current.Value,
+                            now));
+                }
+
+                foreach (var tagId in _nextPeriodicDue.Keys)
+                {
+                    if (!activeTagIds.Contains(
+                            tagId))
+                    {
+                        _nextPeriodicDue.TryRemove(
+                            tagId,
+                            out _);
+                        _periodicIntervals.TryRemove(
+                            tagId,
+                            out _);
+                    }
+                }
+
+                await Task.Delay(
+                    scanDelay,
+                    cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void TryEnqueue(
         TagValue tagValue)
     {
         HistorySample sample;

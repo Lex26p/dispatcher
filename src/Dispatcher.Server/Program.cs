@@ -25,6 +25,7 @@ builder.Services.AddSingleton(
                 services.GetRequiredService<IHostEnvironment>())));
 
 builder.Services.AddSingleton<ConfigurationCatalog>();
+builder.Services.AddSingleton<HistorianPolicyCatalog>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
 
 builder.Services.AddSingleton(
@@ -47,6 +48,9 @@ builder.Services.AddSingleton<HistorianService>();
 builder.Services.AddHostedService<HistorianService>(
     services =>
         services.GetRequiredService<HistorianService>());
+
+builder.Services.AddHostedService<HistorianRetentionHostedService>();
+builder.Services.AddSingleton<HistorianPolicyService>();
 
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
@@ -128,6 +132,7 @@ app.MapPost(
             cancellationToken));
 
 app.MapConfigurationEndpoints();
+app.MapHistorianPolicyEndpoints();
 app.MapMimicEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(

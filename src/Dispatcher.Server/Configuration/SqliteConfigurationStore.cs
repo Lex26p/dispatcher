@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Dispatcher.Server.Historian;
 using Dispatcher.Server.Mimics;
 using Microsoft.Data.Sqlite;
 
@@ -6,7 +7,7 @@ namespace Dispatcher.Server.Configuration;
 
 public sealed class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 3;
+    private const int CurrentSchemaVersion = 4;
 
     private readonly string _connectionString;
 
@@ -57,7 +58,7 @@ public sealed class SqliteConfigurationStore
         switch (schemaVersion)
         {
             case 0:
-                await CreateSchemaV3Async(
+                await CreateSchemaV4Async(
                     connection,
                     cancellationToken);
                 return;
@@ -70,10 +71,24 @@ public sealed class SqliteConfigurationStore
                 await MigrateV2ToV3Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV3ToV4Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
                 await MigrateV2ToV3Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV3ToV4Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 3:
+                await MigrateV3ToV4Async(
                     connection,
                     cancellationToken);
                 return;
@@ -369,6 +384,149 @@ public sealed class SqliteConfigurationStore
         return devices;
     }
 
+    public async Task<IReadOnlyList<HistorianPolicyConfiguration>> LoadHistorianPoliciesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                tag_id,
+                enabled,
+                mode,
+                period_ms,
+                retention_days
+            FROM historian_policies
+            ORDER BY tag_id;
+            """;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var policies =
+            new List<HistorianPolicyConfiguration>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            policies.Add(
+                new HistorianPolicyConfiguration(
+                    TagId:
+                        reader.GetString(0),
+                    Enabled:
+                        reader.GetInt64(1) != 0,
+                    Mode:
+                        (HistorianSamplingMode)reader.GetInt32(2),
+                    PeriodMilliseconds:
+                        reader.IsDBNull(3)
+                            ? null
+                            : reader.GetInt32(3),
+                    RetentionDays:
+                        reader.GetInt32(4)));
+        }
+
+        HistorianPolicyValidator.Validate(
+            policies);
+
+        return policies;
+    }
+
+    public async Task UpsertHistorianPolicyAsync(
+        HistorianPolicyConfiguration policy,
+        CancellationToken cancellationToken = default)
+    {
+        HistorianPolicyValidator.Validate(
+            policy);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            INSERT INTO historian_policies (
+                tag_id,
+                enabled,
+                mode,
+                period_ms,
+                retention_days)
+            VALUES (
+                $tagId,
+                $enabled,
+                $mode,
+                $periodMilliseconds,
+                $retentionDays)
+            ON CONFLICT(tag_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                mode = excluded.mode,
+                period_ms = excluded.period_ms,
+                retention_days = excluded.retention_days;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$tagId",
+            policy.TagId);
+
+        command.Parameters.AddWithValue(
+            "$enabled",
+            policy.Enabled ? 1 : 0);
+
+        command.Parameters.AddWithValue(
+            "$mode",
+            (int)policy.Mode);
+
+        command.Parameters.AddWithValue(
+            "$periodMilliseconds",
+            policy.PeriodMilliseconds is null
+                ? DBNull.Value
+                : policy.PeriodMilliseconds.Value);
+
+        command.Parameters.AddWithValue(
+            "$retentionDays",
+            policy.RetentionDays);
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
+    public async Task<bool> DeleteHistorianPolicyAsync(
+        string tagId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            tagId);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DELETE FROM historian_policies
+            WHERE tag_id = $tagId;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$tagId",
+            tagId);
+
+        return await command.ExecuteNonQueryAsync(
+            cancellationToken) > 0;
+    }
+
     public async Task<IReadOnlyList<MimicConfiguration>> LoadMimicsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -639,7 +797,7 @@ public sealed class SqliteConfigurationStore
             result);
     }
 
-    private static async Task CreateSchemaV3Async(
+    private static async Task CreateSchemaV4Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -705,7 +863,20 @@ public sealed class SqliteConfigurationStore
                 elements_json TEXT NOT NULL
             );
 
-            PRAGMA user_version = 3;
+            CREATE TABLE IF NOT EXISTS historian_policies (
+                tag_id TEXT NOT NULL PRIMARY KEY,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                mode INTEGER NOT NULL CHECK (mode IN (0, 1)),
+                period_ms INTEGER NULL,
+                retention_days INTEGER NOT NULL CHECK (retention_days BETWEEN 1 AND 36500),
+                CHECK (
+                    (mode = 0 AND period_ms IS NULL)
+                    OR
+                    (mode = 1 AND period_ms IS NOT NULL AND period_ms BETWEEN 100 AND 86400000)
+                )
+            );
+
+            PRAGMA user_version = 4;
             """;
 
         await command.ExecuteNonQueryAsync(
@@ -782,6 +953,42 @@ public sealed class SqliteConfigurationStore
             );
 
             PRAGMA user_version = 3;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV3ToV4Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS historian_policies (
+                tag_id TEXT NOT NULL PRIMARY KEY,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                mode INTEGER NOT NULL CHECK (mode IN (0, 1)),
+                period_ms INTEGER NULL,
+                retention_days INTEGER NOT NULL CHECK (retention_days BETWEEN 1 AND 36500),
+                CHECK (
+                    (mode = 0 AND period_ms IS NULL)
+                    OR
+                    (mode = 1 AND period_ms IS NOT NULL AND period_ms BETWEEN 100 AND 86400000)
+                )
+            );
+
+            PRAGMA user_version = 4;
             """;
 
         await command.ExecuteNonQueryAsync(

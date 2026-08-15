@@ -8,4 +8,9 @@ public interface IHistorySampleStore
     Task AppendAsync(
         IReadOnlyList<HistorySample> samples,
         CancellationToken cancellationToken = default);
+
+    Task<int> DeleteBeforeAsync(
+        string tagId,
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default);
 }

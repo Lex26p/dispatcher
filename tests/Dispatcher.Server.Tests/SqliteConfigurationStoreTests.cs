@@ -128,7 +128,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion1Database_ToVersion3WithoutLosingModbusData()
+    public async Task InitializeAsync_MigratesVersion1Database_ToVersion4WithoutLosingModbusData()
     {
         var directory =
             Path.Combine(
@@ -232,12 +232,15 @@ public sealed class SqliteConfigurationStoreTests
                 await store.LoadAsync();
             var snmp =
                 await store.LoadSnmpAsync();
+            var historianPolicies =
+                await store.LoadHistorianPoliciesAsync();
 
             Assert.AreEqual(1, modbus.Count);
             Assert.AreEqual(
                 "plc01.hr0",
                 modbus[0].Tags[0].TagId);
             Assert.AreEqual(0, snmp.Count);
+            Assert.AreEqual(0, historianPolicies.Count);
 
             await using var verify =
                 new SqliteConnection(
@@ -255,7 +258,7 @@ public sealed class SqliteConfigurationStoreTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(3, version);
+            Assert.AreEqual(4, version);
         }
         finally
         {
@@ -268,4 +271,123 @@ public sealed class SqliteConfigurationStoreTests
             }
         }
     }
+
+    [TestMethod]
+    public async Task InitializeAsync_MigratesVersion3Database_ToVersion4WithoutLosingMimics()
+    {
+        var directory =
+            Path.Combine(
+                Path.GetTempPath(),
+                "dispatcher-tests",
+                Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(
+            directory);
+
+        var databasePath =
+            Path.Combine(
+                directory,
+                "dispatcher-v3.db");
+
+        var connectionString =
+            new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Pooling = false
+            }
+            .ToString();
+
+        try
+        {
+            await using (var connection =
+                new SqliteConnection(
+                    connectionString))
+            {
+                await connection.OpenAsync();
+
+                await using var command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    """
+                    CREATE TABLE mimics (
+                        mimic_id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        width INTEGER NOT NULL CHECK (width > 0),
+                        height INTEGER NOT NULL CHECK (height > 0),
+                        elements_json TEXT NOT NULL
+                    );
+
+                    INSERT INTO mimics (
+                        mimic_id,
+                        name,
+                        width,
+                        height,
+                        elements_json)
+                    VALUES (
+                        'main',
+                        'Main',
+                        800,
+                        450,
+                        '[]');
+
+                    PRAGMA user_version = 3;
+                    """;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var store =
+                new SqliteConfigurationStore(
+                    databasePath);
+
+            await store.InitializeAsync();
+
+            var mimics =
+                await store.LoadMimicsAsync();
+            var policies =
+                await store.LoadHistorianPoliciesAsync();
+
+            Assert.AreEqual(
+                1,
+                mimics.Count);
+            Assert.AreEqual(
+                "main",
+                mimics[0].MimicId);
+            Assert.AreEqual(
+                0,
+                policies.Count);
+
+            await using var verify =
+                new SqliteConnection(
+                    connectionString);
+
+            await verify.OpenAsync();
+
+            await using var versionCommand =
+                verify.CreateCommand();
+
+            versionCommand.CommandText =
+                "PRAGMA user_version;";
+
+            var version =
+                Convert.ToInt32(
+                    await versionCommand.ExecuteScalarAsync());
+
+            Assert.AreEqual(
+                4,
+                version);
+        }
+        finally
+        {
+            if (Directory.Exists(
+                    directory))
+            {
+                Directory.Delete(
+                    directory,
+                    recursive: true);
+            }
+        }
+    }
+
 }
