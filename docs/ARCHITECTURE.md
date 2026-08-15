@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S03
+## 1. Состояние после V2-S04
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -11,9 +11,9 @@ TagService / DeviceStateService
       ↓
 REST + SignalR
       ↓
-┌────────────┬───────────────┐
-│ Monitoring │ Mimic runtime │
-└────────────┴───────────────┘
+┌────────────┬──────────────────┬───────────────┐
+│ Monitoring │ History / Trends │ Mimic runtime │
+└────────────┴──────────────────┴───────────────┘
 
 Device Editor → device configuration
 Mimic Editor  → mimic definition
@@ -1019,3 +1019,236 @@ historian realtime stream
 ```
 
 Следующий шаг V2-S04 строит Web UI поверх `GET /api/history` без изменения protocol/Historian ingestion boundary.
+
+
+## 41. History / Trends Web service
+
+V2-S04 добавляет Web screen:
+
+```text
+/history
+```
+
+и не меняет Historian Server/storage boundary.
+
+Цепочка:
+
+```text
+Configuration API
+    ↓ configured TagId list
+
+GET /api/history
+    ↓
+HistoryClient
+    ↓
+History.razor
+    ├── SVG trend
+    ├── dense table
+    └── series properties
+```
+
+Global navigation получает:
+
+```text
+История / Тренды
+```
+
+## 42. History Web spatial model
+
+Экран следует общему engineering UI contract:
+
+```text
+┌──────────────┬────────────────────────────────────────┬──────────────┐
+│ Tags         │ time range / order / limit / query     │ Series       │
+│              ├────────────────────────────────────────┤ properties   │
+│ selection    │ SVG trend                              │              │
+│              ├────────────────────────────────────────┤              │
+│              │ dense history table                    │              │
+└──────────────┴────────────────────────────────────────┴──────────────┘
+```
+
+Left panel:
+
+- configured Modbus/SNMP tags;
+- text filter;
+- manual TagId entry.
+
+Manual TagId нужен для retained operational history, которая может остаться после удаления current configuration.
+
+Center:
+
+- query toolbar;
+- query summary;
+- trend;
+- table.
+
+Right:
+
+- selected series metadata/statistics.
+
+## 43. Web series selection limits
+
+Server V2-S03 допускает:
+
+```text
+16 tags × 2000 samples
+```
+
+Но первый desktop Web screen ограничивает selection:
+
+```text
+MaxSelectedTags = 8
+```
+
+Причина: SVG и table rendering выполняются в browser WASM и должны оставаться предсказуемыми без virtualization/chart library.
+
+API contract не меняется и по-прежнему допускает 16 tags для других clients.
+
+## 44. SVG trend без chart library
+
+Первый trend renderer использует SVG:
+
+```text
+polyline
+line
+rect
+foreignObject labels
+```
+
+External chart dependency не добавляется.
+
+Numeric trend поддерживает:
+
+```text
+Boolean
+Int64
+UInt64
+Double
+Decimal
+```
+
+`Boolean` визуализируется как `0/1`.
+
+`String`, `Json`, `Null` не строятся как line series, но остаются доступны в history table.
+
+Преобразование numeric `ValueText → double` выполняется только для visual plotting/statistics.
+
+Lossless API/storage representation не меняется.
+
+Для `UInt64`/`Decimal` chart является display approximation; таблица остаётся источником точного canonical value.
+
+## 45. Client display caps
+
+API может вернуть до `2000` samples на series.
+
+Trend SVG ограничивает display до:
+
+```text
+1000 points per series
+```
+
+Если API вернул больше, Web выбирает равномерно распределённые source points только для SVG rendering.
+
+Это display reduction, а не server-side aggregation и не изменение stored data.
+
+Dense table ограничена:
+
+```text
+2000 total rows
+```
+
+и явно показывает:
+
+```text
+displayed / total
+```
+
+Если API series имеет:
+
+```text
+Truncated = true
+```
+
+это также показывается отдельно.
+
+Эти ограничения уменьшают риск тяжёлого DOM/SVG rendering до появления подтверждённой необходимости в virtualization/downsampling engine.
+
+## 46. Time range semantics в Web
+
+Toolbar предоставляет presets:
+
+```text
+15 min
+1 h
+6 h
+24 h
+```
+
+и `datetime-local` поля `from/to`.
+
+User-entered values трактуются в browser local timezone и передаются `HistoryClient` как `DateTimeOffset`, после чего query serializes UTC ISO-8601.
+
+Response timestamps отображаются в local time.
+
+Server inclusive semantics V2-S03 сохраняется:
+
+```text
+from <= sample.Timestamp <= to
+```
+
+## 47. Series properties
+
+Selected series properties включают:
+
+```text
+TagId
+Samples
+Truncated
+First sample
+Last sample
+Numeric point count
+Distinct value type count
+Min
+Max
+```
+
+`Min/Max` считаются только по numeric/boolean points, которые могут быть plotted.
+
+Selection синхронизируется между:
+
+```text
+legend
+table rows
+right properties
+```
+
+## 48. V2-S04 scope boundary
+
+После V2-S04 Historian Phase 5 завершает первый end-to-end slice:
+
+```text
+TagService
+   ↓
+Historian ingestion
+   ↓
+policy / retention
+   ↓
+operational SQLite
+   ↓
+history query API
+   ↓
+History / Trends Web
+```
+
+Не реализуются пока:
+
+```text
+saved trend selections
+realtime history stream
+server aggregation
+server downsampling
+CSV export
+advanced cursors/zoom
+```
+
+Следующий шаг V2-S05 начинает отдельную Phase 6 — Event Journal.

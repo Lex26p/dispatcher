@@ -850,3 +850,61 @@ operational history
 ```
 
 Это сохраняет диагностическую ценность history и соответствует stale-policy semantics V2-S02.
+
+---
+
+## D-051 — Первый History/Trends renderer использует SVG без внешней chart library
+
+**Status:** Accepted
+
+V2-S04 строит trend средствами Blazor + SVG.
+
+Причина:
+
+- V2-S03 уже ограничивает число samples;
+- первый Web scope требует только line trend;
+- SVG сохраняет C#-first implementation;
+- не добавляется тяжёлая dependency до подтверждённой необходимости.
+
+Для trend `ValueText` numeric/boolean values преобразуются в `double` только как display representation.
+
+Lossless `ValueType + ValueText` остаётся неизменным в API и таблице.
+
+---
+
+## D-052 — History Web ограничивает browser rendering сильнее Server API
+
+**Status:** Accepted
+
+Server query boundary допускает:
+
+```text
+16 series
+2000 samples per series
+```
+
+Первый Web screen использует:
+
+```text
+8 selected series
+1000 rendered SVG points per series
+2000 total table rows
+```
+
+Причина: browser WASM/DOM rendering должен оставаться bounded без premature virtualization/downsampling framework.
+
+Ограничение является только Web display policy и не меняет REST API.
+
+---
+
+## D-053 — History Web позволяет ручной TagId для retained/stale history
+
+**Status:** Accepted
+
+Основной tag selector строится из current Modbus/SNMP configuration.
+
+Дополнительно пользователь может вручную указать logical `TagId`.
+
+Причина: V2-S03 намеренно разрешает читать retained history deleted/stale tags, которых уже нет в current configuration.
+
+Manual TagId не создаёт device tag или historian policy и используется только как history query selection.

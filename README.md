@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2 начат с Historian foundation.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian завершена.
 
 ## Рабочая цепочка
 
@@ -12,7 +12,7 @@ Modbus TCP ─→ Dispatcher.Modbus ─┐
 SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
                                          REST / SignalR
                                                ↓
-                         Monitoring / Mimic runtime / Device Editor
+                 Monitoring / History / Mimic runtime / Device Editor
 ```
 
 Система умеет:
@@ -38,6 +38,7 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 19. Применять historian policy без restart protocol polling.
 20. Удалять history samples по per-tag `RetentionDays`.
 21. Запрашивать lossless history одного или нескольких `TagId` через ограниченный REST API.
+22. Просматривать history как SVG trend и плотную таблицу через Web `/history`.
 
 ## Базовый стек
 
@@ -277,6 +278,52 @@ ValueType + ValueText
 
 Operational schema остаётся version `1`.
 
+## History / Trends Web
+
+URL:
+
+```text
+/history
+```
+
+Глобальная навигация получает сервис:
+
+```text
+История / Тренды
+```
+
+Компоновка:
+
+```text
+слева  → configured/manual TagId selection
+центр  → SVG trend + dense history table
+справа → свойства выбранной series
+сверху → presets / from / to / order / point limit / query
+```
+
+Первый Web scope:
+
+- до `8` series одновременно;
+- configured Modbus/SNMP tags в левом списке;
+- ручной TagId для retained history удалённых/stale tags;
+- presets `15 min / 1 h / 6 h / 24 h`;
+- произвольные `from/to` через `datetime-local`;
+- `100 / 500 / 1000 / 2000` points per API series;
+- SVG trend без внешней chart library;
+- trend отображает numeric/boolean values;
+- `String/Json/Null` остаются доступны в таблице;
+- до `1000` display points на series в SVG;
+- до `2000` total rows в Web table;
+- `Truncated` явно показывается;
+- свойства выбранной series:
+  - samples;
+  - truncated;
+  - first/last timestamp;
+  - numeric count;
+  - min/max.
+
+Web display limits не меняют lossless API/storage data.
+
 Configuration:
 
 ```json
@@ -427,6 +474,7 @@ S11 не добавляет Web-editor. PUT нужен для persistence/integr
 Мониторинг
 Редактор устройств
 Мнемосхемы
+История / Тренды
 ```
 
 URL runtime:
@@ -481,13 +529,13 @@ docs/ROADMAP_V2.md
 Текущий завершённый шаг:
 
 ```text
-V2-S03 — History query API
+V2-S04 — Historian Web / Trends
 ```
 
 Следующий шаг:
 
 ```text
-V2-S04 — Historian Web / Trends
+V2-S05 — Event Journal
 ```
 
 ## Документы

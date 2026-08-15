@@ -253,37 +253,61 @@ Deadband не добавлен: два требуемых sampling modes зак�
 
 ---
 
-## [ ] V2-S04 — Historian Web / Trends
+## [x] V2-S04 — Historian Web / Trends
 
-Новый сервис Web:
-
-```text
-History / Trends
-```
-
-Предлагаемая компоновка:
+Реализован новый Web service:
 
 ```text
-слева  → tags / saved selections
-центр  → trend + history table
-сверху → time range / refresh / navigation
-справа → свойства выбранной series при необходимости
+/history
 ```
 
-Первый scope:
+Компоновка:
 
-- выбор одного/нескольких TagId;
-- time range;
-- табличный просмотр;
-- trend;
-- понятное состояние no-data;
-- ограничение числа отображаемых точек.
+```text
+слева  → configured/manual TagId selection
+центр  → SVG trend + history table
+сверху → presets / from / to / order / point limit / query
+справа → selected series properties
+```
 
-Не выбирать тяжёлую chart library до проверки, что SVG/простого компонента недостаточно.
+Реализовано:
+
+- global navigation `История / Тренды`;
+- выбор одного/нескольких logical TagId;
+- Web limit `8` concurrent series;
+- configured Modbus/SNMP tags;
+- ручной TagId для retained history deleted/stale tags;
+- локальный tag filter;
+- time presets:
+  - 15 min;
+  - 1 h;
+  - 6 h;
+  - 24 h;
+- произвольный local `from/to`;
+- ASC/DESC;
+- selectable API point limit:
+  - 100;
+  - 500;
+  - 1000;
+  - 2000;
+- SVG trend без внешней chart library;
+- numeric/boolean series rendering;
+- `String/Json/Null` в dense table;
+- client display cap:
+  - 1000 SVG points per series;
+  - 2000 total table rows;
+- API `Truncated` state отображается явно;
+- no-data states;
+- selected series statistics/properties;
+- таблица сохраняет lossless `ValueType + ValueText`;
+- Web использует только существующий V2-S03 `/api/history`;
+- Server/SQLite schema не изменяются;
+- saved trend selections не добавлены;
+- realtime historian stream не добавлен.
 
 ### Результат Phase 5
 
-Dispatcher хранит и показывает долговременную историю logical tags.
+Dispatcher хранит, ограниченно запрашивает и показывает долговременную историю logical tags через Trend/Web UI.
 
 ---
 

@@ -96,12 +96,12 @@ Templates
 Scripting
 ```
 
-V2-S01…V2-S03 завершают storage/ingestion/policy/retention и read API foundation Historian.
+V2-S01…V2-S04 завершают первый полный Historian vertical slice: ingestion, policy, retention, query API и Web Trends.
 
 Следующий шаг новой дорожной карты:
 
 ```text
-V2-S04 — Historian Web / Trends
+V2-S05 — Event Journal
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

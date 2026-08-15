@@ -45,6 +45,13 @@
                          @onclick="CloseGlobalNavigation">
                     Мнемосхемы
                 </NavLink>
+
+                <NavLink class="global-nav-link"
+                         ActiveClass="active"
+                         href="history"
+                         @onclick="CloseGlobalNavigation">
+                    История / Тренды
+                </NavLink>
             </nav>
         </div>
     }
@@ -76,6 +83,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "Мнемосхемы";
+            }
+
+            if (path.StartsWith(
+                    "history",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "История / Тренды";
             }
 
             return "Мониторинг";

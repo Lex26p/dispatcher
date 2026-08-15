@@ -1,0 +1,1222 @@
+@page "/history"
+@using System.Globalization
+@inject HistoryClient HistoryApi
+@inject ConfigurationClient Configuration
+
+<PageTitle>Dispatcher — История / Тренды</PageTitle>
+
+<div class="history-shell">
+    <aside class="history-navigation">
+        <div class="history-panel-heading">
+            <span>Теги</span>
+            <span class="item-count">@_selectedTagIds.Count / @MaxSelectedTags</span>
+        </div>
+
+        <div class="history-tag-tools">
+            <input type="search"
+                   class="history-search"
+                   placeholder="Фильтр TagId / имени"
+                   @bind="_tagFilter"
+                   @bind:event="oninput" />
+
+            <div class="history-manual-row">
+                <input type="text"
+                       placeholder="Ручной TagId"
+                       @bind="_manualTagId"
+                       @bind:event="oninput"
+                       @onkeydown="HandleManualTagKeyDown" />
+
+                <button type="button"
+                        class="history-small-button"
+                        disabled="@(!CanAddManualTag)"
+                        @onclick="AddManualTag">
+                    +
+                </button>
+            </div>
+        </div>
+
+        <div class="history-tag-list">
+            @if (_loadingTags)
+            {
+                <div class="compact-empty">Загрузка тегов…</div>
+            }
+            else if (!FilteredTags.Any())
+            {
+                <div class="compact-empty">
+                    Нет тегов по текущему фильтру.
+                </div>
+            }
+            else
+            {
+                @foreach (var tag in FilteredTags)
+                {
+                    <label class="history-tag-item @(IsTagSelected(tag.TagId) ? "selected" : string.Empty)">
+                        <input type="checkbox"
+                               checked="@IsTagSelected(tag.TagId)"
+                               disabled="@(!IsTagSelected(tag.TagId) && _selectedTagIds.Count >= MaxSelectedTags)"
+                               @onchange="eventArgs => ToggleTag(tag.TagId, eventArgs)" />
+
+                        <span class="history-tag-main">
+                            <span class="history-tag-name-row">
+                                <span class="history-tag-name">@tag.Name</span>
+                                <span class="history-protocol-badge">@tag.Protocol</span>
+                            </span>
+                            <span class="history-tag-id">@tag.TagId</span>
+                            <span class="history-tag-device">@tag.DeviceName</span>
+                        </span>
+                    </label>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="history-workspace">
+        <div class="history-toolbar">
+            <div class="history-toolbar-left">
+                <button type="button"
+                        class="history-preset-button"
+                        @onclick="() => SetPreset(TimeSpan.FromMinutes(15))">
+                    15 мин
+                </button>
+
+                <button type="button"
+                        class="history-preset-button"
+                        @onclick="() => SetPreset(TimeSpan.FromHours(1))">
+                    1 ч
+                </button>
+
+                <button type="button"
+                        class="history-preset-button"
+                        @onclick="() => SetPreset(TimeSpan.FromHours(6))">
+                    6 ч
+                </button>
+
+                <button type="button"
+                        class="history-preset-button"
+                        @onclick="() => SetPreset(TimeSpan.FromHours(24))">
+                    24 ч
+                </button>
+
+                <span class="history-toolbar-divider"></span>
+
+                <label class="history-toolbar-field">
+                    <span>От</span>
+                    <input type="datetime-local"
+                           value="@_fromLocalText"
+                           @onchange="OnFromLocalChanged" />
+                </label>
+
+                <label class="history-toolbar-field">
+                    <span>До</span>
+                    <input type="datetime-local"
+                           value="@_toLocalText"
+                           @onchange="OnToLocalChanged" />
+                </label>
+
+                <label class="history-toolbar-field compact">
+                    <span>Порядок</span>
+                    <select @bind="_order">
+                        <option value="Ascending">↑</option>
+                        <option value="Descending">↓</option>
+                    </select>
+                </label>
+
+                <label class="history-toolbar-field compact">
+                    <span>Точек</span>
+                    <select @bind="_limit">
+                        <option value="100">100</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="2000">2000</option>
+                    </select>
+                </label>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@(!CanQuery || _querying)"
+                        @onclick="QueryAsync">
+                    @(_querying ? "Запрос…" : "Показать")
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="history-error">
+                @_error
+            </div>
+        }
+
+        @if (_result is null)
+        {
+            <div class="history-empty-state">
+                <div class="history-empty-title">История / Тренды</div>
+                <div class="history-empty-text">
+                    Выберите один или несколько logical TagId слева, задайте диапазон времени и нажмите «Показать».
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="history-result-summary">
+                <span>
+                    @_result.From.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")
+                    —
+                    @_result.To.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")
+                </span>
+
+                <span>
+                    @_result.Series.Count series · @TotalSampleCount samples
+                </span>
+
+                @if (_result.Series.Any(series => series.Truncated))
+                {
+                    <span class="history-warning">
+                        часть series ограничена limit
+                    </span>
+                }
+            </div>
+
+            <section class="history-trend-section">
+                <div class="history-section-heading">
+                    <span>Тренд</span>
+                    <span class="history-section-meta">
+                        до @MaxChartPointsPerSeries точек на series в SVG
+                    </span>
+                </div>
+
+                @if (ChartSeries.Count == 0)
+                {
+                    <div class="history-chart-empty">
+                        В выбранном диапазоне нет числовых/boolean значений для построения тренда.
+                    </div>
+                }
+                else
+                {
+                    <div class="history-legend">
+                        @foreach (var series in ChartSeries)
+                        {
+                            <button type="button"
+                                    class="history-legend-item @series.CssClass @(IsSeriesSelected(series.TagId) ? "selected" : string.Empty)"
+                                    @onclick="() => SelectSeries(series.TagId)">
+                                <span class="history-legend-line"></span>
+                                <span>@series.TagId</span>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="history-chart-wrap">
+                        <svg class="history-chart"
+                             viewBox="0 0 1000 280"
+                             preserveAspectRatio="none"
+                             role="img"
+                             aria-label="Исторический тренд">
+                            <rect x="54"
+                                  y="16"
+                                  width="928"
+                                  height="228"
+                                  class="history-chart-background" />
+
+                            <line x1="54" y1="16" x2="982" y2="16"
+                                  class="history-grid-line" />
+                            <line x1="54" y1="130" x2="982" y2="130"
+                                  class="history-grid-line" />
+                            <line x1="54" y1="244" x2="982" y2="244"
+                                  class="history-grid-line" />
+
+                            @foreach (var series in ChartSeries)
+                            {
+                                <polyline points="@series.Points"
+                                          class="history-trend-line @series.CssClass"
+                                          vector-effect="non-scaling-stroke"
+                                          @onclick="() => SelectSeries(series.TagId)" />
+                            }
+
+                            <foreignObject x="0" y="8" width="50" height="22"
+                                           class="history-chart-label-object">
+                                <div class="history-chart-y-label">@ChartMaximumLabel</div>
+                            </foreignObject>
+
+                            <foreignObject x="0" y="122" width="50" height="22"
+                                           class="history-chart-label-object">
+                                <div class="history-chart-y-label">@ChartMiddleLabel</div>
+                            </foreignObject>
+
+                            <foreignObject x="0" y="236" width="50" height="22"
+                                           class="history-chart-label-object">
+                                <div class="history-chart-y-label">@ChartMinimumLabel</div>
+                            </foreignObject>
+                        </svg>
+
+                        <div class="history-chart-time-axis">
+                            <span>@_result.From.ToLocalTime().ToString("dd.MM HH:mm:ss")</span>
+                            <span>@_result.To.ToLocalTime().ToString("dd.MM HH:mm:ss")</span>
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <section class="history-table-section">
+                <div class="history-section-heading">
+                    <span>Данные</span>
+                    <span class="history-section-meta">
+                        @DisplayedRows.Count / @TotalSampleCount строк
+                        @if (TableIsLimited)
+                        {
+                            <span> · таблица ограничена @MaxTableRows</span>
+                        }
+                    </span>
+                </div>
+
+                @if (TotalSampleCount == 0)
+                {
+                    <div class="history-table-empty">
+                        В выбранном диапазоне нет samples.
+                    </div>
+                }
+                else
+                {
+                    <div class="history-table-wrap">
+                        <table class="history-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Время</th>
+                                    <th>TagId</th>
+                                    <th>Тип</th>
+                                    <th>Значение</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in DisplayedRows)
+                                {
+                                    <tr class="@(IsSeriesSelected(row.TagId) ? "selected-series" : string.Empty)"
+                                        @onclick="() => SelectSeries(row.TagId)">
+                                        <td class="history-time-cell">
+                                            @row.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")
+                                        </td>
+                                        <td class="history-tag-cell">@row.TagId</td>
+                                        <td>@row.ValueType</td>
+                                        <td class="history-value-cell"
+                                            title="@row.ValueText">
+                                            @DisplayValue(row)
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+    </main>
+
+    <aside class="history-properties">
+        <div class="history-panel-heading">
+            Свойства series
+        </div>
+
+        @if (SelectedSeries is null)
+        {
+            <div class="history-properties-empty">
+                После запроса выберите series в легенде, таблице или справа автоматически будет выбрана первая.
+            </div>
+        }
+        else
+        {
+            <div class="history-property-form">
+                <div class="history-property-field">
+                    <span>TagId</span>
+                    <strong class="history-property-tag">@SelectedSeries.TagId</strong>
+                </div>
+
+                <div class="history-property-grid">
+                    <div class="history-property-field">
+                        <span>Samples</span>
+                        <strong>@SelectedSeries.Samples.Count</strong>
+                    </div>
+
+                    <div class="history-property-field">
+                        <span>Truncated</span>
+                        <strong>@(SelectedSeries.Truncated ? "Да" : "Нет")</strong>
+                    </div>
+                </div>
+
+                <div class="history-property-field">
+                    <span>Первый sample</span>
+                    <strong>@FormatSeriesBoundary(SelectedSeries, first: true)</strong>
+                </div>
+
+                <div class="history-property-field">
+                    <span>Последний sample</span>
+                    <strong>@FormatSeriesBoundary(SelectedSeries, first: false)</strong>
+                </div>
+
+                <div class="history-property-section">Числовая статистика</div>
+
+                <div class="history-property-grid">
+                    <div class="history-property-field">
+                        <span>Numeric points</span>
+                        <strong>@SelectedSeriesStatistics.NumericCount</strong>
+                    </div>
+
+                    <div class="history-property-field">
+                        <span>Типов</span>
+                        <strong>@SelectedSeriesStatistics.TypeCount</strong>
+                    </div>
+
+                    <div class="history-property-field">
+                        <span>Min</span>
+                        <strong>@SelectedSeriesStatistics.MinimumLabel</strong>
+                    </div>
+
+                    <div class="history-property-field">
+                        <span>Max</span>
+                        <strong>@SelectedSeriesStatistics.MaximumLabel</strong>
+                    </div>
+                </div>
+
+                <div class="history-property-help">
+                    Таблица показывает lossless `ValueType + ValueText`. SVG trend преобразует только numeric/boolean значения в display `double`.
+                </div>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private const int MaxSelectedTags = 8;
+    private const int MaxChartPointsPerSeries = 1000;
+    private const int MaxTableRows = 2000;
+
+    private readonly List<TagOption> _configuredTags = [];
+    private readonly List<TagOption> _manualTags = [];
+    private readonly HashSet<string> _selectedTagIds =
+        new(StringComparer.Ordinal);
+
+    private string _tagFilter = string.Empty;
+    private string _manualTagId = string.Empty;
+    private string _fromLocalText = string.Empty;
+    private string _toLocalText = string.Empty;
+    private HistoryQueryOrderDto _order =
+        HistoryQueryOrderDto.Ascending;
+    private int _limit = 500;
+    private bool _loadingTags;
+    private bool _querying;
+    private string? _error;
+    private string? _selectedSeriesTagId;
+    private HistoryQueryResponseDto? _result;
+
+    private IEnumerable<TagOption> FilteredTags =>
+        _configuredTags
+            .Concat(_manualTags)
+            .Where(tag =>
+                string.IsNullOrWhiteSpace(_tagFilter)
+                || tag.TagId.Contains(
+                    _tagFilter,
+                    StringComparison.OrdinalIgnoreCase)
+                || tag.Name.Contains(
+                    _tagFilter,
+                    StringComparison.OrdinalIgnoreCase)
+                || tag.DeviceName.Contains(
+                    _tagFilter,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(
+                tag => tag.TagId,
+                StringComparer.Ordinal);
+
+    private bool CanAddManualTag =>
+        !string.IsNullOrWhiteSpace(_manualTagId)
+        && _selectedTagIds.Count < MaxSelectedTags;
+
+    private bool CanQuery =>
+        _selectedTagIds.Count > 0
+        && TryParseLocalInput(
+            _fromLocalText,
+            out var from)
+        && TryParseLocalInput(
+            _toLocalText,
+            out var to)
+        && from <= to;
+
+    private HistorySeriesDto? SelectedSeries =>
+        _result?.Series.FirstOrDefault(series =>
+            string.Equals(
+                series.TagId,
+                _selectedSeriesTagId,
+                StringComparison.Ordinal));
+
+    private SeriesStatistics SelectedSeriesStatistics =>
+        BuildSeriesStatistics(
+            SelectedSeries);
+
+    private int TotalSampleCount =>
+        _result?.Series.Sum(series =>
+            series.Samples.Count)
+        ?? 0;
+
+    private IReadOnlyList<HistoryRow> DisplayedRows =>
+        BuildRows();
+
+    private bool TableIsLimited =>
+        TotalSampleCount > MaxTableRows;
+
+    private IReadOnlyList<ChartSeriesModel> ChartSeries =>
+        BuildChartSeries();
+
+    private string ChartMinimumLabel =>
+        FormatChartNumber(
+            GetChartRange().Minimum);
+
+    private string ChartMiddleLabel
+    {
+        get
+        {
+            var range =
+                GetChartRange();
+
+            return FormatChartNumber(
+                (range.Minimum + range.Maximum) / 2d);
+        }
+    }
+
+    private string ChartMaximumLabel =>
+        FormatChartNumber(
+            GetChartRange().Maximum);
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetPreset(
+            TimeSpan.FromHours(1));
+
+        await LoadTagOptionsAsync();
+    }
+
+    private async Task LoadTagOptionsAsync()
+    {
+        _loadingTags = true;
+        _error = null;
+
+        try
+        {
+            var modbus =
+                await Configuration.GetDevicesAsync();
+
+            var snmp =
+                await Configuration.GetSnmpDevicesAsync();
+
+            _configuredTags.Clear();
+
+            _configuredTags.AddRange(
+                modbus.SelectMany(device =>
+                    device.Tags.Select(tag =>
+                        new TagOption(
+                            tag.TagId,
+                            tag.Name,
+                            device.Name,
+                            "MODBUS"))));
+
+            _configuredTags.AddRange(
+                snmp.SelectMany(device =>
+                    device.Tags.Select(tag =>
+                        new TagOption(
+                            tag.TagId,
+                            tag.Name,
+                            device.Name,
+                            "SNMP"))));
+
+            var duplicateIds =
+                _configuredTags
+                    .GroupBy(
+                        tag => tag.TagId,
+                        StringComparer.Ordinal)
+                    .Where(group =>
+                        group.Count() > 1)
+                    .Select(group =>
+                        group.Key)
+                    .ToArray();
+
+            if (duplicateIds.Length > 0)
+            {
+                _error =
+                    $"Получены duplicate TagId: {string.Join(", ", duplicateIds)}";
+            }
+        }
+        catch (Exception exception)
+        {
+            _error =
+                $"Не удалось загрузить список тегов: {exception.Message}";
+        }
+        finally
+        {
+            _loadingTags = false;
+        }
+    }
+
+    private void ToggleTag(
+        string tagId,
+        ChangeEventArgs eventArgs)
+    {
+        var selected =
+            eventArgs.Value is true
+            || string.Equals(
+                eventArgs.Value?.ToString(),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (selected)
+        {
+            if (_selectedTagIds.Count >= MaxSelectedTags)
+            {
+                _error =
+                    $"Web trend ограничен {MaxSelectedTags} series одновременно.";
+                return;
+            }
+
+            _selectedTagIds.Add(
+                tagId);
+        }
+        else
+        {
+            _selectedTagIds.Remove(
+                tagId);
+        }
+
+        _error = null;
+    }
+
+    private void HandleManualTagKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        if (string.Equals(
+                eventArgs.Key,
+                "Enter",
+                StringComparison.Ordinal))
+        {
+            AddManualTag();
+        }
+    }
+
+    private void AddManualTag()
+    {
+        var tagId =
+            _manualTagId.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                tagId))
+        {
+            return;
+        }
+
+        if (_selectedTagIds.Count >= MaxSelectedTags
+            && !_selectedTagIds.Contains(
+                tagId))
+        {
+            _error =
+                $"Web trend ограничен {MaxSelectedTags} series одновременно.";
+            return;
+        }
+
+        if (!_configuredTags.Any(tag =>
+                string.Equals(
+                    tag.TagId,
+                    tagId,
+                    StringComparison.Ordinal))
+            && !_manualTags.Any(tag =>
+                string.Equals(
+                    tag.TagId,
+                    tagId,
+                    StringComparison.Ordinal)))
+        {
+            _manualTags.Add(
+                new TagOption(
+                    tagId,
+                    "Ручной TagId",
+                    "retained history",
+                    "HISTORY"));
+        }
+
+        _selectedTagIds.Add(
+            tagId);
+
+        _manualTagId =
+            string.Empty;
+        _error =
+            null;
+    }
+
+    private bool IsTagSelected(
+        string tagId)
+    {
+        return _selectedTagIds.Contains(
+            tagId);
+    }
+
+    private void OnFromLocalChanged(
+        ChangeEventArgs eventArgs)
+    {
+        _fromLocalText =
+            eventArgs.Value?.ToString()
+            ?? string.Empty;
+    }
+
+    private void OnToLocalChanged(
+        ChangeEventArgs eventArgs)
+    {
+        _toLocalText =
+            eventArgs.Value?.ToString()
+            ?? string.Empty;
+    }
+
+    private void SetPreset(
+        TimeSpan duration)
+    {
+        var now =
+            DateTime.Now;
+
+        var to =
+            new DateTime(
+                now.Year,
+                now.Month,
+                now.Day,
+                now.Hour,
+                now.Minute,
+                0,
+                DateTimeKind.Unspecified);
+
+        var from =
+            to.Subtract(
+                duration);
+
+        _fromLocalText =
+            FormatLocalInput(
+                from);
+
+        _toLocalText =
+            FormatLocalInput(
+                to);
+    }
+
+    private async Task QueryAsync()
+    {
+        if (!CanQuery
+            || _querying)
+        {
+            return;
+        }
+
+        _querying = true;
+        _error = null;
+
+        try
+        {
+            var tagIds =
+                _selectedTagIds
+                    .OrderBy(
+                        tagId => tagId,
+                        StringComparer.Ordinal)
+                    .ToArray();
+
+            if (!TryParseLocalInput(
+                    _fromLocalText,
+                    out var from)
+                || !TryParseLocalInput(
+                    _toLocalText,
+                    out var to))
+            {
+                throw new InvalidOperationException(
+                    "Диапазон времени задан неверно.");
+            }
+
+            _result =
+                await HistoryApi.QueryAsync(
+                    tagIds,
+                    from,
+                    to,
+                    _order,
+                    _limit);
+
+            _selectedSeriesTagId =
+                _result.Series.FirstOrDefault(series =>
+                    series.Samples.Count > 0)?.TagId
+                ?? _result.Series.FirstOrDefault()?.TagId;
+        }
+        catch (Exception exception)
+        {
+            _result = null;
+            _selectedSeriesTagId = null;
+            _error = exception.Message;
+        }
+        finally
+        {
+            _querying = false;
+        }
+    }
+
+    private void SelectSeries(
+        string tagId)
+    {
+        _selectedSeriesTagId =
+            tagId;
+    }
+
+    private bool IsSeriesSelected(
+        string tagId)
+    {
+        return string.Equals(
+            tagId,
+            _selectedSeriesTagId,
+            StringComparison.Ordinal);
+    }
+
+    private IReadOnlyList<HistoryRow> BuildRows()
+    {
+        if (_result is null)
+        {
+            return Array.Empty<HistoryRow>();
+        }
+
+        var rows =
+            _result.Series
+                .SelectMany(series =>
+                    series.Samples.Select(sample =>
+                        new HistoryRow(
+                            series.TagId,
+                            sample.Timestamp,
+                            sample.ValueType,
+                            sample.ValueText)));
+
+        rows =
+            _order == HistoryQueryOrderDto.Ascending
+                ? rows
+                    .OrderBy(row =>
+                        row.Timestamp)
+                    .ThenBy(row =>
+                        row.TagId,
+                        StringComparer.Ordinal)
+                : rows
+                    .OrderByDescending(row =>
+                        row.Timestamp)
+                    .ThenBy(row =>
+                        row.TagId,
+                        StringComparer.Ordinal);
+
+        return rows
+            .Take(MaxTableRows)
+            .ToArray();
+    }
+
+    private IReadOnlyList<ChartSeriesModel> BuildChartSeries()
+    {
+        if (_result is null)
+        {
+            return Array.Empty<ChartSeriesModel>();
+        }
+
+        var allNumeric =
+            _result.Series
+                .SelectMany(series =>
+                    series.Samples
+                        .Select(sample =>
+                            TryCreateNumericPoint(
+                                sample,
+                                out var point)
+                                ? (NumericPoint?)point
+                                : null)
+                        .Where(point =>
+                            point.HasValue)
+                        .Select(point =>
+                            point.Value))
+                .ToArray();
+
+        if (allNumeric.Length == 0)
+        {
+            return Array.Empty<ChartSeriesModel>();
+        }
+
+        var range =
+            CalculateRange(
+                allNumeric.Select(point =>
+                    point.Value));
+
+        var fromTicks =
+            _result.From.UtcDateTime.Ticks;
+        var toTicks =
+            _result.To.UtcDateTime.Ticks;
+        var timeSpanTicks =
+            Math.Max(
+                1L,
+                toTicks - fromTicks);
+
+        var models =
+            new List<ChartSeriesModel>();
+
+        for (var seriesIndex = 0;
+             seriesIndex < _result.Series.Count;
+             seriesIndex++)
+        {
+            var source =
+                _result.Series[seriesIndex];
+
+            var points =
+                source.Samples
+                    .Select(sample =>
+                        TryCreateNumericPoint(
+                            sample,
+                            out var point)
+                            ? (NumericPoint?)point
+                            : null)
+                    .Where(point =>
+                        point.HasValue)
+                    .Select(point =>
+                        point.Value)
+                    .ToArray();
+
+            if (points.Length == 0)
+            {
+                continue;
+            }
+
+            var displayPoints =
+                LimitChartPoints(
+                    points,
+                    MaxChartPointsPerSeries);
+
+            var coordinates =
+                displayPoints.Select(point =>
+                {
+                    var x =
+                        54d
+                        + ((point.Timestamp.UtcDateTime.Ticks - fromTicks)
+                           / (double)timeSpanTicks)
+                        * 928d;
+
+                    var y =
+                        244d
+                        - ((point.Value - range.Minimum)
+                           / (range.Maximum - range.Minimum))
+                        * 228d;
+
+                    return FormattableString.Invariant(
+                        $"{x:0.##},{y:0.##}");
+                });
+
+            models.Add(
+                new ChartSeriesModel(
+                    source.TagId,
+                    string.Join(
+                        " ",
+                        coordinates),
+                    $"series-{seriesIndex % 8}"));
+        }
+
+        return models;
+    }
+
+    private ChartRange GetChartRange()
+    {
+        if (_result is null)
+        {
+            return new ChartRange(
+                0,
+                1);
+        }
+
+        var values =
+            _result.Series
+                .SelectMany(series =>
+                    series.Samples)
+                .Select(sample =>
+                    TryCreateNumericPoint(
+                        sample,
+                        out var point)
+                        ? point.Value
+                        : (double?)null)
+                .Where(value =>
+                    value.HasValue)
+                .Select(value =>
+                    value!.Value)
+                .ToArray();
+
+        return values.Length == 0
+            ? new ChartRange(
+                0,
+                1)
+            : CalculateRange(
+                values);
+    }
+
+    private static ChartRange CalculateRange(
+        IEnumerable<double> values)
+    {
+        var array =
+            values.ToArray();
+
+        var minimum =
+            array.Min();
+        var maximum =
+            array.Max();
+
+        if (Math.Abs(
+                maximum - minimum) > double.Epsilon)
+        {
+            return new ChartRange(
+                minimum,
+                maximum);
+        }
+
+        var padding =
+            Math.Abs(minimum) < 1d
+                ? 1d
+                : Math.Abs(minimum) * 0.05d;
+
+        return new ChartRange(
+            minimum - padding,
+            maximum + padding);
+    }
+
+    private static IReadOnlyList<NumericPoint> LimitChartPoints(
+        IReadOnlyList<NumericPoint> points,
+        int maximum)
+    {
+        if (points.Count <= maximum)
+        {
+            return points;
+        }
+
+        var result =
+            new NumericPoint[maximum];
+
+        for (var index = 0;
+             index < maximum;
+             index++)
+        {
+            var sourceIndex =
+                (int)Math.Round(
+                    index
+                    * (points.Count - 1d)
+                    / (maximum - 1d));
+
+            result[index] =
+                points[sourceIndex];
+        }
+
+        return result;
+    }
+
+    private static bool TryCreateNumericPoint(
+        HistorySampleDto sample,
+        out NumericPoint point)
+    {
+        if (TryParseNumericValue(
+                sample,
+                out var value))
+        {
+            point =
+                new NumericPoint(
+                    sample.Timestamp,
+                    value);
+
+            return true;
+        }
+
+        point =
+            default;
+
+        return false;
+    }
+
+    private static bool TryParseNumericValue(
+        HistorySampleDto sample,
+        out double value)
+    {
+        value =
+            default;
+
+        switch (sample.ValueType)
+        {
+            case HistoryValueTypeDto.Boolean:
+                value =
+                    string.Equals(
+                        sample.ValueText,
+                        "1",
+                        StringComparison.Ordinal)
+                        ? 1d
+                        : 0d;
+
+                return true;
+
+            case HistoryValueTypeDto.Int64:
+            case HistoryValueTypeDto.UInt64:
+            case HistoryValueTypeDto.Double:
+            case HistoryValueTypeDto.Decimal:
+                return double.TryParse(
+                    sample.ValueText,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out value);
+
+            default:
+                return false;
+        }
+    }
+
+    private static SeriesStatistics BuildSeriesStatistics(
+        HistorySeriesDto? series)
+    {
+        if (series is null)
+        {
+            return SeriesStatistics.Empty;
+        }
+
+        var numeric =
+            series.Samples
+                .Select(sample =>
+                    TryParseNumericValue(
+                        sample,
+                        out var value)
+                        ? value
+                        : (double?)null)
+                .Where(value =>
+                    value.HasValue)
+                .Select(value =>
+                    value!.Value)
+                .ToArray();
+
+        var typeCount =
+            series.Samples
+                .Select(sample =>
+                    sample.ValueType)
+                .Distinct()
+                .Count();
+
+        return new SeriesStatistics(
+            numeric.Length,
+            typeCount,
+            numeric.Length == 0
+                ? "—"
+                : FormatChartNumber(
+                    numeric.Min()),
+            numeric.Length == 0
+                ? "—"
+                : FormatChartNumber(
+                    numeric.Max()));
+    }
+
+    private static string FormatSeriesBoundary(
+        HistorySeriesDto series,
+        bool first)
+    {
+        if (series.Samples.Count == 0)
+        {
+            return "—";
+        }
+
+        var sample =
+            first
+                ? series.Samples[0]
+                : series.Samples[^1];
+
+        return sample.Timestamp
+            .ToLocalTime()
+            .ToString(
+                "dd.MM.yyyy HH:mm:ss.fff");
+    }
+
+    private static string DisplayValue(
+        HistoryRow row)
+    {
+        return row.ValueType == HistoryValueTypeDto.Null
+            ? "null"
+            : row.ValueText
+                ?? string.Empty;
+    }
+
+    private static string FormatChartNumber(
+        double value)
+    {
+        return value.ToString(
+            "G6",
+            CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatLocalInput(
+        DateTime value)
+    {
+        return value.ToString(
+            "yyyy-MM-ddTHH:mm",
+            CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseLocalInput(
+        string value,
+        out DateTimeOffset result)
+    {
+        if (!DateTime.TryParseExact(
+                value,
+                "yyyy-MM-ddTHH:mm",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var local))
+        {
+            result =
+                default;
+
+            return false;
+        }
+
+        var unspecified =
+            DateTime.SpecifyKind(
+                local,
+                DateTimeKind.Unspecified);
+
+        var offset =
+            TimeZoneInfo.Local.GetUtcOffset(
+                unspecified);
+
+        result =
+            new DateTimeOffset(
+                unspecified,
+                offset);
+
+        return true;
+    }
+
+    private sealed record TagOption(
+        string TagId,
+        string Name,
+        string DeviceName,
+        string Protocol);
+
+    private sealed record HistoryRow(
+        string TagId,
+        DateTimeOffset Timestamp,
+        HistoryValueTypeDto ValueType,
+        string? ValueText);
+
+    private readonly record struct NumericPoint(
+        DateTimeOffset Timestamp,
+        double Value);
+
+    private sealed record ChartSeriesModel(
+        string TagId,
+        string Points,
+        string CssClass);
+
+    private readonly record struct ChartRange(
+        double Minimum,
+        double Maximum);
+
+    private sealed record SeriesStatistics(
+        int NumericCount,
+        int TypeCount,
+        string MinimumLabel,
+        string MaximumLabel)
+    {
+        public static SeriesStatistics Empty { get; } =
+            new(
+                0,
+                0,
+                "—",
+                "—");
+    }
+}
