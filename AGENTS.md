@@ -110,7 +110,7 @@ dispatcher-step-03.zip
 Типовая команда:
 
 ```powershell
-Expand-Archive -Path "C:\\Users\\pereverworkki\\Downloads\\dispatcher-step-XX.zip" -DestinationPath "C:\\Projects\\dispatcher" -Force
+Expand-Archive -Path "C:\Users\pereverworkki\Downloads\dispatcher-step-XX.zip" -DestinationPath "C:\Projects\dispatcher" -Force
 ```
 
 Если когда-либо необходимо удалить уже существующий файл, нельзя скрывать удаление внутри скрипта. Нужно явно указать удаляемый путь и отдельную PowerShell-команду. По возможности проектировать шаги так, чтобы удаление не требовалось.
@@ -122,7 +122,7 @@ Expand-Archive -Path "C:\\Users\\pereverworkki\\Downloads\\dispatcher-step-XX.zi
 Для .NET-проекта типовая последовательность после появления solution:
 
 ```powershell
-cd C:\\Projects\\dispatcher
+cd C:\Projects\dispatcher
 
 dotnet restore
 dotnet build
@@ -132,12 +132,18 @@ dotnet test
 Если для шага нужен запуск:
 
 ```powershell
-dotnet run --project .\\src\\Dispatcher.Server\\Dispatcher.Server.csproj
+dotnet run --project .\src\Dispatcher.Server\Dispatcher.Server.csproj
 ```
 
 Команды должны соответствовать реальной структуре актуального репозитория. Нельзя механически повторять пример, если пути или инструменты изменились.
 
-Если нужен конкретный тест, сначала запускать целевой тест, затем полный набор тестов, когда это целесообразно.
+Объём тестирования выбирается по достаточности для текущего изменения:
+
+- если целевой тест или конкретный test project полностью покрывает изменённую границу, выполняется только он;
+- полный набор тестов выполняется, когда изменение затрагивает общие границы или риск регрессии требует более широкого прогона;
+- не требуется автоматически запускать сначала целевой, а затем полный набор тестов, если второй прогон не даёт необходимой дополнительной проверки.
+
+Команды PowerShell для пользователя не должны использовать обратную кавычку как символ продолжения строки. Команда должна помещаться в одну строку или быть разбита на отдельные самостоятельные команды, совместимые с терминалом Visual Studio.
 
 ## 7. После команд — ручная проверка
 
@@ -161,7 +167,7 @@ dotnet run --project .\\src\\Dispatcher.Server\\Dispatcher.Server.csproj
 В конце успешного шага агент выдаёт команды примерно такого вида:
 
 ```powershell
-cd C:\\Projects\\dispatcher
+cd C:\Projects\dispatcher
 
 git status
 git add .

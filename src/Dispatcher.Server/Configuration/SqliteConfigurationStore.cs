@@ -1,13 +1,14 @@
 using System.Text.Json;
 using Dispatcher.Server.Historian;
 using Dispatcher.Server.Mimics;
+using Dispatcher.Server.Security;
 using Microsoft.Data.Sqlite;
 
 namespace Dispatcher.Server.Configuration;
 
 public sealed class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 4;
+    private const int CurrentSchemaVersion = 5;
 
     private readonly string _connectionString;
 
@@ -58,7 +59,7 @@ public sealed class SqliteConfigurationStore
         switch (schemaVersion)
         {
             case 0:
-                await CreateSchemaV4Async(
+                await CreateSchemaV5Async(
                     connection,
                     cancellationToken);
                 return;
@@ -75,6 +76,10 @@ public sealed class SqliteConfigurationStore
                 await MigrateV3ToV4Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV4ToV5Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
@@ -85,10 +90,24 @@ public sealed class SqliteConfigurationStore
                 await MigrateV3ToV4Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV4ToV5Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 3:
                 await MigrateV3ToV4Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV4ToV5Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 4:
+                await MigrateV4ToV5Async(
                     connection,
                     cancellationToken);
                 return;
@@ -527,6 +546,181 @@ public sealed class SqliteConfigurationStore
             cancellationToken) > 0;
     }
 
+    public async Task<IReadOnlyList<LocalUserConfiguration>> LoadLocalUsersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                user_id,
+                user_name,
+                normalized_user_name,
+                display_name,
+                enabled,
+                password_hash
+            FROM local_users
+            ORDER BY normalized_user_name;
+            """;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var users =
+            new List<LocalUserConfiguration>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            var user =
+                new LocalUserConfiguration(
+                    UserId:
+                        reader.GetString(0),
+                    UserName:
+                        reader.GetString(1),
+                    NormalizedUserName:
+                        reader.GetString(2),
+                    DisplayName:
+                        reader.GetString(3),
+                    Enabled:
+                        reader.GetInt64(4) != 0,
+                    PasswordHash:
+                        reader.GetString(5));
+
+            LocalUserConfigurationValidator.Validate(
+                user);
+
+            users.Add(
+                user);
+        }
+
+        return users;
+    }
+
+    public async Task<LocalUserConfiguration?> FindLocalUserByNormalizedUserNameAsync(
+        string normalizedUserName,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            normalizedUserName);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                user_id,
+                user_name,
+                normalized_user_name,
+                display_name,
+                enabled,
+                password_hash
+            FROM local_users
+            WHERE normalized_user_name = $normalizedUserName;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$normalizedUserName",
+            normalizedUserName);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        if (!await reader.ReadAsync(
+                cancellationToken))
+        {
+            return null;
+        }
+
+        var user =
+            new LocalUserConfiguration(
+                UserId:
+                    reader.GetString(0),
+                UserName:
+                    reader.GetString(1),
+                NormalizedUserName:
+                    reader.GetString(2),
+                DisplayName:
+                    reader.GetString(3),
+                Enabled:
+                    reader.GetInt64(4) != 0,
+                PasswordHash:
+                    reader.GetString(5));
+
+        LocalUserConfigurationValidator.Validate(
+            user);
+
+        return user;
+    }
+
+    public async Task InsertLocalUserAsync(
+        LocalUserConfiguration user,
+        CancellationToken cancellationToken = default)
+    {
+        LocalUserConfigurationValidator.Validate(
+            user);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            INSERT INTO local_users (
+                user_id,
+                user_name,
+                normalized_user_name,
+                display_name,
+                enabled,
+                password_hash)
+            VALUES (
+                $userId,
+                $userName,
+                $normalizedUserName,
+                $displayName,
+                $enabled,
+                $passwordHash);
+            """;
+
+        command.Parameters.AddWithValue(
+            "$userId",
+            user.UserId);
+        command.Parameters.AddWithValue(
+            "$userName",
+            user.UserName);
+        command.Parameters.AddWithValue(
+            "$normalizedUserName",
+            user.NormalizedUserName);
+        command.Parameters.AddWithValue(
+            "$displayName",
+            user.DisplayName);
+        command.Parameters.AddWithValue(
+            "$enabled",
+            user.Enabled ? 1 : 0);
+        command.Parameters.AddWithValue(
+            "$passwordHash",
+            user.PasswordHash);
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<MimicConfiguration>> LoadMimicsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -797,7 +991,7 @@ public sealed class SqliteConfigurationStore
             result);
     }
 
-    private static async Task CreateSchemaV4Async(
+    private static async Task CreateSchemaV5Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -876,7 +1070,16 @@ public sealed class SqliteConfigurationStore
                 )
             );
 
-            PRAGMA user_version = 4;
+            CREATE TABLE IF NOT EXISTS local_users (
+                user_id TEXT NOT NULL PRIMARY KEY,
+                user_name TEXT NOT NULL,
+                normalized_user_name TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                password_hash TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 5;
             """;
 
         await command.ExecuteNonQueryAsync(
@@ -989,6 +1192,38 @@ public sealed class SqliteConfigurationStore
             );
 
             PRAGMA user_version = 4;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV4ToV5Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS local_users (
+                user_id TEXT NOT NULL PRIMARY KEY,
+                user_name TEXT NOT NULL,
+                normalized_user_name TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                password_hash TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 5;
             """;
 
         await command.ExecuteNonQueryAsync(

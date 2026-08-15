@@ -128,7 +128,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion1Database_ToVersion4WithoutLosingModbusData()
+    public async Task InitializeAsync_MigratesVersion1Database_ToVersion5WithoutLosingModbusData()
     {
         var directory =
             Path.Combine(
@@ -234,6 +234,8 @@ public sealed class SqliteConfigurationStoreTests
                 await store.LoadSnmpAsync();
             var historianPolicies =
                 await store.LoadHistorianPoliciesAsync();
+            var localUsers =
+                await store.LoadLocalUsersAsync();
 
             Assert.AreEqual(1, modbus.Count);
             Assert.AreEqual(
@@ -241,6 +243,7 @@ public sealed class SqliteConfigurationStoreTests
                 modbus[0].Tags[0].TagId);
             Assert.AreEqual(0, snmp.Count);
             Assert.AreEqual(0, historianPolicies.Count);
+            Assert.AreEqual(0, localUsers.Count);
 
             await using var verify =
                 new SqliteConnection(
@@ -258,7 +261,7 @@ public sealed class SqliteConfigurationStoreTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(4, version);
+            Assert.AreEqual(5, version);
         }
         finally
         {
@@ -273,7 +276,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion3Database_ToVersion4WithoutLosingMimics()
+    public async Task InitializeAsync_MigratesVersion3Database_ToVersion5WithoutLosingMimics()
     {
         var directory =
             Path.Combine(
@@ -347,6 +350,8 @@ public sealed class SqliteConfigurationStoreTests
                 await store.LoadMimicsAsync();
             var policies =
                 await store.LoadHistorianPoliciesAsync();
+            var localUsers =
+                await store.LoadLocalUsersAsync();
 
             Assert.AreEqual(
                 1,
@@ -357,6 +362,9 @@ public sealed class SqliteConfigurationStoreTests
             Assert.AreEqual(
                 0,
                 policies.Count);
+            Assert.AreEqual(
+                0,
+                localUsers.Count);
 
             await using var verify =
                 new SqliteConnection(
@@ -375,7 +383,7 @@ public sealed class SqliteConfigurationStoreTests
                     await versionCommand.ExecuteScalarAsync());
 
             Assert.AreEqual(
-                4,
+                5,
                 version);
         }
         finally
@@ -389,5 +397,4 @@ public sealed class SqliteConfigurationStoreTests
             }
         }
     }
-
 }

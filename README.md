@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. Phase 7 начата с V2-S07A — local users storage/password hashing/bootstrap foundation.
 
 ## Рабочая цепочка
 
@@ -42,6 +42,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 23. Записывать immutable operational events для system/device/command/configuration producers.
 24. Запрашивать Events по времени/category/severity/source/text с server-side paging.
 25. Просматривать Events в Web `/events` и получать новые persisted events через SignalR.
+26. Хранить локальные user identities в configuration SQLite без plaintext passwords.
+27. Создавать первого local user через явный bootstrap password, используя platform password hashing.
+28. Сохранять persistent `Enabled/Disabled` state local user для следующего authentication шага.
 
 ## Базовый стек
 
@@ -53,6 +56,7 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 - Modbus: NModbus 3.0.83.
 - SNMP: Lextm.SharpSnmpLib 12.5.7.
 - Mimic renderer: SVG в Blazor WebAssembly.
+- Local password hashing: ASP.NET Core Identity `PasswordHasher<TUser>`.
 
 ## Runtime tags
 
@@ -81,10 +85,10 @@ TagId
 
 ## SQLite schema
 
-Configuration SQLite schema version после V2-S02:
+Configuration SQLite schema version после V2-S07A:
 
 ```text
-4
+5
 ```
 
 Таблицы:
@@ -96,9 +100,10 @@ snmp_devices
 snmp_tags
 mimics
 historian_policies
+local_users
 ```
 
-Существующая schema `1/2/3` автоматически мигрируется в `4` без удаления protocol/mimic configuration.
+Существующая schema `1/2/3/4` автоматически мигрируется в `5` без удаления protocol/mimic/historian configuration.
 
 Таблица `mimics` хранит:
 
@@ -111,6 +116,64 @@ elements_json
 ```
 
 Elements сохраняются как internal configuration JSON. Это позволяет S12 добавить editor без смены runtime API.
+
+`local_users` хранит:
+
+```text
+user_id
+user_name
+normalized_user_name
+display_name
+enabled
+password_hash
+```
+
+`normalized_user_name` уникален и используется как case-insensitive logical lookup key. Plaintext password в SQLite не сохраняется.
+
+## Local user foundation
+
+V2-S07A вводит только durable identity storage и bootstrap foundation. Login/logout/current-user/session появятся в V2-S07B.
+
+Local user:
+
+```text
+UserId
+UserName
+NormalizedUserName
+DisplayName
+Enabled
+PasswordHash
+```
+
+Password hash создаётся штатным ASP.NET Core Identity `PasswordHasher<TUser>`; собственная криптографическая схема не реализуется.
+
+Bootstrap первого пользователя выполняется только когда:
+
+```text
+local_users is empty
+AND
+Authentication:BootstrapAdministrator:Password is explicitly configured
+```
+
+Configuration:
+
+```json
+"Authentication": {
+  "BootstrapAdministrator": {
+    "UserName": "admin",
+    "DisplayName": "Administrator",
+    "Password": ""
+  }
+}
+```
+
+Default password отсутствует. Для первого bootstrap startup пароль следует передавать через secret/environment configuration, например:
+
+```text
+Authentication__BootstrapAdministrator__Password
+```
+
+После появления хотя бы одного local user bootstrap больше не создаёт пользователя. Поле роли/`IsAdministrator` в V2-S07A намеренно отсутствует: permissions и roles относятся к V2-S08.
 
 ## Historian foundation
 
@@ -726,9 +789,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 ## Новая БД
 
-Новая configuration database по-прежнему пустая.
-
-S11 не создаёт скрытую sample-мнемосхему. До S12 определение можно создать через configuration API.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. V2-S07A также не создаёт пользователя без явно заданного bootstrap password.
 
 ## Roadmap v2
 
@@ -738,16 +799,16 @@ S11 не создаёт скрытую sample-мнемосхему. До S12 о�
 docs/ROADMAP_V2.md
 ```
 
-Текущий завершённый шаг:
+Текущий подготовленный подшаг:
 
 ```text
-V2-S06 — Events API и Web
+V2-S07A — Local users storage, password hashing и bootstrap
 ```
 
-Следующий шаг:
+Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S07 — Authentication foundation
+V2-S07B — Server authentication session, login/logout/current user
 ```
 
 ## Документы

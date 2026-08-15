@@ -177,7 +177,7 @@ public sealed class MimicRuntimeTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion2Database_ToVersion4WithoutLosingProtocolData()
+    public async Task InitializeAsync_MigratesVersion2Database_ToVersion5WithoutLosingProtocolData()
     {
         var directory =
             Path.Combine(
@@ -352,7 +352,7 @@ public sealed class MimicRuntimeTests
                     await versionCommand.ExecuteScalarAsync());
 
             Assert.AreEqual(
-                4,
+                5,
                 version);
         }
         finally

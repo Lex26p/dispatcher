@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S06
+## 1. Состояние после V2-S07A
 
-Application layer содержит несколько пользовательских operational services:
+Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
 ```text
 Protocol workers
@@ -17,9 +17,15 @@ REST + SignalR
 
 Device Editor → device configuration
 Mimic Editor  → mimic definition
+
+Configuration SQLite
+      ↓
+local user identity storage
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
+
+V2-S07A сохраняет local user identities и password hashes, но ещё не вводит login/session HTTP boundary.
 
 ## 2. Главная граница binding
 
@@ -81,7 +87,7 @@ Public boundary находится в `Dispatcher.Contracts.Mimics`.
 Configuration SQLite schema version:
 
 ```text
-4
+5
 ```
 
 Tables, добавленные после базовой protocol configuration:
@@ -89,6 +95,7 @@ Tables, добавленные после базовой protocol configuration:
 ```text
 mimics
 historian_policies
+local_users
 ```
 
 Schema migration:
@@ -101,9 +108,13 @@ v2  SNMP
 v3  mimics
  ↓
 v4  historian_policies
+ ↓
+v5  local_users
 ```
 
-При `v3 → v4` protocol/mimic tables не перестраиваются и не очищаются.
+При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются.
+
+Operational SQLite schema независимо остаётся version `2`.
 
 ## 5. Почему elements_json
 
@@ -407,7 +418,6 @@ Mimic definition/editor/runtime
 
 Phase 5 выбирается после оценки эксплуатации, а не проектируется заранее.
 
-
 ## 19. Historian operational boundary
 
 V2-S01 добавляет долговременное хранение runtime tag changes без изменения protocol drivers.
@@ -447,19 +457,28 @@ devices
 tags
 mimics
 historian policies
+local users
 ```
 
-V2-S01 вводит отдельную operational database:
+Operational database:
 
 ```text
 dispatcher-operational.db
 ```
 
+хранит:
+
+```text
+history samples
+events
+```
+
 Причина разделения:
 
-- history samples имеют существенно более высокую частоту записи;
+- history/event volume и write rate отличаются от configuration;
 - configuration lifecycle не должен зависеть от роста operational data;
-- будущая замена historian/events storage не должна требовать переноса device/mimic configuration.
+- security identities являются низкочастотной configuration, а не operational journal;
+- будущая замена historian/events storage не должна требовать переноса device/mimic/security configuration.
 
 Обе базы пока используют `Microsoft.Data.Sqlite`, но имеют независимые schema versions.
 
@@ -611,6 +630,13 @@ SnmpRuntimeHostedService
 RuntimeHubPublisher
 ```
 
+Configuration initialization начиная с V2-S07A:
+
+1. создаёт/мигрирует configuration schema;
+2. при пустом `local_users` пытается выполнить explicit bootstrap пользователя;
+3. загружает protocol configuration и historian policies;
+4. публикует active configuration catalogs.
+
 Historian:
 
 1. создаёт/проверяет operational schema;
@@ -628,7 +654,6 @@ V2-S02 поверх этой границы добавляет policy-driven sam
 
 History query API и Trend Web по-прежнему остаются V2-S03/V2-S04.
 
-
 ## 27. Historian policy configuration
 
 V2-S02 добавляет в configuration database:
@@ -642,11 +667,13 @@ historian_policies
 └── retention_days
 ```
 
-Configuration schema version становится:
+Configuration schema version на этом шаге стала:
 
 ```text
 4
 ```
+
+V2-S07A позже повышает общую configuration schema до `5`, не изменяя layout `historian_policies`.
 
 Policy не имеет SQL foreign key на protocol tag tables.
 
@@ -843,7 +870,6 @@ Trend Web
 
 Следующий шаг V2-S03 вводит read/query boundary поверх существующего operational storage.
 
-
 ## 33. History read boundary
 
 V2-S03 добавляет protocol-neutral read API поверх operational storage:
@@ -1027,7 +1053,6 @@ historian realtime stream
 ```
 
 Следующий шаг V2-S04 строит Web UI поверх `GET /api/history` без изменения protocol/Historian ingestion boundary.
-
 
 ## 41. History / Trends Web service
 
@@ -1260,7 +1285,6 @@ advanced cursors/zoom
 ```
 
 Следующий шаг V2-S05 начинает отдельную Phase 6 — Event Journal.
-
 
 ## 49. Event Journal operational boundary
 
@@ -1538,7 +1562,6 @@ event retention
 ```
 
 Следующий шаг V2-S06 добавляет read/query + Web UI поверх Event Journal.
-
 
 ## 55. Events read/query boundary
 
@@ -1824,7 +1847,7 @@ Operational schema остаётся:
 2
 ```
 
-Не реализуются пока:
+Не реализуются на V2-S06:
 
 ```text
 event retention policy
@@ -1833,8 +1856,164 @@ AlarmService
 alarm transitions
 ```
 
+Следующий security phase начинается V2-S07.
+
+## 61. Local user configuration boundary
+
+V2-S07A добавляет local user identity как низкочастотную configuration:
+
+```text
+dispatcher.db
+└── local_users
+```
+
+Таблица:
+
+```text
+local_users
+├── user_id                 TEXT PRIMARY KEY
+├── user_name               TEXT
+├── normalized_user_name    TEXT UNIQUE
+├── display_name            TEXT
+├── enabled                 INTEGER 0/1
+└── password_hash           TEXT
+```
+
+Configuration schema повышается:
+
+```text
+v4 → v5
+```
+
+Operational database не меняется:
+
+```text
+dispatcher-operational.db
+PRAGMA user_version = 2
+```
+
+Причина: user identity/password hash/disabled state являются durable security configuration, а не временными operational records.
+
+## 62. Username identity
+
+Public login spelling хранится как:
+
+```text
+UserName
+```
+
+Lookup identity хранится отдельно:
+
+```text
+NormalizedUserName = UserName.Trim().ToUpperInvariant()
+```
+
+`normalized_user_name` имеет SQL `UNIQUE` constraint.
+
+Это даёт одну local identity для case-вариантов имени и не требует зависеть от SQLite locale/collation semantics.
+
+`UserId` остаётся отдельным immutable identifier и не равен username.
+
+## 63. Password storage
+
+Dispatcher не реализует собственный password KDF/hash format.
+
+Цепочка bootstrap hashing:
+
+```text
+plaintext bootstrap secret
+        ↓
+ASP.NET Core Identity PasswordHasher<LocalUserConfiguration>
+        ↓
+PasswordHash
+        ↓
+SQLite local_users.password_hash
+```
+
+В persistent user record отсутствует plaintext password.
+
+Password verification в следующем V2-S07B будет использовать тот же platform hasher и его encoded hash metadata вместо собственного salt/iteration format.
+
+## 64. Bootstrap первого local user
+
+Bootstrap выполняется во время configuration initialization до protocol polling.
+
+Условие:
+
+```text
+LoadLocalUsersAsync().Count == 0
+AND
+Authentication:BootstrapAdministrator:Password is non-empty
+```
+
+Тогда создаётся один enabled local user.
+
+Defaults только для identity metadata:
+
+```text
+UserName    = admin
+DisplayName = Administrator
+```
+
+Default password **не существует**.
+
+Bootstrap password ожидается через configuration provider/secret/environment variable. Он не записывается в configuration SQLite.
+
+После появления хотя бы одного local user bootstrap больше не создаёт пользователей, даже если bootstrap password остался в process configuration.
+
+Если users пусты и password не задан, Server продолжает запускаться и пишет warning. Это позволяет существующим development/test hosts работать до V2-S07B, но до включения authentication оператор должен явно выполнить bootstrap.
+
+## 65. Disabled user semantics на V2-S07A
+
+`Enabled` сохраняется как часть local user configuration.
+
+На V2-S07A это только durable state:
+
+```text
+Enabled = true / false
+```
+
+Проверка запрета login для disabled user появляется вместе с login/session boundary в V2-S07B.
+
+V2-S07A намеренно не добавляет:
+
+```text
+role
+permissions
+is_admin authorization bypass
+audit actor identity
+```
+
+Название bootstrap administrator описывает bootstrap intent, но не создаёт скрытого authorization privilege. Permission model появляется только в V2-S08.
+
+## 66. V2-S07A scope boundary
+
+После V2-S07A есть:
+
+```text
+persistent local user identity
+configuration schema v5
+unique normalized username
+platform password hash
+explicit first-user bootstrap
+persistent disabled flag
+```
+
+Ещё нет:
+
+```text
+login
+logout
+current user
+authenticated cookie/session
+server authorization
+roles/permissions
+audit actor identity
+authentication Web UI
+```
+
 Следующий шаг:
 
 ```text
-V2-S07 — Authentication foundation
+V2-S07B — Server authentication session, login/logout/current user
 ```

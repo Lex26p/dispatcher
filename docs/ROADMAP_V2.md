@@ -511,7 +511,62 @@ Operational SQLite schema остаётся version `2`.
 
 Не добавлять OAuth/OIDC/LDAP/AD до отдельного требования.
 
-### Результат
+### [x] V2-S07A — Local users storage, password hashing и bootstrap
+
+Реализовано:
+
+- `local_users` в configuration SQLite;
+- configuration schema `v4 → v5` без изменения operational schema;
+- local user:
+  - `UserId`;
+  - `UserName`;
+  - `NormalizedUserName`;
+  - `DisplayName`;
+  - `Enabled`;
+  - `PasswordHash`;
+- case-insensitive logical username через unique normalized value;
+- password хранится только как hash;
+- hashing выполняет штатный ASP.NET Core Identity `PasswordHasher<TUser>`;
+- bootstrap первого local user выполняется только если таблица пользователей пуста и явно задан bootstrap password;
+- скрытого/default password нет;
+- bootstrap password не сохраняется в SQLite;
+- disabled state является persistent security configuration;
+- роли, permissions и отдельный administrator flag не добавлены преждевременно.
+
+Bootstrap configuration:
+
+```text
+Authentication:BootstrapAdministrator:UserName
+Authentication:BootstrapAdministrator:DisplayName
+Authentication:BootstrapAdministrator:Password
+```
+
+`Password` по умолчанию пуст. Для первого запуска его следует передавать через secret/environment configuration, например `Authentication__BootstrapAdministrator__Password`.
+
+### [ ] V2-S07B — Server authentication session
+
+Следующий scope:
+
+- login endpoint;
+- logout endpoint;
+- current-user endpoint;
+- authenticated cookie/session;
+- password verification через тот же platform hasher;
+- disabled user не может создать новую authenticated session;
+- server различает anonymous и конкретного authenticated user.
+
+Permissions/roles по-прежнему не входят в этот подшаг.
+
+### [ ] V2-S07C — Web authentication integration
+
+Следующий Web scope после Server boundary:
+
+- login screen/state;
+- current user в application shell;
+- logout action;
+- корректное anonymous/authenticated navigation behavior без попытки подменить server authorization Web-видимостью.
+
+### Результат V2-S07
 
 Server различает anonymous и конкретного authenticated user.
 

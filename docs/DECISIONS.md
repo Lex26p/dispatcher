@@ -1106,3 +1106,80 @@ SignalR применяется только к новым persisted events.
 - оператор не теряет контекст при просмотре старой страницы;
 - realtime не заменяет REST как источник исторической истины;
 - UI остаётся bounded и предсказуемым.
+
+---
+
+## D-060 — Local users хранятся в configuration SQLite schema v5
+
+**Status:** Accepted
+
+V2-S07A добавляет:
+
+```text
+local_users
+```
+
+в `dispatcher.db` и повышает configuration schema:
+
+```text
+v4 → v5
+```
+
+Record:
+
+```text
+UserId
+UserName
+NormalizedUserName
+DisplayName
+Enabled
+PasswordHash
+```
+
+`NormalizedUserName` имеет unique constraint и вычисляется из username как trimmed `ToUpperInvariant()` value.
+
+Причина:
+
+- user identity, password credential и disabled state являются низкочастотной durable security configuration;
+- они не являются operational history/events и не должны увеличивать operational DB schema;
+- отдельный immutable `UserId` нужен для будущих role assignments/audit references независимо от возможного изменения display/login name;
+- нормализованный lookup key обеспечивает одну identity для case-вариантов username без зависимости от locale-specific SQLite collation.
+
+Roles/permissions и audit records в schema v5 не добавляются: это V2-S08/V2-S09.
+
+---
+
+## D-061 — Password hashing выполняет ASP.NET Core Identity PasswordHasher, bootstrap password не имеет default value
+
+**Status:** Accepted
+
+Dispatcher не реализует собственную криптографическую схему для local passwords.
+
+V2-S07A использует штатный:
+
+```text
+PasswordHasher<LocalUserConfiguration>
+```
+
+для создания `PasswordHash`.
+
+Persistent `local_users` не содержит plaintext password, salt columns или собственные iteration/version fields. Format/version metadata контролирует platform hasher.
+
+Первый local user создаётся только если:
+
+```text
+local_users empty
+AND
+Authentication:BootstrapAdministrator:Password explicitly configured
+```
+
+Default bootstrap password отсутствует.
+
+`UserName=admin` и `DisplayName=Administrator` являются только defaults identity metadata. V2-S07A не создаёт `IsAdministrator`, role или authorization bypass. Реальная permission model появляется в V2-S08.
+
+Причина:
+
+- custom password KDF/salt/version format создаёт ненужный security risk;
+- скрытый/default password неприемлем для bootstrap;
+- bootstrap должен быть повторяемым только до появления первого local user и не должен создавать дополнительные accounts на каждом startup;
+- authentication и authorization остаются разными границами.
