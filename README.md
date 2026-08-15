@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian завершена.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian завершена, Phase 6 Events начата.
 
 ## Рабочая цепочка
 
@@ -39,6 +39,7 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 20. Удалять history samples по per-tag `RetentionDays`.
 21. Запрашивать lossless history одного или нескольких `TagId` через ограниченный REST API.
 22. Просматривать history как SVG trend и плотную таблицу через Web `/history`.
+23. Записывать immutable operational events для system/device/command/configuration producers.
 
 ## Базовый стек
 
@@ -134,10 +135,10 @@ dispatcher-operational.db
 Operational database имеет собственную schema version:
 
 ```text
-1
+2
 ```
 
-Первая table:
+Tables:
 
 ```text
 history_samples
@@ -146,7 +147,19 @@ history_samples
 ├── timestamp_utc_ticks
 ├── value_type
 └── value_text
+
+events
+├── event_id
+├── timestamp_utc_ticks
+├── category
+├── type
+├── severity
+├── source
+├── message
+└── data_json
 ```
+
+Operational schema `v1 → v2` добавляет только `events` и сохраняет существующий `history_samples`.
 
 `HistoryValueType`:
 
@@ -276,7 +289,7 @@ ValueType + ValueText
 
 вместо преобразования в общий JSON `number`, которое могло бы потерять точность `UInt64`/`Decimal`.
 
-Operational schema остаётся version `1`.
+V2-S03 query API не менял schema; текущая operational schema после V2-S05 — version `2`.
 
 ## History / Trends Web
 
@@ -335,6 +348,10 @@ Configuration:
   "BatchSize": 256,
   "PeriodicScanMilliseconds": 100,
   "RetentionCleanupIntervalMinutes": 60
+},
+"EventJournal": {
+  "BufferCapacity": 4096,
+  "BatchSize": 128
 }
 ```
 
@@ -347,6 +364,100 @@ Default operational database:
 ```
 
 или `data/dispatcher-operational.db`, если LocalApplicationData недоступен.
+
+## Event Journal
+
+V2-S05 добавляет единый immutable operational journal до AlarmService/Audit.
+
+Record:
+
+```text
+EventId
+Timestamp
+Category
+Type
+Severity
+Source
+Message
+DataJson
+```
+
+Initial categories:
+
+```text
+System
+Device
+Command
+Configuration
+```
+
+Severity:
+
+```text
+Information
+Warning
+Error
+```
+
+Initial event types:
+
+```text
+SystemStarted
+SystemStopping
+DeviceOnline
+DeviceOffline
+TagWriteSucceeded
+TagWriteFailed
+RuntimeConfigurationApplied
+```
+
+Event ingestion:
+
+```text
+producer
+   ↓ EventJournalService.Publish
+bounded Channel<EventRecord>
+   ↓ background batch writer
+Operational SQLite events
+```
+
+Producer path не ждёт SQLite. При заполненном buffer incoming event отбрасывается, увеличивается `DroppedEventCount` и пишется warning.
+
+Device producer подписывается на `DeviceStateService.Changed`, но journal самостоятельно дедуплицирует status и создаёт event только при фактическом переходе:
+
+```text
+first Online / Offline
+status change
+```
+
+Повторный `Online → Online` или `Offline → Offline` от очередного poll-cycle event не создаёт.
+
+Tag write journal покрывает:
+
+```text
+success
+unknown tag
+protocol/tag read-only
+disabled device
+invalid UInt16
+protocol write error
+```
+
+Configuration event создаётся после успешного runtime apply Modbus/SNMP configuration.
+
+Event Journal не имеет update/delete API.
+
+На V2-S05 ещё нет:
+
+```text
+Events REST query
+Events Web
+Events SignalR
+AlarmService
+Audit actor identity
+```
+
+Это остаётся следующим V2-S06 и последующими security/alarm steps.
 
 ## Mimic contracts
 
@@ -529,13 +640,13 @@ docs/ROADMAP_V2.md
 Текущий завершённый шаг:
 
 ```text
-V2-S04 — Historian Web / Trends
+V2-S05 — Event Journal
 ```
 
 Следующий шаг:
 
 ```text
-V2-S05 — Event Journal
+V2-S06 — Events API и Web
 ```
 
 ## Документы

@@ -313,9 +313,9 @@ Dispatcher хранит, ограниченно запрашивает и пок
 
 # Phase 6 — Events foundation
 
-## [ ] V2-S05 — Event Journal
+## [x] V2-S05 — Event Journal
 
-Цель: ввести единый immutable operational journal до реализации alarms и audit.
+Реализован единый immutable operational journal до AlarmService/Audit.
 
 Event record:
 
@@ -327,25 +327,70 @@ Type
 Severity
 Source
 Message
-Data
+DataJson
 ```
 
-Первый набор producers:
+Categories:
 
 ```text
-device Online / Offline
-tag write success / failure
-configuration apply/change
-system startup/shutdown where useful
+System
+Device
+Command
+Configuration
 ```
 
-Events записываются в operational database.
+Severity:
 
-Event Journal не является AlarmService.
+```text
+Information
+Warning
+Error
+```
+
+Operational SQLite:
+
+- schema `v1 → v2`;
+- existing `history_samples` сохраняется;
+- новая append-only table `events`;
+- indexes:
+  - time;
+  - category/time;
+  - severity/time;
+  - source/time.
+
+Ingestion:
+
+- bounded `Channel<EventRecord>`;
+- background batch writer;
+- retry текущего batch при persistence error;
+- producer не блокирует SQLite;
+- `DroppedEventCount`;
+- `RejectedEventCount`.
+
+Initial producers:
+
+```text
+SystemStarted / SystemStopping
+DeviceOnline / DeviceOffline
+TagWriteSucceeded / TagWriteFailed
+RuntimeConfigurationApplied
+```
+
+Device events:
+
+- first observed Online/Offline фиксируется;
+- одинаковый status на каждом poll-cycle не создаёт повторные events;
+- event создаётся только при status transition.
+
+Tag write events покрывают success и все текущие rejection/error branches.
+
+Configuration event создаётся после успешного Modbus/SNMP runtime apply.
+
+Event Journal не является AlarmService и не имеет update/delete API.
 
 ### Результат
 
-Появляется единая временная лента важных operational событий.
+Появляется единая долговременная временная лента важных operational событий, готовая к query/Web boundary V2-S06.
 
 ---
 

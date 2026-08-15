@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S04
+## 1. Состояние после V2-S05
 
 В application layer появляется третий пользовательский runtime service:
 
@@ -463,9 +463,9 @@ dispatcher-operational.db
 
 Обе базы пока используют `Microsoft.Data.Sqlite`, но имеют независимые schema versions.
 
-## 21. Operational SQLite schema v1
+## 21. Operational SQLite schema
 
-Первая operational schema:
+V2-S01 создал operational schema v1:
 
 ```text
 history_samples
@@ -484,10 +484,18 @@ Index:
 
 `sample_id` обеспечивает однозначный порядок records даже при одинаковом timestamp.
 
-Operational schema version:
+Начиная с V2-S05 current operational schema:
 
 ```text
-PRAGMA user_version = 1
+PRAGMA user_version = 2
+```
+
+Migration:
+
+```text
+v1 history_samples
+ ↓ preserve history
+v2 history_samples + events
 ```
 
 Неизвестная future schema version вызывает startup error вместо неявной попытки использовать несовместимую DB.
@@ -810,7 +818,7 @@ DeletedSampleCount
 
 Ошибка cleanup логируется и не останавливает основной protocol/Historian ingestion runtime.
 
-Operational schema остаётся version `1`: retention использует уже существующий индекс `(tag_id, timestamp_utc_ticks, sample_id)` и не требует изменения table layout.
+Retention по-прежнему использует существующий индекс `(tag_id, timestamp_utc_ticks, sample_id)` и не требует изменения layout `history_samples`. V2-S05 повышает operational schema до `2` только для добавления Event Journal.
 
 ## 32. V2-S02 scope boundary
 
@@ -1252,3 +1260,281 @@ advanced cursors/zoom
 ```
 
 Следующий шаг V2-S05 начинает отдельную Phase 6 — Event Journal.
+
+
+## 49. Event Journal operational boundary
+
+V2-S05 добавляет второй тип operational records рядом с history:
+
+```text
+dispatcher-operational.db
+├── history_samples
+└── events
+```
+
+Event Journal не использует configuration database.
+
+Цепочка:
+
+```text
+system/device/command/configuration producer
+        ↓
+EventJournalService.Publish(...)
+        ↓ TryWrite
+bounded Channel<EventRecord>
+        ↓
+background batch writer
+        ↓
+SqliteOperationalStore
+        ↓
+events
+```
+
+Producer path не ждёт SQLite transaction/disk I/O.
+
+## 50. Event record
+
+Internal event model:
+
+```text
+EventRecord
+├── EventId
+├── Timestamp
+├── Category
+├── Type
+├── Severity
+├── Source
+├── Message
+└── DataJson
+```
+
+`EventId` создаётся SQLite `AUTOINCREMENT`.
+
+Timestamp нормализуется в UTC ticks.
+
+Categories V2-S05:
+
+```text
+System
+Device
+Command
+Configuration
+```
+
+Severity:
+
+```text
+Information
+Warning
+Error
+```
+
+`Type` остаётся строковым stable identifier:
+
+```text
+SystemStarted
+SystemStopping
+DeviceOnline
+DeviceOffline
+TagWriteSucceeded
+TagWriteFailed
+RuntimeConfigurationApplied
+```
+
+Это позволяет V2-S06 фильтровать события без смешивания human-readable `Message` с machine-readable event type.
+
+`DataJson` содержит producer-specific structured details и nullable.
+
+## 51. Operational SQLite schema v2
+
+V2-S05 migration:
+
+```text
+v1
+├── history_samples
+└── ix_history_samples_tag_time
+
+       ↓
+
+v2
+├── history_samples
+├── events
+├── ix_history_samples_tag_time
+├── ix_events_time
+├── ix_events_category_time
+├── ix_events_severity_time
+└── ix_events_source_time
+```
+
+Existing history table/records не перестраиваются и не очищаются.
+
+`events`:
+
+```text
+event_id             INTEGER PK AUTOINCREMENT
+timestamp_utc_ticks  INTEGER
+category             INTEGER
+type                 TEXT
+severity             INTEGER
+source               TEXT
+message              TEXT
+data_json             TEXT NULL
+```
+
+Store API Event Journal является append/read-only foundation:
+
+```text
+AppendEventsAsync
+LoadAllEventsAsync
+```
+
+Update/delete event methods отсутствуют.
+
+V2-S06 добавит query boundary, но не должен превращать immutable journal в editable collection.
+
+## 52. Bounded asynchronous Event Journal
+
+Baseline:
+
+```text
+BufferCapacity = 4096
+BatchSize      = 128
+```
+
+настраивается через:
+
+```text
+EventJournal:BufferCapacity
+EventJournal:BatchSize
+```
+
+При full buffer:
+
+```text
+TryWrite == false
+    ↓
+drop incoming event
+    ↓
+DroppedEventCount++
+    ↓
+warning
+```
+
+Current batch при SQLite error retry-ится background writer-ом.
+
+Это сохраняет важную границу:
+
+```text
+protocol/device state callback
+command/configuration request
+        ≠
+SQLite wait
+```
+
+`RejectedEventCount` учитывает event payload, который не удалось сериализовать в `DataJson`.
+
+## 53. Initial Event producers
+
+### System lifecycle
+
+`EventJournalService.StartAsync`:
+
+```text
+SystemStarted
+```
+
+`StopAsync` перед завершением channel:
+
+```text
+SystemStopping
+```
+
+Shutdown event best-effort в рамках normal graceful shutdown и flush channel.
+
+### Device status
+
+`DeviceStateService.Changed` вызывается при каждом `SetOnline/SetOffline`, включая повторный status на очередном poll-cycle.
+
+Event Journal поэтому держит собственный last-status snapshot:
+
+```text
+first observed Online/Offline → event
+Online → Online               → no event
+Offline → Offline             → no event
+Online → Offline              → event
+Offline → Online              → event
+```
+
+Это не меняет `DeviceStateService`; deduplication принадлежит event producer.
+
+`DeviceOffline` имеет `Warning`, `DeviceOnline` — `Information`.
+
+### Tag write
+
+Existing `/api/tags/{tagId}/write` публикует:
+
+```text
+TagWriteSucceeded
+TagWriteFailed
+```
+
+Failure включает текущие branches:
+
+```text
+tag not found
+protocol read-only
+device disabled
+tag read-only
+invalid UInt16
+protocol error
+```
+
+Event publishing не меняет HTTP status semantics существующего write API.
+
+### Configuration
+
+Каждая успешная Modbus/SNMP mutation всё ещё проходит:
+
+```text
+persist
+ConfigurationCatalog
+RuntimeConfigurationCoordinator.ApplyAsync
+```
+
+После успешного runtime apply создаётся:
+
+```text
+RuntimeConfigurationApplied
+```
+
+Если apply бросил exception, event `Applied` не создаётся.
+
+V2-S05 намеренно фиксирует runtime device configuration apply как первый configuration producer. Более детальный audit actor/action model появится в Users/Roles/Audit phase.
+
+## 54. V2-S05 scope boundary
+
+После V2-S05 есть:
+
+```text
+immutable operational events
+system lifecycle producer
+device transition producer
+tag write producer
+runtime configuration producer
+bounded async persistence
+operational DB migration v1 → v2
+```
+
+Ещё нет:
+
+```text
+Events REST query
+Events Web
+Events SignalR
+audit actor identity
+AlarmService
+alarm transitions
+event retention
+```
+
+Следующий шаг V2-S06 добавляет read/query + Web UI поверх Event Journal.

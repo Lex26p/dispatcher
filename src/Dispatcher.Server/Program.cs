@@ -5,6 +5,7 @@ using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
 using Dispatcher.Modbus;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Events;
 using Dispatcher.Server.Historian;
 using Dispatcher.Server.Mimics;
 using Dispatcher.Server.Realtime;
@@ -39,6 +40,10 @@ builder.Services.AddSingleton<IHistorySampleStore>(
     services =>
         services.GetRequiredService<SqliteOperationalStore>());
 
+builder.Services.AddSingleton<IEventJournalStore>(
+    services =>
+        services.GetRequiredService<SqliteOperationalStore>());
+
 builder.Services.AddSingleton(
     services =>
         HistorianOptions.Create(
@@ -52,6 +57,16 @@ builder.Services.AddHostedService<HistorianService>(
 builder.Services.AddHostedService<HistorianRetentionHostedService>();
 builder.Services.AddSingleton<HistorianPolicyService>();
 builder.Services.AddSingleton<HistoryQueryService>();
+
+builder.Services.AddSingleton(
+    services =>
+        EventJournalOptions.Create(
+            services.GetRequiredService<IConfiguration>()));
+
+builder.Services.AddSingleton<EventJournalService>();
+builder.Services.AddHostedService<EventJournalService>(
+    services =>
+        services.GetRequiredService<EventJournalService>());
 
 builder.Services.AddSingleton<ModbusTcpRegisterReader>();
 builder.Services.AddSingleton<ModbusPollingService>();
@@ -122,6 +137,7 @@ app.MapPost(
         TagWriteRequest request,
         ConfigurationCatalog configuration,
         ModbusWriteService writeService,
+        EventJournalService eventJournal,
         ILogger<Program> logger,
         CancellationToken cancellationToken) =>
         WriteTagAsync(
@@ -129,6 +145,7 @@ app.MapPost(
             request,
             configuration,
             writeService,
+            eventJournal,
             logger,
             cancellationToken));
 
@@ -151,6 +168,7 @@ static async Task<IResult> WriteTagAsync(
     TagWriteRequest request,
     ConfigurationCatalog configuration,
     ModbusWriteService writeService,
+    EventJournalService eventJournal,
     ILogger<Program> logger,
     CancellationToken cancellationToken)
 {
@@ -163,6 +181,18 @@ static async Task<IResult> WriteTagAsync(
         if (configuration.ContainsTagId(
                 tagId))
         {
+            eventJournal.Publish(
+                EventCategory.Command,
+                EventTypes.TagWriteFailed,
+                EventSeverity.Warning,
+                tagId,
+                $"Запись тега '{tagId}' отклонена: текущий протокол read-only.",
+                new
+                {
+                    Reason =
+                        "ProtocolReadOnly"
+                });
+
             return Results.Problem(
                 statusCode:
                     StatusCodes.Status409Conflict,
@@ -171,6 +201,18 @@ static async Task<IResult> WriteTagAsync(
                 detail:
                     $"Тег '{tagId}' не поддерживает запись текущим протоколом.");
         }
+
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteFailed,
+            EventSeverity.Warning,
+            tagId,
+            $"Запись тега '{tagId}' отклонена: тег не найден.",
+            new
+            {
+                Reason =
+                    "TagNotFound"
+            });
 
         return Results.Problem(
             statusCode:
@@ -183,6 +225,19 @@ static async Task<IResult> WriteTagAsync(
 
     if (!binding.Device.Enabled)
     {
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteFailed,
+            EventSeverity.Warning,
+            tagId,
+            $"Запись тега '{tagId}' отклонена: устройство отключено.",
+            new
+            {
+                Reason =
+                    "DeviceDisabled",
+                binding.Device.DeviceId
+            });
+
         return Results.Problem(
             statusCode:
                 StatusCodes.Status503ServiceUnavailable,
@@ -194,6 +249,19 @@ static async Task<IResult> WriteTagAsync(
 
     if (!binding.Tag.Writable)
     {
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteFailed,
+            EventSeverity.Warning,
+            tagId,
+            $"Запись тега '{tagId}' отклонена: тег read-only.",
+            new
+            {
+                Reason =
+                    "TagReadOnly",
+                binding.Device.DeviceId
+            });
+
         return Results.Problem(
             statusCode:
                 StatusCodes.Status409Conflict,
@@ -207,6 +275,20 @@ static async Task<IResult> WriteTagAsync(
             request.Value,
             out var value))
     {
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteFailed,
+            EventSeverity.Warning,
+            tagId,
+            $"Запись тега '{tagId}' отклонена: значение вне UInt16.",
+            new
+            {
+                Reason =
+                    "InvalidUInt16Value",
+                binding.Device.DeviceId,
+                request.Value
+            });
+
         return Results.Problem(
             statusCode:
                 StatusCodes.Status400BadRequest,
@@ -230,6 +312,20 @@ static async Task<IResult> WriteTagAsync(
                 target.RequestTimeout,
                 cancellationToken);
 
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteSucceeded,
+            EventSeverity.Information,
+            tagId,
+            $"Тег '{tagId}' записан.",
+            new
+            {
+                binding.Device.DeviceId,
+                Value =
+                    value
+            },
+            tagValue.Timestamp);
+
         return Results.Ok(
             RuntimeContractMapper.ToDto(
                 tagValue,
@@ -246,6 +342,19 @@ static async Task<IResult> WriteTagAsync(
             exception,
             "Failed to write tag {TagId}.",
             tagId);
+
+        eventJournal.Publish(
+            EventCategory.Command,
+            EventTypes.TagWriteFailed,
+            EventSeverity.Error,
+            tagId,
+            $"Ошибка записи тега '{tagId}'.",
+            new
+            {
+                binding.Device.DeviceId,
+                Error =
+                    exception.Message
+            });
 
         return Results.Problem(
             statusCode:

@@ -96,12 +96,14 @@ Templates
 Scripting
 ```
 
-V2-S01…V2-S04 завершают первый полный Historian vertical slice: ingestion, policy, retention, query API и Web Trends.
+V2-S01…V2-S04 завершают первый полный Historian vertical slice.
+
+V2-S05 создаёт foundation Phase 6 — immutable Event Journal в operational storage.
 
 Следующий шаг новой дорожной карты:
 
 ```text
-V2-S05 — Event Journal
+V2-S06 — Events API и Web
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

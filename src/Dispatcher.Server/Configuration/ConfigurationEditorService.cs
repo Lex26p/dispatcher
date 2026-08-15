@@ -1,5 +1,6 @@
 using Dispatcher.Contracts.Configuration;
 using Dispatcher.Contracts.Realtime;
+using Dispatcher.Server.Events;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
 using Microsoft.AspNetCore.SignalR;
@@ -12,18 +13,21 @@ public sealed class ConfigurationEditorService
     private readonly ConfigurationCatalog _catalog;
     private readonly RuntimeConfigurationCoordinator _runtime;
     private readonly IHubContext<RuntimeHub> _hubContext;
+    private readonly EventJournalService? _eventJournal;
     private readonly SemaphoreSlim _mutationLock = new(1, 1);
 
     public ConfigurationEditorService(
         SqliteConfigurationStore store,
         ConfigurationCatalog catalog,
         RuntimeConfigurationCoordinator runtime,
-        IHubContext<RuntimeHub> hubContext)
+        IHubContext<RuntimeHub> hubContext,
+        EventJournalService? eventJournal = null)
     {
         _store = store;
         _catalog = catalog;
         _runtime = runtime;
         _hubContext = hubContext;
+        _eventJournal = eventJournal;
     }
 
     public IReadOnlyList<ModbusDeviceConfiguration> GetDevices()
@@ -646,6 +650,29 @@ public sealed class ConfigurationEditorService
     {
         await _runtime.ApplyAsync(
             CancellationToken.None);
+
+        _eventJournal?.Publish(
+            EventCategory.Configuration,
+            EventTypes.RuntimeConfigurationApplied,
+            EventSeverity.Information,
+            source:
+                "configuration",
+            message:
+                "Конфигурация устройств применена.",
+            data:
+                new
+                {
+                    ModbusDevices =
+                        _catalog.ModbusDevices.Count,
+                    ModbusTags =
+                        _catalog.ModbusDevices.Sum(device =>
+                            device.Tags.Count),
+                    SnmpDevices =
+                        _catalog.SnmpDevices.Count,
+                    SnmpTags =
+                        _catalog.SnmpDevices.Sum(device =>
+                            device.Tags.Count)
+                });
 
         await _hubContext.Clients.All.SendAsync(
             RuntimeHubContract.ConfigurationChanged,

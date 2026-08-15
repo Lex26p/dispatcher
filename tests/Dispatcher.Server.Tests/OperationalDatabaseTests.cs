@@ -1,3 +1,4 @@
+using Dispatcher.Server.Events;
 using Dispatcher.Server.Historian;
 using Microsoft.Data.Sqlite;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -8,7 +9,7 @@ namespace Dispatcher.Server.Tests;
 public sealed class OperationalDatabaseTests
 {
     [TestMethod]
-    public async Task InitializeAsync_CreatesIndependentSchemaVersion1()
+    public async Task InitializeAsync_CreatesIndependentSchemaVersion2()
     {
         using var database =
             TemporaryOperationalDatabase.Create();
@@ -25,15 +26,20 @@ public sealed class OperationalDatabaseTests
                 database.DatabasePath);
 
         Assert.AreEqual(
-            1,
+            2,
             version);
 
         var samples =
             await store.LoadAllAsync();
+        var events =
+            await store.LoadAllEventsAsync();
 
         Assert.AreEqual(
             0,
             samples.Count);
+        Assert.AreEqual(
+            0,
+            events.Count);
     }
 
     [TestMethod]
@@ -181,6 +187,166 @@ public sealed class OperationalDatabaseTests
         Assert.AreEqual(
             timestamp.ToUniversalTime(),
             loaded[0].Timestamp);
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_MigratesVersion1ToVersion2_WithoutLosingHistory()
+    {
+        using var database =
+            TemporaryOperationalDatabase.Create();
+
+        await using (var connection =
+            new SqliteConnection(
+                CreateConnectionString(
+                    database.DatabasePath)))
+        {
+            await connection.OpenAsync();
+
+            await using var command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+                CREATE TABLE history_samples (
+                    sample_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    tag_id TEXT NOT NULL,
+                    timestamp_utc_ticks INTEGER NOT NULL,
+                    value_type INTEGER NOT NULL CHECK (value_type BETWEEN 0 AND 7),
+                    value_text TEXT NULL
+                );
+
+                CREATE INDEX ix_history_samples_tag_time
+                    ON history_samples(
+                        tag_id,
+                        timestamp_utc_ticks,
+                        sample_id);
+
+                INSERT INTO history_samples (
+                    tag_id,
+                    timestamp_utc_ticks,
+                    value_type,
+                    value_text)
+                VALUES (
+                    'legacy.tag',
+                    638908128000000000,
+                    6,
+                    'legacy');
+
+                PRAGMA user_version = 1;
+                """;
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store =
+            new SqliteOperationalStore(
+                database.DatabasePath);
+
+        await store.InitializeAsync();
+
+        Assert.AreEqual(
+            2,
+            await ReadSchemaVersionAsync(
+                database.DatabasePath));
+
+        var samples =
+            await store.LoadAllAsync();
+        var events =
+            await store.LoadAllEventsAsync();
+
+        Assert.AreEqual(
+            1,
+            samples.Count);
+        Assert.AreEqual(
+            "legacy.tag",
+            samples[0].TagId);
+        Assert.AreEqual(
+            "legacy",
+            samples[0].ValueText);
+        Assert.AreEqual(
+            0,
+            events.Count);
+    }
+
+    [TestMethod]
+    public async Task AppendEventsAsync_PreservesImmutableEventRecord()
+    {
+        using var database =
+            TemporaryOperationalDatabase.Create();
+
+        var store =
+            new SqliteOperationalStore(
+                database.DatabasePath);
+
+        await store.InitializeAsync();
+
+        var timestamp =
+            new DateTimeOffset(
+                2026,
+                8,
+                15,
+                19,
+                0,
+                0,
+                TimeSpan.FromHours(3));
+
+        await store.AppendEventsAsync(
+            [
+                new EventRecord(
+                    EventId:
+                        0,
+                    Timestamp:
+                        timestamp,
+                    Category:
+                        EventCategory.Command,
+                    Type:
+                        EventTypes.TagWriteSucceeded,
+                    Severity:
+                        EventSeverity.Information,
+                    Source:
+                        "plc01.command",
+                    Message:
+                        "Команда выполнена.",
+                    DataJson:
+                        """{"value":1}""")
+            ]);
+
+        var events =
+            await store.LoadAllEventsAsync();
+
+        Assert.AreEqual(
+            1,
+            events.Count);
+
+        var record =
+            events[0];
+
+        Assert.IsTrue(
+            record.EventId > 0);
+        Assert.AreEqual(
+            timestamp.ToUniversalTime(),
+            record.Timestamp);
+        Assert.AreEqual(
+            TimeSpan.Zero,
+            record.Timestamp.Offset);
+        Assert.AreEqual(
+            EventCategory.Command,
+            record.Category);
+        Assert.AreEqual(
+            EventTypes.TagWriteSucceeded,
+            record.Type);
+        Assert.AreEqual(
+            EventSeverity.Information,
+            record.Severity);
+        Assert.AreEqual(
+            "plc01.command",
+            record.Source);
+        Assert.AreEqual(
+            "Команда выполнена.",
+            record.Message);
+        Assert.AreEqual(
+            """{"value":1}""",
+            record.DataJson);
     }
 
     private static async Task<int> ReadSchemaVersionAsync(

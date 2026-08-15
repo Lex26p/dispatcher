@@ -4,6 +4,8 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Dispatcher.Contracts.Tags;
 using Dispatcher.Core.Tags;
+using Dispatcher.Server.Events;
+using Dispatcher.Server.Historian;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -90,6 +92,23 @@ public sealed class TagWriteApiTests
         Assert.AreEqual(
             (ushort)3456,
             tagService.Get("device01.register100")?.Value);
+
+        var journalEvent =
+            await WaitForEventAsync(
+                database.DatabasePath,
+                EventTypes.TagWriteSucceeded,
+                "device01.register100");
+
+        Assert.AreEqual(
+            EventCategory.Command,
+            journalEvent.Category);
+        Assert.AreEqual(
+            EventSeverity.Information,
+            journalEvent.Severity);
+        StringAssert.Contains(
+            journalEvent.DataJson
+            ?? string.Empty,
+            "3456");
     }
 
     [TestMethod]
@@ -119,6 +138,20 @@ public sealed class TagWriteApiTests
         Assert.AreEqual(
             HttpStatusCode.Conflict,
             response.StatusCode);
+
+        var journalEvent =
+            await WaitForEventAsync(
+                database.DatabasePath,
+                EventTypes.TagWriteFailed,
+                "device01.register100");
+
+        Assert.AreEqual(
+            EventSeverity.Warning,
+            journalEvent.Severity);
+        StringAssert.Contains(
+            journalEvent.DataJson
+            ?? string.Empty,
+            "TagReadOnly");
     }
 
     [TestMethod]
@@ -148,6 +181,65 @@ public sealed class TagWriteApiTests
         Assert.AreEqual(
             HttpStatusCode.BadRequest,
             response.StatusCode);
+
+        var journalEvent =
+            await WaitForEventAsync(
+                database.DatabasePath,
+                EventTypes.TagWriteFailed,
+                "device01.register100");
+
+        Assert.AreEqual(
+            EventSeverity.Warning,
+            journalEvent.Severity);
+        StringAssert.Contains(
+            journalEvent.DataJson
+            ?? string.Empty,
+            "InvalidUInt16Value");
+    }
+
+    private static async Task<EventRecord> WaitForEventAsync(
+        string configurationDatabasePath,
+        string eventType,
+        string source)
+    {
+        var store =
+            new SqliteOperationalStore(
+                TestDispatcherFactory.GetOperationalDatabasePath(
+                    configurationDatabasePath));
+
+        await store.InitializeAsync();
+
+        var deadline =
+            DateTimeOffset.UtcNow
+            + TimeSpan.FromSeconds(2);
+
+        while (true)
+        {
+            var record =
+                (await store.LoadAllEventsAsync())
+                    .LastOrDefault(current =>
+                        string.Equals(
+                            current.Type,
+                            eventType,
+                            StringComparison.Ordinal)
+                        && string.Equals(
+                            current.Source,
+                            source,
+                            StringComparison.Ordinal));
+
+            if (record is not null)
+            {
+                return record;
+            }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                Assert.Fail(
+                    $"Event '{eventType}' for source '{source}' was not persisted before timeout.");
+            }
+
+            await Task.Delay(10);
+        }
     }
 
     private static int ReserveUnusedPort()

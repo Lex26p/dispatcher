@@ -1,10 +1,11 @@
+using Dispatcher.Server.Events;
 using Microsoft.Data.Sqlite;
 
 namespace Dispatcher.Server.Historian;
 
-public sealed class SqliteOperationalStore : IHistorySampleStore
+public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalStore
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     private readonly string _connectionString;
 
@@ -55,7 +56,13 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         switch (schemaVersion)
         {
             case 0:
-                await CreateSchemaV1Async(
+                await CreateSchemaV2Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 1:
+                await MigrateV1ToV2Async(
                     connection,
                     cancellationToken);
                 return;
@@ -156,6 +163,171 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         }
 
         transaction.Commit();
+    }
+
+    public async Task AppendEventsAsync(
+        IReadOnlyList<EventRecord> events,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(
+            events);
+
+        if (events.Count == 0)
+        {
+            return;
+        }
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            INSERT INTO events (
+                timestamp_utc_ticks,
+                category,
+                type,
+                severity,
+                source,
+                message,
+                data_json)
+            VALUES (
+                $timestampUtcTicks,
+                $category,
+                $type,
+                $severity,
+                $source,
+                $message,
+                $dataJson);
+            """;
+
+        var timestampParameter =
+            command.Parameters.Add(
+                "$timestampUtcTicks",
+                SqliteType.Integer);
+
+        var categoryParameter =
+            command.Parameters.Add(
+                "$category",
+                SqliteType.Integer);
+
+        var typeParameter =
+            command.Parameters.Add(
+                "$type",
+                SqliteType.Text);
+
+        var severityParameter =
+            command.Parameters.Add(
+                "$severity",
+                SqliteType.Integer);
+
+        var sourceParameter =
+            command.Parameters.Add(
+                "$source",
+                SqliteType.Text);
+
+        var messageParameter =
+            command.Parameters.Add(
+                "$message",
+                SqliteType.Text);
+
+        var dataJsonParameter =
+            command.Parameters.Add(
+                "$dataJson",
+                SqliteType.Text);
+
+        foreach (var record in events)
+        {
+            ArgumentNullException.ThrowIfNull(
+                record);
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                record.Type);
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                record.Source);
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                record.Message);
+
+            timestampParameter.Value =
+                record.Timestamp
+                    .UtcDateTime
+                    .Ticks;
+
+            categoryParameter.Value =
+                (int)record.Category;
+
+            typeParameter.Value =
+                record.Type;
+
+            severityParameter.Value =
+                (int)record.Severity;
+
+            sourceParameter.Value =
+                record.Source;
+
+            messageParameter.Value =
+                record.Message;
+
+            dataJsonParameter.Value =
+                record.DataJson is null
+                    ? DBNull.Value
+                    : record.DataJson;
+
+            await command.ExecuteNonQueryAsync(
+                cancellationToken);
+        }
+
+        transaction.Commit();
+    }
+
+    public async Task<IReadOnlyList<EventRecord>> LoadAllEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                event_id,
+                timestamp_utc_ticks,
+                category,
+                type,
+                severity,
+                source,
+                message,
+                data_json
+            FROM events
+            ORDER BY event_id;
+            """;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var events =
+            new List<EventRecord>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            events.Add(
+                ReadEvent(
+                    reader));
+        }
+
+        return events;
     }
 
     public async Task<IReadOnlyList<HistorySample>> QueryAsync(
@@ -335,6 +507,36 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
         return samples;
     }
 
+    private static EventRecord ReadEvent(
+        SqliteDataReader reader)
+    {
+        var ticks =
+            reader.GetInt64(1);
+
+        return new EventRecord(
+            EventId:
+                reader.GetInt64(0),
+            Timestamp:
+                new DateTimeOffset(
+                    new DateTime(
+                        ticks,
+                        DateTimeKind.Utc)),
+            Category:
+                (EventCategory)reader.GetInt32(2),
+            Type:
+                reader.GetString(3),
+            Severity:
+                (EventSeverity)reader.GetInt32(4),
+            Source:
+                reader.GetString(5),
+            Message:
+                reader.GetString(6),
+            DataJson:
+                reader.IsDBNull(7)
+                    ? null
+                    : reader.GetString(7));
+    }
+
     private static HistorySample ReadSample(
         SqliteDataReader reader)
     {
@@ -399,7 +601,64 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
             result);
     }
 
-    private static async Task CreateSchemaV1Async(
+    private static async Task MigrateV1ToV2Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS events (
+                event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                timestamp_utc_ticks INTEGER NOT NULL,
+                category INTEGER NOT NULL CHECK (category BETWEEN 0 AND 3),
+                type TEXT NOT NULL,
+                severity INTEGER NOT NULL CHECK (severity BETWEEN 0 AND 2),
+                source TEXT NOT NULL,
+                message TEXT NOT NULL,
+                data_json TEXT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_events_time
+                ON events(
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_category_time
+                ON events(
+                    category,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_severity_time
+                ON events(
+                    severity,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_source_time
+                ON events(
+                    source,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            PRAGMA user_version = 2;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task CreateSchemaV2Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -422,7 +681,41 @@ public sealed class SqliteOperationalStore : IHistorySampleStore
                     timestamp_utc_ticks,
                     sample_id);
 
-            PRAGMA user_version = 1;
+            CREATE TABLE IF NOT EXISTS events (
+                event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                timestamp_utc_ticks INTEGER NOT NULL,
+                category INTEGER NOT NULL CHECK (category BETWEEN 0 AND 3),
+                type TEXT NOT NULL,
+                severity INTEGER NOT NULL CHECK (severity BETWEEN 0 AND 2),
+                source TEXT NOT NULL,
+                message TEXT NOT NULL,
+                data_json TEXT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_events_time
+                ON events(
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_category_time
+                ON events(
+                    category,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_severity_time
+                ON events(
+                    severity,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            CREATE INDEX IF NOT EXISTS ix_events_source_time
+                ON events(
+                    source,
+                    timestamp_utc_ticks,
+                    event_id);
+
+            PRAGMA user_version = 2;
             """;
 
         await command.ExecuteNonQueryAsync(

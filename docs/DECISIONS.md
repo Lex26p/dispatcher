@@ -908,3 +908,98 @@ Server query boundary допускает:
 Причина: V2-S03 намеренно разрешает читать retained history deleted/stale tags, которых уже нет в current configuration.
 
 Manual TagId не создаёт device tag или historian policy и используется только как history query selection.
+
+---
+
+## D-054 — Event Journal хранится в operational SQLite schema v2 как immutable append-only records
+
+**Status:** Accepted
+
+V2-S05 повышает:
+
+```text
+dispatcher-operational.db
+v1 → v2
+```
+
+и добавляет:
+
+```text
+events
+```
+
+Existing `history_samples` сохраняется без перестройки.
+
+Event Journal не хранится в configuration database.
+
+Для journal существуют append/read foundation operations; update/delete event API не вводится.
+
+Причина:
+
+- event — факт, произошедший во времени, а не редактируемая configuration;
+- historian/events имеют общий operational lifecycle;
+- будущие alarms/audit смогут ссылаться на ту же временную модель;
+- configuration database не должна расти от operational records.
+
+---
+
+## D-055 — Event ingestion bounded/asynchronous и device status дедуплицируется в EventJournalService
+
+**Status:** Accepted
+
+Producer вызывает:
+
+```text
+EventJournalService.Publish
+        ↓
+Channel.Writer.TryWrite
+```
+
+SQLite write выполняет отдельный background writer.
+
+Baseline:
+
+```text
+BufferCapacity = 4096
+BatchSize = 128
+```
+
+При full buffer incoming event отбрасывается и учитывается в `DroppedEventCount`; producer не блокируется.
+
+`DeviceStateService.Changed` не меняется. Поскольку он публикует state после каждого poll, Event Journal самостоятельно фиксирует только first status/status transition.
+
+Причина: journal должен отражать operational transitions, а не частоту polling.
+
+---
+
+## D-056 — Event type отделён от Message, а producer-specific данные хранятся как nullable DataJson
+
+**Status:** Accepted
+
+Event record разделяет:
+
+```text
+Category
+Type
+Severity
+Source
+Message
+DataJson
+```
+
+`Type` — stable machine-readable identifier.
+
+`Message` — human-readable описание.
+
+`DataJson` — optional structured details конкретного producer.
+
+Первый набор categories:
+
+```text
+System
+Device
+Command
+Configuration
+```
+
+Event Journal не является AlarmService. Alarm states/transitions появятся отдельной subsystem после Event Journal и security foundation.
