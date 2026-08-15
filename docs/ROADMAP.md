@@ -75,8 +75,31 @@ Modbus TCP и SNMP v2c одновременно опрашиваются, пол
 
 Инженер создаёт простую мнемосхему, связывает элементы с logical tags, сохраняет её и использует тот же definition в операторском realtime runtime.
 
-## Phase 5 — Дальнейшее развитие
+## Phase 5 — Roadmap v2
 
-Не детализируется заранее.
+Базовый цикл S00–S12 завершён.
 
-После S12 при необходимости планируются historian, alarms/events, пользователи/роли, дополнительные протоколы, шаблоны, scripting, redundancy и distributed execution.
+Дальнейшее развитие вынесено в отдельный документ:
+
+```text
+docs/ROADMAP_V2.md
+```
+
+Roadmap v2 включает:
+
+```text
+Historian
+Events
+Users / Roles / Audit
+Alarms
+Templates
+Scripting
+```
+
+Первый шаг новой дорожной карты:
+
+```text
+V2-S01 — Historian storage и ingestion foundation
+```
+
+Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

@@ -1,0 +1,828 @@
+# Дорожная карта Dispatcher v2
+
+Эта дорожная карта продолжает завершённый базовый цикл `S00–S12`.
+
+Первая дорожная карта дала законченный вертикальный срез:
+
+```text
+Modbus / SNMP
+      ↓
+logical Tag
+      ↓
+Monitoring
+      ↓
+Device Editor
+      ↓
+Mimic Editor / Runtime
+```
+
+Roadmap v2 развивает Dispatcher в сторону долговременного хранения данных, событий и тревог, управления доступом, повторного использования конфигурации и контролируемой автоматизации.
+
+## Обозначения
+
+- `[x]` — шаг подготовлен/реализован в репозитории.
+- `[ ]` — шаг ещё не реализован.
+- Ошибка проверки означает продолжение текущего шага.
+- Следующий шаг начинается только после локальной проверки и нового Git SHA.
+- Шаг можно разделить, если фактический объём окажется слишком большим.
+
+## Цели Roadmap v2
+
+В scope входят:
+
+```text
+Historian
+Alarms / Events
+Users / Roles
+Templates
+Scripting
+```
+
+Не входят автоматически:
+
+```text
+distributed execution
+redundancy
+cluster
+external message broker
+enterprise identity providers
+arbitrary plugin framework
+```
+
+Эти направления рассматриваются отдельно после появления реальной необходимости.
+
+## Архитектурные принципы v2
+
+### Logical Tag остаётся главной runtime-границей
+
+Новые подсистемы работают через:
+
+```text
+TagId
+```
+
+Historian, alarm rules, templates и scripts не должны хранить Modbus address или SNMP OID вместо logical binding.
+
+### Configuration и operational data разделяются
+
+Низкочастотная configuration:
+
+```text
+devices
+tags
+mimics
+historian policies
+alarm definitions
+templates
+scripts
+security configuration
+```
+
+не должна смешиваться с высокочастотными operational records:
+
+```text
+history samples
+events
+alarm transitions
+audit records
+script executions
+```
+
+На первом этапе operational data может оставаться в SQLite, но в отдельной operational database.
+
+Это сохраняет возможность позже заменить storage historian/events без миграции всей configuration database.
+
+### Не блокировать protocol polling записью истории
+
+Historian ingest не должен выполнять тяжёлый disk I/O внутри `TagService.Changed`/protocol polling path.
+
+Между runtime changes и persistence должен быть ограниченный asynchronous ingestion boundary.
+
+Конкретный механизм выбирается на реализации V2-S01 без создания отдельного message broker.
+
+### Security раньше полноценного scripting
+
+Scripting появляется только после:
+
+```text
+authentication
+permissions
+audit
+```
+
+Скрипт не получает прямой доступ к filesystem/process/network/DI container по умолчанию.
+
+### Templates начинаются с конкретных use cases
+
+Не создаётся generic template framework до появления хотя бы двух реальных use cases.
+
+Первые два use cases:
+
+```text
+Mimic templates
+Device/tag templates
+```
+
+Только после их реализации общая часть выносится в общий template catalog, если это действительно уменьшает дублирование.
+
+---
+
+# Phase 5 — Historian
+
+## [ ] V2-S01 — Historian storage и ingestion foundation
+
+Цель: начать надёжно сохранять runtime tag values без изменения protocol drivers.
+
+План:
+
+- отдельная operational SQLite database;
+- независимая schema version operational storage;
+- typed history record:
+  - `TagId`;
+  - timestamp;
+  - value;
+  - value type;
+- `HistorianService`;
+- asynchronous background writer;
+- подписка на logical tag changes;
+- ingestion не блокирует protocol polling;
+- migration/startup tests;
+- tests без реального оборудования.
+
+Первый scope не требует внешней time-series database.
+
+### Результат
+
+```text
+TagService
+   ↓ change
+Historian ingestion
+   ↓ async
+Operational SQLite
+```
+
+---
+
+## [ ] V2-S02 — Historian policies и retention
+
+Цель: не писать все значения бесконтрольно.
+
+Минимальная policy на TagId:
+
+```text
+Enabled
+Mode
+Retention
+```
+
+Начальные режимы:
+
+```text
+OnChange
+Periodic
+```
+
+Для numeric tags допускается добавить deadband, если он реально нужен при реализации.
+
+Нужно определить:
+
+- период periodic sampling;
+- retention days;
+- cleanup hosted service;
+- поведение при удалённом/переименованном TagId;
+- bounded queue overflow policy;
+- diagnostics lost/dropped samples, если это возможно.
+
+### Результат
+
+Инженер явно выбирает, какие теги архивируются и с какой политикой.
+
+---
+
+## [ ] V2-S03 — History query API
+
+Цель: получить стабильную application boundary для trend/history.
+
+API должен поддерживать как минимум:
+
+```text
+TagId
+from
+to
+order
+limit / max points
+```
+
+Для нескольких тегов должен быть определён один однозначный формат результата.
+
+Server обязан ограничивать чрезмерно большие ответы.
+
+Не добавлять protocol-specific поля.
+
+### Результат
+
+Историю можно запросить независимо от Web UI.
+
+---
+
+## [ ] V2-S04 — Historian Web / Trends
+
+Новый сервис Web:
+
+```text
+History / Trends
+```
+
+Предлагаемая компоновка:
+
+```text
+слева  → tags / saved selections
+центр  → trend + history table
+сверху → time range / refresh / navigation
+справа → свойства выбранной series при необходимости
+```
+
+Первый scope:
+
+- выбор одного/нескольких TagId;
+- time range;
+- табличный просмотр;
+- trend;
+- понятное состояние no-data;
+- ограничение числа отображаемых точек.
+
+Не выбирать тяжёлую chart library до проверки, что SVG/простого компонента недостаточно.
+
+### Результат Phase 5
+
+Dispatcher хранит и показывает долговременную историю logical tags.
+
+---
+
+# Phase 6 — Events foundation
+
+## [ ] V2-S05 — Event Journal
+
+Цель: ввести единый immutable operational journal до реализации alarms и audit.
+
+Event record:
+
+```text
+EventId
+Timestamp
+Category
+Type
+Severity
+Source
+Message
+Data
+```
+
+Первый набор producers:
+
+```text
+device Online / Offline
+tag write success / failure
+configuration apply/change
+system startup/shutdown where useful
+```
+
+Events записываются в operational database.
+
+Event Journal не является AlarmService.
+
+### Результат
+
+Появляется единая временная лента важных operational событий.
+
+---
+
+## [ ] V2-S06 — Events API и Web
+
+Новый Web service:
+
+```text
+Events
+```
+
+Минимум:
+
+- time range;
+- category;
+- severity;
+- source;
+- text filter;
+- dense table;
+- server-side limit/paging;
+- детали выбранного event справа.
+
+Realtime добавляется только для новых events, исторический диапазон читается REST.
+
+### Результат Phase 6
+
+Инженер может диагностировать, что происходило в системе, даже до появления Alarm rules.
+
+---
+
+# Phase 7 — Users / Roles / Audit
+
+## [ ] V2-S07 — Authentication foundation
+
+Цель: ввести идентичность пользователя без самодельной криптографии.
+
+Первый scope:
+
+- local users;
+- secure platform password hashing;
+- login;
+- logout;
+- current user;
+- authenticated session;
+- initial administrator bootstrap;
+- disabled users.
+
+Не добавлять OAuth/OIDC/LDAP/AD до отдельного требования.
+
+### Результат
+
+Server различает anonymous и конкретного authenticated user.
+
+---
+
+## [ ] V2-S08 — Permissions и Roles
+
+Авторизация строится по permissions, а не по scattered role-name checks.
+
+Начальный набор permissions:
+
+```text
+Runtime.Read
+Tags.Write
+
+Devices.Edit
+Mimics.Edit
+Historian.Configure
+Alarms.Configure
+Alarms.Acknowledge
+
+Users.Manage
+Roles.Manage
+
+Templates.Edit
+
+Scripts.Edit
+Scripts.Execute
+```
+
+Начальные built-in roles могут быть:
+
+```text
+Viewer
+Operator
+Engineer
+Administrator
+```
+
+Но Server проверяет permission.
+
+Обязательный порядок:
+
+```text
+Server authorization
+      ↓
+Web visibility/enabled state
+```
+
+Скрытая Web-кнопка не считается защитой.
+
+### Результат
+
+Операторские и инженерные действия имеют server-side permission boundary.
+
+---
+
+## [ ] V2-S09 — Users/Roles Web + Audit
+
+Web admin service:
+
+```text
+Users / Roles
+```
+
+Функции:
+
+- создать/отключить user;
+- изменить display name;
+- reset/change password по безопасному flow;
+- назначить roles;
+- посмотреть effective permissions.
+
+Security-sensitive actions пишутся в audit/events:
+
+```text
+login success/failure where appropriate
+user create/disable
+role changes
+tag writes
+alarm acknowledgement
+configuration changes
+script execution
+```
+
+Audit record должен содержать actor identity.
+
+### Результат Phase 7
+
+Dispatcher имеет базовую локальную модель безопасности и трассируемость действий пользователя.
+
+---
+
+# Phase 8 — Alarms
+
+## [ ] V2-S10 — Alarm definitions и Alarm Editor
+
+Alarm binding:
+
+```text
+TagId
+```
+
+Первый набор типов без expression language:
+
+```text
+Digital true/false
+High
+Low
+```
+
+Definition минимум:
+
+```text
+AlarmId
+Name
+Enabled
+TagId
+Condition
+Threshold
+Severity
+Message
+Delay
+Hysteresis
+```
+
+`Threshold/Hysteresis` используются только там, где применимы.
+
+Alarm definitions хранятся как configuration, а не в history table.
+
+Editor использует стандартную схему:
+
+```text
+слева  → alarms
+центр  → rules/list
+справа → properties
+сверху → add/save/delete
+```
+
+### Результат
+
+Инженер может определить alarm rule без scripting.
+
+---
+
+## [ ] V2-S11 — Alarm runtime state machine
+
+Alarm runtime подписывается на logical Tag changes.
+
+Минимальные состояния должны явно различать:
+
+```text
+Normal
+ActiveUnacknowledged
+ActiveAcknowledged
+ReturnedUnacknowledged
+```
+
+Нужно определить transitions для:
+
+```text
+raise
+acknowledge
+return-to-normal
+ack after return
+```
+
+Alarm transition записывается в Event Journal/operational storage.
+
+Delay и hysteresis применяются в runtime, а не в Web.
+
+Не добавлять пока:
+
+```text
+shelving
+suppression
+alarm groups
+complex expressions
+```
+
+### Результат
+
+Alarm имеет воспроизводимый lifecycle, а не просто boolean flag.
+
+---
+
+## [ ] V2-S12 — Alarm ACK, realtime и Web
+
+Новый operator service:
+
+```text
+Alarms
+```
+
+Основной экран:
+
+```text
+Active alarms
+Alarm history/events
+```
+
+Для Active alarms:
+
+- severity;
+- source/TagId;
+- message;
+- raised time;
+- state;
+- acknowledged by;
+- acknowledged at;
+- current value.
+
+ACK:
+
+```text
+authenticated user
++ Alarms.Acknowledge permission
++ timestamp
+```
+
+SignalR сообщает alarm transitions.
+
+Первый scope — acknowledge одной выбранной alarm instance. Bulk ACK можно добавить позже.
+
+### Результат Phase 8
+
+Dispatcher имеет полноценный минимальный alarm lifecycle с идентифицированным оператором.
+
+---
+
+# Phase 9 — Templates
+
+## [ ] V2-S13 — Mimic templates
+
+Первый конкретный template use case.
+
+Цель: повторно использовать фрагменты мнемосхем.
+
+Template может содержать:
+
+```text
+elements
+relative positions
+visual properties
+TagId placeholders/parameters
+```
+
+Первый instantiate workflow:
+
+```text
+template
+   ↓ instantiate
+copy elements into MimicDefinition
+```
+
+Экземпляр не должен автоматически изменяться после изменения template.
+
+Это избегает неочевидных каскадных изменений работающих экранов.
+
+### Результат
+
+Часто повторяющийся visual fragment можно вставлять без ручного повторения всех элементов.
+
+---
+
+## [ ] V2-S14 — Device/Tag templates и общий Template Catalog
+
+Второй конкретный use case — повторяющаяся device/tag configuration.
+
+Первый scope должен быть protocol-aware, а не притворяться полностью generic.
+
+Примеры:
+
+```text
+Modbus TCP device template
+SNMP v2c device template
+```
+
+Template может задавать:
+
+- набор tags;
+- default names;
+- protocol-specific point settings;
+- writable flags где применимо;
+- параметры экземпляра.
+
+После появления двух concrete use cases:
+
+```text
+Mimic template
+Device/tag template
+```
+
+выделить только действительно общие свойства:
+
+```text
+TemplateId
+Name
+Kind
+Version
+Parameters
+```
+
+### Результат Phase 9
+
+Dispatcher имеет reusable configuration templates без преждевременного универсального template engine.
+
+---
+
+# Phase 10 — Scripting
+
+## [ ] V2-S15 — Script security boundary и runtime foundation
+
+Перед выбором scripting engine фиксируется разрешённый host API.
+
+Скрипт должен получать контролируемые операции наподобие:
+
+```text
+ReadTag(TagId)
+WriteTag(TagId, value)
+Log(...)
+EmitEvent(...)
+```
+
+`WriteTag` обязан проходить существующую command/permission boundary.
+
+По умолчанию скрипту запрещены прямые:
+
+```text
+filesystem
+process start
+raw network
+reflection
+application DI container
+database connection
+```
+
+Нужны:
+
+- execution timeout;
+- cancellation;
+- error isolation;
+- bounded output/log;
+- concurrency policy.
+
+Scripting engine выбирается на этом шаге после проверки актуальных supported libraries и sandbox characteristics.
+
+Не использовать произвольную компиляцию пользовательского C# внутри Server только потому, что приложение написано на C#.
+
+### Результат
+
+Есть контролируемая execution boundary до появления пользовательского script editor.
+
+---
+
+## [ ] V2-S16 — Script definitions, Editor и manual execution
+
+Script definition:
+
+```text
+ScriptId
+Name
+Enabled
+Source
+```
+
+Web:
+
+```text
+Scripts
+├── list
+├── editor
+├── validation
+├── Run/Test
+└── execution result/log
+```
+
+Save и Run являются разными действиями.
+
+Permissions:
+
+```text
+Scripts.Edit
+Scripts.Execute
+```
+
+Manual execution создаёт audit/execution record.
+
+### Результат
+
+Инженер может безопасно сохранить и вручную выполнить script.
+
+---
+
+## [ ] V2-S17 — Script triggers и observability
+
+После стабильного manual runtime добавляются triggers.
+
+Первый набор:
+
+```text
+Timer
+TagChanged
+AlarmTransition
+```
+
+Для каждого script явно задаётся concurrency policy, например:
+
+```text
+SkipIfRunning
+QueueOne
+```
+
+Нельзя допускать бесконтрольного параллельного запуска одного script.
+
+Execution history:
+
+```text
+ScriptId
+StartedAt
+FinishedAt
+Trigger
+UserId?
+Outcome
+Error
+Duration
+```
+
+Ошибки script должны быть видимы в Web и Event Journal.
+
+### Результат Phase 10
+
+Dispatcher получает контролируемую event-driven automation без обхода logical Tag, permissions и audit boundaries.
+
+---
+
+# Итог Roadmap v2
+
+После V2-S17 целевая цепочка выглядит так:
+
+```text
+Protocols
+   ↓
+Logical Tags
+   ├────────────→ Current runtime / Monitoring
+   │
+   ├────────────→ Historian → Trends
+   │
+   ├────────────→ Alarm runtime → Alarms / Events
+   │
+   └────────────→ Scripts
+                      ↓
+                 controlled commands
+
+Users / Roles
+   ↓
+permissions + audit
+   ↓
+writes / ack / configuration / scripts
+
+Templates
+   ↓
+reusable device + mimic configuration
+```
+
+## Осознанно отложено после v2
+
+До отдельного решения не включать автоматически:
+
+```text
+alarm shelving/suppression
+complex alarm expressions
+historian clustering
+external time-series database
+LDAP / Active Directory / OIDC
+distributed script workers
+arbitrary filesystem/network scripting
+generic plugin framework
+redundancy / HA
+```
+
+Эти возможности рассматриваются после измерения фактических ограничений Roadmap v2.
