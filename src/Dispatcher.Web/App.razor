@@ -56,6 +56,14 @@ else
     private bool CanAccessRoute(
         Type pageType)
     {
+        if (pageType == typeof(SecurityAdmin))
+        {
+            return Authentication.HasPermission(
+                    PermissionNames.UsersManage)
+                || Authentication.HasPermission(
+                    PermissionNames.RolesManage);
+        }
+
         return RequiredPermissions(
                 pageType)
             .All(
@@ -65,6 +73,11 @@ else
     private string MissingPermissions(
         Type pageType)
     {
+        if (pageType == typeof(SecurityAdmin))
+        {
+            return $"{PermissionNames.UsersManage} или {PermissionNames.RolesManage}";
+        }
+
         return string.Join(
             ", ",
             RequiredPermissions(

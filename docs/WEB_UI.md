@@ -377,3 +377,57 @@ Mimic Button остаётся видимым, потому что являетс
 Если authenticated user не имеет `Runtime.Read`, global header с identity/logout остаётся доступным, а drawer сообщает, что доступных текущих сервисов нет. Это допускает будущие admin-only/custom roles без фиктивного доступа к runtime.
 
 Web не должен проверять role names (`Viewer`, `Engineer`, `Administrator`) для visibility. Используются только stable permission identifiers, совпадающие с Server authorization model.
+
+## 18. Users / Roles administration
+
+V2-S09B добавляет administrative service:
+
+```text
+/security
+Пользователи / Роли
+```
+
+Он появляется в global navigation, если current user имеет хотя бы одну capability:
+
+```text
+Users.Manage OR Roles.Manage
+```
+
+`Runtime.Read` для этого service не требуется: admin-only custom role является допустимым состоянием. Client route visibility остаётся UX projection; Server S09A авторизует каждый API endpoint отдельно.
+
+Spatial model:
+
+```text
+слева  → local navigation Пользователи / Роли
+центр  → compact toolbar + dense users/roles table
+справа → selected user/role properties и effective permissions
+```
+
+Не используются большие карточки или отдельный декоративный page header. Status/error показываются в compact toolbar/workspace boundary.
+
+User section:
+
+- доступен при `Users.Manage`;
+- таблица показывает login, display name, Enabled/Disabled, количество roles и effective permissions;
+- справа находятся immutable login/UserId, editable `DisplayName`/`Enabled`, assignments, effective permissions и password reset;
+- create user выполняется в той же right properties panel;
+- role assignments и password reset доступны только когда одновременно есть `Users.Manage + Roles.Manage`;
+- без `Roles.Manage` assigned role IDs остаются read-only information.
+
+Roles section:
+
+- доступен при `Roles.Manage`;
+- таблица показывает name, Built-in/Custom, assignment count и permission count;
+- built-in role всегда read-only по Server-projected `BuiltIn`;
+- custom role редактирует name и declared permission set справа;
+- delete custom role disabled в Web при existing assignments, но окончательный conflict определяет Server.
+
+Permission-aware UI не должен вызывать недоступную collection API только для оформления screen:
+
+```text
+Users.Manage only → no GET /api/security/roles
+Roles.Manage only → no GET /api/security/users
+```
+
+После successful mutation current authentication projection refresh-ится с Server, поэтому изменение current actor metadata/permissions сразу меняет global header/navigation. Role names не используются для visibility/enabled state.
+

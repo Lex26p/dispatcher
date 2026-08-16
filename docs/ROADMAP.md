@@ -125,14 +125,14 @@ V2-S09 разбит на проверяемые подшаги:
 
 ```text
 [x] V2-S09A — Users/Roles management API foundation
-[ ] V2-S09B — Users/Roles Web admin service
+[x] V2-S09B — Users/Roles Web admin service
 [ ] V2-S09C — Actor-aware security audit wiring
 ```
 
-Следующий шаг после принятия V2-S09A:
+Следующий шаг после принятия V2-S09B:
 
 ```text
-V2-S09B — Users/Roles Web admin service
+V2-S09C — Actor-aware security audit wiring
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

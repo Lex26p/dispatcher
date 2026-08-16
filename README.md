@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 продолжена V2-S09A: Server имеет permission-protected Users/Roles management API поверх существующей configuration SQLite v6; Web admin UI и actor-aware audit остаются следующими подшагами.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 продолжена V2-S09A/B: Server имеет permission-protected Users/Roles management API, а Web — permission-aware admin service `/security`; actor-aware audit остаётся V2-S09C.
 
 ## Рабочая цепочка
 
@@ -62,6 +62,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 43. Управлять custom security roles и полным набором user-role assignments без изменения built-in role definitions.
 44. Немедленно обновлять `SecurityCatalog` после security configuration mutation.
 45. Не допускать security mutation, которая оставит систему без enabled user с `Users.Manage + Roles.Manage`.
+46. Управлять users и roles через плотный Web service `/security`, доступный по `Users.Manage` или `Roles.Manage`.
+47. Редактировать user profile/Enabled, role assignments, password reset и custom roles с permission-aware enabled state без role-name checks.
+48. Показывать effective permissions выбранного пользователя и обновлять current Web identity/access projection после security mutation.
 
 ## Базовый стек
 
@@ -379,7 +382,25 @@ at least one Enabled user
 
 Проверка выполняется по effective permissions, а не по role name. Это предотвращает случайный administrative lockout.
 
-S09A ещё не добавляет Web admin service и actor-aware audit events; они остаются V2-S09B/V2-S09C.
+V2-S09B добавляет Web admin service:
+
+```text
+/security
+```
+
+Global navigation показывает `Пользователи / Роли`, если current user имеет `Users.Manage` или `Roles.Manage`. Внутри сервиса local navigation разделяет `Пользователи` и `Роли`; center использует плотную таблицу, а right properties panel — свойства выбранного user/role.
+
+Web capability split повторяет Server boundary:
+
+```text
+Users.Manage             → users list/create/profile/Enabled
+Roles.Manage             → roles list/custom-role CRUD
+Users.Manage + Roles.Manage → role assignments + password reset
+```
+
+Built-in roles отображаются read-only по public `BuiltIn` flag. Effective permissions пользователя показываются как Server projection. После successful security mutation Web вызывает existing `AuthenticationClient.RefreshAsync()`, поэтому изменение собственного `DisplayName` или permissions сразу отражается в global header/navigation. Client visibility остаётся UX only; S09A Server authorization и lockout guard являются authoritative boundary.
+
+Actor-aware audit events пока не добавлены и остаются V2-S09C.
 
 ## Historian foundation
 
@@ -1008,13 +1029,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S09A — Users/Roles management API foundation
+V2-S09B — Users/Roles Web admin service
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S09B — Users/Roles Web admin service
+V2-S09C — Actor-aware security audit wiring
 ```
 
 ## Документы

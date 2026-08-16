@@ -774,16 +774,34 @@ Audit record должен содержать actor identity.
 - configuration schema остаётся `6`;
 - Web admin UI и audit events в S09A не добавляются.
 
-### [ ] V2-S09B — Users/Roles Web admin service
+### [x] V2-S09B — Users/Roles Web admin service
 
-Добавить permission-aware Web service `Users / Roles` поверх S09A API:
+Реализовано поверх S09A API без изменения Server/storage schema:
 
-- users list + selected-user properties;
-- create/enable/disable/display-name/password-reset actions;
-- role assignment editor;
-- roles list/custom-role editor;
-- effective permissions;
-- `Users.Manage` / `Roles.Manage` visibility/enabled state без role-name checks.
+- Web route `/security`;
+- global navigation `Пользователи / Роли` доступна при `Users.Manage OR Roles.Manage`;
+- direct route использует ту же OR capability projection и не требует `Runtime.Read`;
+- local navigation разделяет `Пользователи` и `Роли` согласно current permissions;
+- users center — плотная таблица login/display-name/Enabled/roles/effective-permission count;
+- selected user properties справа:
+  - immutable `UserName`;
+  - `DisplayName`;
+  - `Enabled`;
+  - role assignments;
+  - effective permissions;
+  - password reset;
+- create user с initial password и Enabled state;
+- roles center — плотная таблица role type/assigned users/permission count;
+- built-in roles отображаются read-only через DTO `BuiltIn`, а не role-name checks;
+- custom role create/update/delete и declared permission picker;
+- assigned custom role delete action disabled до снятия assignments; Server остаётся окончательной проверкой;
+- `Users.Manage` в одиночку не вызывает roles API и даёт только user-management UI;
+- `Roles.Manage` в одиночку не вызывает users API и даёт только role-management UI;
+- role assignments и password reset показываются только при `Users.Manage + Roles.Manage`;
+- Server `ProblemDetails.detail`, включая lockout `409`, показывается как operation error;
+- после successful security mutation Web refresh-ит `GET /api/auth/current` через `AuthenticationClient`, чтобы current actor metadata/permissions/navigation обновились сразу;
+- client visibility/enabled state остаётся UX only и не заменяет S09A Server permission policies/lockout guard;
+- actor-aware audit events ещё не добавлены.
 
 ### [ ] V2-S09C — Actor-aware security audit wiring
 

@@ -1,0 +1,1380 @@
+@page "/security"
+@implements IDisposable
+@inject AuthenticationClient Authentication
+@inject SecurityManagementClient Security
+@inject IJSRuntime JavaScript
+
+<PageTitle>Dispatcher — Пользователи / Роли</PageTitle>
+
+<div class="security-admin-shell">
+    <aside class="security-local-navigation">
+        <div class="security-panel-heading">Безопасность</div>
+
+        <nav class="security-section-nav"
+             aria-label="Разделы управления безопасностью">
+            @if (CanManageUsers)
+            {
+                <button type="button"
+                        class="security-section-button @SectionClass(AdminSection.Users)"
+                        @onclick="() => SelectSection(AdminSection.Users)">
+                    <span>Пользователи</span>
+                    <span class="security-count">@_users.Count</span>
+                </button>
+            }
+
+            @if (CanManageRoles)
+            {
+                <button type="button"
+                        class="security-section-button @SectionClass(AdminSection.Roles)"
+                        @onclick="() => SelectSection(AdminSection.Roles)">
+                    <span>Роли</span>
+                    <span class="security-count">@_roles.Count</span>
+                </button>
+            }
+        </nav>
+
+        <div class="security-nav-note">
+            @if (CanManageUsers && CanManageRoles)
+            {
+                <span>Users.Manage + Roles.Manage</span>
+            }
+            else if (CanManageUsers)
+            {
+                <span>Users.Manage</span>
+            }
+            else if (CanManageRoles)
+            {
+                <span>Roles.Manage</span>
+            }
+        </div>
+    </aside>
+
+    <main class="security-workspace">
+        <div class="security-toolbar">
+            <div class="security-toolbar-left">
+                @if (_section == AdminSection.Users && CanManageUsers)
+                {
+                    <button type="button"
+                            class="toolbar-button"
+                            disabled="@_busy"
+                            @onclick="StartCreateUser">
+                        + Пользователь
+                    </button>
+                }
+                else if (_section == AdminSection.Roles && CanManageRoles)
+                {
+                    <button type="button"
+                            class="toolbar-button"
+                            disabled="@_busy"
+                            @onclick="StartCreateRole">
+                        + Роль
+                    </button>
+                }
+            </div>
+
+            <div class="security-toolbar-right">
+                @if (!string.IsNullOrWhiteSpace(_status))
+                {
+                    <span class="security-status">@_status</span>
+                }
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(_loading || _busy)"
+                        @onclick="RefreshAsync">
+                    @(_loading ? "Обновление…" : "Обновить")
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="security-error">@_error</div>
+        }
+
+        <div class="security-table-area">
+            @if (_loading)
+            {
+                <div class="security-empty">Загрузка security configuration…</div>
+            }
+            else if (_section == AdminSection.Users)
+            {
+                <table class="security-table">
+                    <thead>
+                        <tr>
+                            <th>Login</th>
+                            <th>Отображаемое имя</th>
+                            <th>Состояние</th>
+                            <th>Роли</th>
+                            <th>Permissions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_users.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="security-table-empty">
+                                    Пользователей нет или список недоступен.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var user in _users)
+                            {
+                                <tr class="@UserRowClass(user)"
+                                    @onclick="() => SelectUser(user)">
+                                    <td class="security-id-cell">@user.UserName</td>
+                                    <td>@user.DisplayName</td>
+                                    <td>
+                                        <span class="security-state @(user.Enabled ? "enabled" : "disabled")">
+                                            @(user.Enabled ? "Enabled" : "Disabled")
+                                        </span>
+                                    </td>
+                                    <td>@user.RoleIds.Count</td>
+                                    <td>@user.EffectivePermissions.Count</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <table class="security-table">
+                    <thead>
+                        <tr>
+                            <th>Роль</th>
+                            <th>Тип</th>
+                            <th>Пользователи</th>
+                            <th>Permissions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_roles.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="security-table-empty">
+                                    Ролей нет или список недоступен.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var role in _roles)
+                            {
+                                <tr class="@RoleRowClass(role)"
+                                    @onclick="() => SelectRole(role)">
+                                    <td class="security-id-cell">@role.Name</td>
+                                    <td>
+                                        <span class="security-role-kind @(role.BuiltIn ? "built-in" : "custom")">
+                                            @(role.BuiltIn ? "Built-in" : "Custom")
+                                        </span>
+                                    </td>
+                                    <td>@role.AssignedUserCount</td>
+                                    <td>@role.Permissions.Count</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </main>
+
+    <aside class="security-properties">
+        @if (_section == AdminSection.Users)
+        {
+            @if (_creatingUser)
+            {
+                <div class="security-panel-heading">Новый пользователь</div>
+                <div class="security-properties-body">
+                    <label class="security-field">
+                        <span>Login</span>
+                        <input type="text"
+                               maxlength="128"
+                               autocomplete="off"
+                               disabled="@_busy"
+                               @bind="_newUserName"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <label class="security-field">
+                        <span>Отображаемое имя</span>
+                        <input type="text"
+                               maxlength="200"
+                               autocomplete="off"
+                               disabled="@_busy"
+                               @bind="_newDisplayName"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <label class="security-checkbox-row">
+                        <input type="checkbox"
+                               disabled="@_busy"
+                               @bind="_newUserEnabled" />
+                        <span>Enabled</span>
+                    </label>
+
+                    <label class="security-field">
+                        <span>Начальный пароль</span>
+                        <input type="password"
+                               minlength="12"
+                               maxlength="256"
+                               autocomplete="new-password"
+                               disabled="@_busy"
+                               @bind="_newPassword"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <label class="security-field">
+                        <span>Подтверждение</span>
+                        <input type="password"
+                               minlength="12"
+                               maxlength="256"
+                               autocomplete="new-password"
+                               disabled="@_busy"
+                               @bind="_newPasswordConfirmation"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <div class="security-action-row">
+                        <button type="button"
+                                class="toolbar-button primary"
+                                disabled="@(!CanCreateUser || _busy)"
+                                @onclick="CreateUserAsync">
+                            @(_busy ? "Создание…" : "Создать")
+                        </button>
+                        <button type="button"
+                                class="toolbar-button"
+                                disabled="@_busy"
+                                @onclick="CancelCreate">
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (SelectedUser is not null)
+            {
+                <div class="security-panel-heading">Пользователь</div>
+                <div class="security-properties-body">
+                    <div class="security-readonly-field">
+                        <span>Login</span>
+                        <strong>@SelectedUser.UserName</strong>
+                    </div>
+                    <div class="security-readonly-field subtle">
+                        <span>UserId</span>
+                        <code>@SelectedUser.UserId</code>
+                    </div>
+
+                    <label class="security-field">
+                        <span>Отображаемое имя</span>
+                        <input type="text"
+                               maxlength="200"
+                               disabled="@(!CanManageUsers || _busy)"
+                               @bind="_userDisplayName"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <label class="security-checkbox-row">
+                        <input type="checkbox"
+                               disabled="@(!CanManageUsers || _busy)"
+                               @bind="_userEnabled" />
+                        <span>Enabled</span>
+                    </label>
+
+                    @if (CanManageUsers)
+                    {
+                        <div class="security-action-row">
+                            <button type="button"
+                                    class="toolbar-button primary"
+                                    disabled="@(!CanSaveUserProfile || _busy)"
+                                    @onclick="SaveUserProfileAsync">
+                                Сохранить профиль
+                            </button>
+                        </div>
+                    }
+
+                    <div class="security-property-section">
+                        <div class="security-property-title">Роли</div>
+
+                        @if (CanAssignRoles)
+                        {
+                            <div class="security-check-list">
+                                @foreach (var role in _roles)
+                                {
+                                    <label class="security-checkbox-row permission-row">
+                                        <input type="checkbox"
+                                               checked="@_userRoleIds.Contains(role.RoleId)"
+                                               disabled="@_busy"
+                                               @onchange="args => ToggleUserRole(role.RoleId, args)" />
+                                        <span>@role.Name</span>
+                                        @if (role.BuiltIn)
+                                        {
+                                            <span class="security-inline-badge">built-in</span>
+                                        }
+                                    </label>
+                                }
+                            </div>
+                            <div class="security-action-row">
+                                <button type="button"
+                                        class="toolbar-button primary"
+                                        disabled="@(!CanSaveUserRoles || _busy)"
+                                        @onclick="SaveUserRolesAsync">
+                                    Сохранить роли
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="security-token-list">
+                                @if (SelectedUser.RoleIds.Count == 0)
+                                {
+                                    <span class="security-muted">Роли не назначены.</span>
+                                }
+                                else
+                                {
+                                    @foreach (var roleId in SelectedUser.RoleIds)
+                                    {
+                                        <span class="security-token">@RoleName(roleId)</span>
+                                    }
+                                }
+                            </div>
+
+                            @if (CanManageUsers && !CanManageRoles)
+                            {
+                                <div class="security-hint">
+                                    Для изменения назначений требуется Roles.Manage.
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="security-property-section">
+                        <div class="security-property-title">Effective permissions</div>
+                        <div class="security-token-list">
+                            @if (SelectedUser.EffectivePermissions.Count == 0)
+                            {
+                                <span class="security-muted">Нет effective permissions.</span>
+                            }
+                            else
+                            {
+                                @foreach (var permission in SelectedUser.EffectivePermissions)
+                                {
+                                    <span class="security-token">@permission</span>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    @if (CanResetPasswords)
+                    {
+                        <div class="security-property-section">
+                            <div class="security-property-title">Сброс пароля</div>
+
+                            <label class="security-field">
+                                <span>Новый пароль</span>
+                                <input type="password"
+                                       minlength="12"
+                                       maxlength="256"
+                                       autocomplete="new-password"
+                                       disabled="@_busy"
+                                       @bind="_resetPassword"
+                                       @bind:event="oninput" />
+                            </label>
+
+                            <label class="security-field">
+                                <span>Подтверждение</span>
+                                <input type="password"
+                                       minlength="12"
+                                       maxlength="256"
+                                       autocomplete="new-password"
+                                       disabled="@_busy"
+                                       @bind="_resetPasswordConfirmation"
+                                       @bind:event="oninput" />
+                            </label>
+
+                            <div class="security-action-row">
+                                <button type="button"
+                                        class="toolbar-button danger"
+                                        disabled="@(!CanResetSelectedPassword || _busy)"
+                                        @onclick="ResetPasswordAsync">
+                                    Сбросить пароль
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="security-panel-heading">Пользователь</div>
+                <div class="security-empty properties-empty">
+                    Выберите пользователя в таблице или создайте нового.
+                </div>
+            }
+        }
+        else
+        {
+            @if (_creatingRole)
+            {
+                <div class="security-panel-heading">Новая роль</div>
+                <div class="security-properties-body">
+                    <label class="security-field">
+                        <span>Имя роли</span>
+                        <input type="text"
+                               maxlength="128"
+                               autocomplete="off"
+                               disabled="@_busy"
+                               @bind="_newRoleName"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <div class="security-property-section">
+                        <div class="security-property-title">Permissions</div>
+                        <div class="security-check-list">
+                            @foreach (var permission in PermissionNames.All)
+                            {
+                                <label class="security-checkbox-row permission-row">
+                                    <input type="checkbox"
+                                           checked="@_newRolePermissions.Contains(permission)"
+                                           disabled="@_busy"
+                                           @onchange="args => TogglePermission(_newRolePermissions, permission, args)" />
+                                    <span>@permission</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="security-action-row">
+                        <button type="button"
+                                class="toolbar-button primary"
+                                disabled="@(!CanCreateRole || _busy)"
+                                @onclick="CreateRoleAsync">
+                            @(_busy ? "Создание…" : "Создать")
+                        </button>
+                        <button type="button"
+                                class="toolbar-button"
+                                disabled="@_busy"
+                                @onclick="CancelCreate">
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (SelectedRole is not null)
+            {
+                <div class="security-panel-heading">Роль</div>
+                <div class="security-properties-body">
+                    <div class="security-readonly-field subtle">
+                        <span>RoleId</span>
+                        <code>@SelectedRole.RoleId</code>
+                    </div>
+
+                    <label class="security-field">
+                        <span>Имя роли</span>
+                        <input type="text"
+                               maxlength="128"
+                               disabled="@(SelectedRole.BuiltIn || !CanManageRoles || _busy)"
+                               @bind="_roleName"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <div class="security-readonly-field">
+                        <span>Тип</span>
+                        <strong>@(SelectedRole.BuiltIn ? "Built-in · system-managed" : "Custom")</strong>
+                    </div>
+
+                    <div class="security-readonly-field">
+                        <span>Назначено пользователям</span>
+                        <strong>@SelectedRole.AssignedUserCount</strong>
+                    </div>
+
+                    <div class="security-property-section">
+                        <div class="security-property-title">Permissions</div>
+
+                        @if (SelectedRole.BuiltIn)
+                        {
+                            <div class="security-token-list">
+                                @foreach (var permission in SelectedRole.Permissions)
+                                {
+                                    <span class="security-token">@permission</span>
+                                }
+                            </div>
+                            <div class="security-hint">
+                                Built-in role определяется Server и редактированию не подлежит.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="security-check-list">
+                                @foreach (var permission in PermissionNames.All)
+                                {
+                                    <label class="security-checkbox-row permission-row">
+                                        <input type="checkbox"
+                                               checked="@_rolePermissions.Contains(permission)"
+                                               disabled="@(!CanManageRoles || _busy)"
+                                               @onchange="args => TogglePermission(_rolePermissions, permission, args)" />
+                                        <span>@permission</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (!SelectedRole.BuiltIn && CanManageRoles)
+                    {
+                        <div class="security-action-row split">
+                            <button type="button"
+                                    class="toolbar-button primary"
+                                    disabled="@(!CanSaveRole || _busy)"
+                                    @onclick="SaveRoleAsync">
+                                Сохранить роль
+                            </button>
+                            <button type="button"
+                                    class="toolbar-button danger"
+                                    disabled="@(SelectedRole.AssignedUserCount > 0 || _busy)"
+                                    title="@(SelectedRole.AssignedUserCount > 0 ? "Сначала снимите роль со всех пользователей." : "Удалить custom role")"
+                                    @onclick="DeleteRoleAsync">
+                                Удалить
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="security-panel-heading">Роль</div>
+                <div class="security-empty properties-empty">
+                    Выберите роль в таблице или создайте custom role.
+                </div>
+            }
+        }
+    </aside>
+</div>
+
+@code {
+    private readonly List<SecurityUserDto> _users = [];
+    private readonly List<SecurityRoleDto> _roles = [];
+    private readonly HashSet<string> _userRoleIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _rolePermissions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _newRolePermissions = new(StringComparer.Ordinal);
+
+    private AdminSection _section;
+    private string? _selectedUserId;
+    private string? _selectedRoleId;
+    private bool _loading;
+    private bool _busy;
+    private bool _creatingUser;
+    private bool _creatingRole;
+    private string? _error;
+    private string? _status;
+
+    private string _userDisplayName = string.Empty;
+    private bool _userEnabled;
+    private string _resetPassword = string.Empty;
+    private string _resetPasswordConfirmation = string.Empty;
+
+    private string _newUserName = string.Empty;
+    private string _newDisplayName = string.Empty;
+    private bool _newUserEnabled = true;
+    private string _newPassword = string.Empty;
+    private string _newPasswordConfirmation = string.Empty;
+
+    private string _roleName = string.Empty;
+    private string _newRoleName = string.Empty;
+
+    private bool CanManageUsers =>
+        Authentication.HasPermission(
+            PermissionNames.UsersManage);
+
+    private bool CanManageRoles =>
+        Authentication.HasPermission(
+            PermissionNames.RolesManage);
+
+    private bool CanAssignRoles =>
+        CanManageUsers && CanManageRoles;
+
+    private bool CanResetPasswords =>
+        CanManageUsers && CanManageRoles;
+
+    private SecurityUserDto? SelectedUser =>
+        _users.FirstOrDefault(user =>
+            string.Equals(
+                user.UserId,
+                _selectedUserId,
+                StringComparison.Ordinal));
+
+    private SecurityRoleDto? SelectedRole =>
+        _roles.FirstOrDefault(role =>
+            string.Equals(
+                role.RoleId,
+                _selectedRoleId,
+                StringComparison.Ordinal));
+
+    private bool CanCreateUser =>
+        CanManageUsers
+        && !string.IsNullOrWhiteSpace(_newUserName)
+        && !string.IsNullOrWhiteSpace(_newDisplayName)
+        && PasswordIsValid(
+            _newPassword,
+            _newPasswordConfirmation);
+
+    private bool CanSaveUserProfile =>
+        SelectedUser is not null
+        && !string.IsNullOrWhiteSpace(_userDisplayName)
+        && (!string.Equals(
+                _userDisplayName,
+                SelectedUser.DisplayName,
+                StringComparison.Ordinal)
+            || _userEnabled != SelectedUser.Enabled);
+
+    private bool CanSaveUserRoles =>
+        SelectedUser is not null
+        && !_userRoleIds.SetEquals(
+            SelectedUser.RoleIds);
+
+    private bool CanResetSelectedPassword =>
+        SelectedUser is not null
+        && PasswordIsValid(
+            _resetPassword,
+            _resetPasswordConfirmation);
+
+    private bool CanCreateRole =>
+        CanManageRoles
+        && !string.IsNullOrWhiteSpace(_newRoleName);
+
+    private bool CanSaveRole =>
+        SelectedRole is { BuiltIn: false }
+        && !string.IsNullOrWhiteSpace(_roleName)
+        && (!string.Equals(
+                _roleName,
+                SelectedRole.Name,
+                StringComparison.Ordinal)
+            || !_rolePermissions.SetEquals(
+                SelectedRole.Permissions));
+
+    protected override async Task OnInitializedAsync()
+    {
+        Authentication.Changed += OnAuthenticationChanged;
+
+        SelectInitialSection();
+        await RefreshDataAsync();
+    }
+
+    private void SelectInitialSection()
+    {
+        _section =
+            CanManageUsers
+                ? AdminSection.Users
+                : AdminSection.Roles;
+    }
+
+    private void SelectSection(
+        AdminSection section)
+    {
+        if (section == AdminSection.Users
+            && !CanManageUsers)
+        {
+            return;
+        }
+
+        if (section == AdminSection.Roles
+            && !CanManageRoles)
+        {
+            return;
+        }
+
+        _section =
+            section;
+        CancelCreate();
+        _error =
+            null;
+        _status =
+            null;
+    }
+
+    private void SelectUser(
+        SecurityUserDto user)
+    {
+        _selectedUserId =
+            user.UserId;
+        _creatingUser =
+            false;
+        _error =
+            null;
+        _status =
+            null;
+        LoadUserDraft(
+            user);
+    }
+
+    private void SelectRole(
+        SecurityRoleDto role)
+    {
+        _selectedRoleId =
+            role.RoleId;
+        _creatingRole =
+            false;
+        _error =
+            null;
+        _status =
+            null;
+        LoadRoleDraft(
+            role);
+    }
+
+    private void StartCreateUser()
+    {
+        _creatingUser =
+            true;
+        _creatingRole =
+            false;
+        _selectedUserId =
+            null;
+        _newUserName =
+            string.Empty;
+        _newDisplayName =
+            string.Empty;
+        _newUserEnabled =
+            true;
+        _newPassword =
+            string.Empty;
+        _newPasswordConfirmation =
+            string.Empty;
+        _error =
+            null;
+        _status =
+            null;
+    }
+
+    private void StartCreateRole()
+    {
+        _creatingRole =
+            true;
+        _creatingUser =
+            false;
+        _selectedRoleId =
+            null;
+        _newRoleName =
+            string.Empty;
+        _newRolePermissions.Clear();
+        _error =
+            null;
+        _status =
+            null;
+    }
+
+    private void CancelCreate()
+    {
+        _creatingUser =
+            false;
+        _creatingRole =
+            false;
+    }
+
+    private Task RefreshAsync()
+    {
+        return RefreshDataAsync(
+            _selectedUserId,
+            _selectedRoleId);
+    }
+
+    private async Task RefreshDataAsync(
+        string? preferredUserId = null,
+        string? preferredRoleId = null)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _loading =
+            true;
+        _error =
+            null;
+
+        try
+        {
+            _users.Clear();
+            _roles.Clear();
+
+            if (CanManageUsers)
+            {
+                _users.AddRange(
+                    await Security.GetUsersAsync());
+            }
+
+            if (CanManageRoles)
+            {
+                _roles.AddRange(
+                    await Security.GetRolesAsync());
+            }
+
+            EnsureAccessibleSection();
+
+            if (CanManageUsers)
+            {
+                var user =
+                    FindPreferredUser(
+                        preferredUserId);
+                _selectedUserId =
+                    user?.UserId;
+
+                if (user is not null)
+                {
+                    LoadUserDraft(
+                        user);
+                }
+            }
+            else
+            {
+                _selectedUserId =
+                    null;
+            }
+
+            if (CanManageRoles)
+            {
+                var role =
+                    FindPreferredRole(
+                        preferredRoleId);
+                _selectedRoleId =
+                    role?.RoleId;
+
+                if (role is not null)
+                {
+                    LoadRoleDraft(
+                        role);
+                }
+            }
+            else
+            {
+                _selectedRoleId =
+                    null;
+            }
+        }
+        catch (Exception exception)
+            when (IsExpectedClientException(
+                exception))
+        {
+            _error =
+                UserMessage(
+                    exception);
+        }
+        finally
+        {
+            _loading =
+                false;
+        }
+    }
+
+    private SecurityUserDto? FindPreferredUser(
+        string? preferredUserId)
+    {
+        return !string.IsNullOrWhiteSpace(
+                preferredUserId)
+            ? _users.FirstOrDefault(user =>
+                string.Equals(
+                    user.UserId,
+                    preferredUserId,
+                    StringComparison.Ordinal))
+                ?? _users.FirstOrDefault()
+            : _users.FirstOrDefault();
+    }
+
+    private SecurityRoleDto? FindPreferredRole(
+        string? preferredRoleId)
+    {
+        return !string.IsNullOrWhiteSpace(
+                preferredRoleId)
+            ? _roles.FirstOrDefault(role =>
+                string.Equals(
+                    role.RoleId,
+                    preferredRoleId,
+                    StringComparison.Ordinal))
+                ?? _roles.FirstOrDefault()
+            : _roles.FirstOrDefault();
+    }
+
+    private void EnsureAccessibleSection()
+    {
+        if (_section == AdminSection.Users
+            && !CanManageUsers
+            && CanManageRoles)
+        {
+            _section =
+                AdminSection.Roles;
+        }
+        else if (_section == AdminSection.Roles
+                 && !CanManageRoles
+                 && CanManageUsers)
+        {
+            _section =
+                AdminSection.Users;
+        }
+    }
+
+    private void LoadUserDraft(
+        SecurityUserDto user)
+    {
+        _userDisplayName =
+            user.DisplayName;
+        _userEnabled =
+            user.Enabled;
+        _userRoleIds.Clear();
+        _userRoleIds.UnionWith(
+            user.RoleIds);
+        _resetPassword =
+            string.Empty;
+        _resetPasswordConfirmation =
+            string.Empty;
+    }
+
+    private void LoadRoleDraft(
+        SecurityRoleDto role)
+    {
+        _roleName =
+            role.Name;
+        _rolePermissions.Clear();
+        _rolePermissions.UnionWith(
+            role.Permissions);
+    }
+
+    private async Task CreateUserAsync()
+    {
+        if (!CanCreateUser || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                var created =
+                    await Security.CreateUserAsync(
+                        new CreateSecurityUserRequest(
+                            UserName:
+                                _newUserName.Trim(),
+                            DisplayName:
+                                _newDisplayName.Trim(),
+                            Password:
+                                _newPassword,
+                            Enabled:
+                                _newUserEnabled));
+
+                _creatingUser =
+                    false;
+                _status =
+                    $"Пользователь '{created.UserName}' создан.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    created.UserId,
+                    _selectedRoleId);
+            });
+    }
+
+    private async Task SaveUserProfileAsync()
+    {
+        var user =
+            SelectedUser;
+
+        if (user is null
+            || !CanSaveUserProfile
+            || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                var updated =
+                    await Security.UpdateUserAsync(
+                        user.UserId,
+                        new UpdateSecurityUserRequest(
+                            DisplayName:
+                                _userDisplayName.Trim(),
+                            Enabled:
+                                _userEnabled));
+
+                _status =
+                    $"Профиль '{updated.UserName}' сохранён.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    updated.UserId,
+                    _selectedRoleId);
+            });
+    }
+
+    private async Task SaveUserRolesAsync()
+    {
+        var user =
+            SelectedUser;
+
+        if (user is null
+            || !CanAssignRoles
+            || !CanSaveUserRoles
+            || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                var updated =
+                    await Security.ReplaceUserRolesAsync(
+                        user.UserId,
+                        new ReplaceSecurityUserRolesRequest(
+                            _userRoleIds
+                                .OrderBy(
+                                    roleId => roleId,
+                                    StringComparer.Ordinal)
+                                .ToArray()));
+
+                _status =
+                    $"Роли '{updated.UserName}' сохранены.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    updated.UserId,
+                    _selectedRoleId);
+            });
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        var user =
+            SelectedUser;
+
+        if (user is null
+            || !CanResetPasswords
+            || !CanResetSelectedPassword
+            || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                await Security.ResetUserPasswordAsync(
+                    user.UserId,
+                    new ResetSecurityUserPasswordRequest(
+                        _resetPassword));
+
+                _resetPassword =
+                    string.Empty;
+                _resetPasswordConfirmation =
+                    string.Empty;
+                _status =
+                    $"Пароль '{user.UserName}' сброшен.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    user.UserId,
+                    _selectedRoleId);
+            });
+    }
+
+    private async Task CreateRoleAsync()
+    {
+        if (!CanCreateRole || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                var created =
+                    await Security.CreateRoleAsync(
+                        new SecurityRoleUpsertRequest(
+                            Name:
+                                _newRoleName.Trim(),
+                            Permissions:
+                                SortedPermissions(
+                                    _newRolePermissions)));
+
+                _creatingRole =
+                    false;
+                _status =
+                    $"Роль '{created.Name}' создана.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    _selectedUserId,
+                    created.RoleId);
+            });
+    }
+
+    private async Task SaveRoleAsync()
+    {
+        var role =
+            SelectedRole;
+
+        if (role is null
+            || role.BuiltIn
+            || !CanSaveRole
+            || _busy)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                var updated =
+                    await Security.UpdateRoleAsync(
+                        role.RoleId,
+                        new SecurityRoleUpsertRequest(
+                            Name:
+                                _roleName.Trim(),
+                            Permissions:
+                                SortedPermissions(
+                                    _rolePermissions)));
+
+                _status =
+                    $"Роль '{updated.Name}' сохранена.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    _selectedUserId,
+                    updated.RoleId);
+            });
+    }
+
+    private async Task DeleteRoleAsync()
+    {
+        var role =
+            SelectedRole;
+
+        if (role is null
+            || role.BuiltIn
+            || role.AssignedUserCount > 0
+            || !CanManageRoles
+            || _busy)
+        {
+            return;
+        }
+
+        var confirmed =
+            await JavaScript.InvokeAsync<bool>(
+                "confirm",
+                $"Удалить custom role '{role.Name}'?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await ExecuteMutationAsync(
+            async () =>
+            {
+                await Security.DeleteRoleAsync(
+                    role.RoleId);
+
+                _selectedRoleId =
+                    null;
+                _status =
+                    $"Роль '{role.Name}' удалена.";
+
+                await RefreshCurrentActorAndDataAsync(
+                    _selectedUserId,
+                    preferredRoleId:
+                        null);
+            });
+    }
+
+    private async Task ExecuteMutationAsync(
+        Func<Task> mutation)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy =
+            true;
+        _error =
+            null;
+        _status =
+            null;
+
+        try
+        {
+            await mutation();
+        }
+        catch (Exception exception)
+            when (IsExpectedClientException(
+                exception))
+        {
+            _error =
+                UserMessage(
+                    exception);
+        }
+        finally
+        {
+            _busy =
+                false;
+        }
+    }
+
+    private async Task RefreshCurrentActorAndDataAsync(
+        string? preferredUserId,
+        string? preferredRoleId)
+    {
+        await Authentication.RefreshAsync();
+
+        if (!Authentication.CurrentUser.Authenticated
+            || (!CanManageUsers && !CanManageRoles))
+        {
+            return;
+        }
+
+        await RefreshDataAsync(
+            preferredUserId,
+            preferredRoleId);
+    }
+
+    private void ToggleUserRole(
+        string roleId,
+        ChangeEventArgs args)
+    {
+        ToggleSetValue(
+            _userRoleIds,
+            roleId,
+            args);
+    }
+
+    private void TogglePermission(
+        HashSet<string> target,
+        string permission,
+        ChangeEventArgs args)
+    {
+        ToggleSetValue(
+            target,
+            permission,
+            args);
+    }
+
+    private static void ToggleSetValue(
+        HashSet<string> target,
+        string value,
+        ChangeEventArgs args)
+    {
+        var enabled =
+            args.Value is bool direct
+                ? direct
+                : bool.TryParse(
+                    args.Value?.ToString(),
+                    out var parsed)
+                    && parsed;
+
+        if (enabled)
+        {
+            target.Add(
+                value);
+        }
+        else
+        {
+            target.Remove(
+                value);
+        }
+    }
+
+    private string RoleName(
+        string roleId)
+    {
+        return _roles.FirstOrDefault(role =>
+                string.Equals(
+                    role.RoleId,
+                    roleId,
+                    StringComparison.Ordinal))
+            ?.Name
+            ?? roleId;
+    }
+
+    private static IReadOnlyList<string> SortedPermissions(
+        IEnumerable<string> permissions)
+    {
+        return permissions
+            .OrderBy(
+                permission => permission,
+                StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool PasswordIsValid(
+        string password,
+        string confirmation)
+    {
+        return password.Length is >= 12 and <= 256
+            && string.Equals(
+                password,
+                confirmation,
+                StringComparison.Ordinal);
+    }
+
+    private string SectionClass(
+        AdminSection section)
+    {
+        return _section == section
+            ? "active"
+            : string.Empty;
+    }
+
+    private string UserRowClass(
+        SecurityUserDto user)
+    {
+        return string.Equals(
+                user.UserId,
+                _selectedUserId,
+                StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private string RoleRowClass(
+        SecurityRoleDto role)
+    {
+        return string.Equals(
+                role.RoleId,
+                _selectedRoleId,
+                StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private static bool IsExpectedClientException(
+        Exception exception)
+    {
+        return exception is
+            SecurityManagementClientException
+            or HttpRequestException
+            or JsonException
+            or InvalidOperationException;
+    }
+
+    private static string UserMessage(
+        Exception exception)
+    {
+        return exception is SecurityManagementClientException management
+            ? management.Message
+            : $"Не удалось выполнить security operation: {exception.Message}";
+    }
+
+    private void OnAuthenticationChanged()
+    {
+        EnsureAccessibleSection();
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Authentication.Changed -= OnAuthenticationChanged;
+    }
+
+    private enum AdminSection
+    {
+        Users,
+        Roles
+    }
+}

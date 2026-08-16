@@ -14,6 +14,7 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 
 builder.Services.AddScoped<AuthenticationClient>();
+builder.Services.AddScoped<SecurityManagementClient>();
 builder.Services.AddScoped<RuntimeStateClient>();
 builder.Services.AddScoped<ConfigurationClient>();
 builder.Services.AddScoped<MimicClient>();

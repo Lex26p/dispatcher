@@ -98,7 +98,17 @@
                     </NavLink>
                 }
 
-                @if (!CanReadRuntime)
+                @if (CanManageSecurity)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="security"
+                             @onclick="CloseGlobalNavigation">
+                        Пользователи / Роли
+                    </NavLink>
+                }
+
+                @if (!CanReadRuntime && !CanManageSecurity)
                 {
                     <div class="compact-empty">
                         Нет доступных сервисов.
@@ -125,6 +135,12 @@
         Authentication.HasAllPermissions(
             PermissionNames.RuntimeRead,
             PermissionNames.DevicesEdit);
+
+    private bool CanManageSecurity =>
+        Authentication.HasPermission(
+            PermissionNames.UsersManage)
+        || Authentication.HasPermission(
+            PermissionNames.RolesManage);
 
     private string CurrentSection
     {
@@ -159,6 +175,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "События";
+            }
+
+            if (path.StartsWith(
+                    "security",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Пользователи / Роли";
             }
 
             return "Мониторинг";

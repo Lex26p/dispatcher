@@ -1444,3 +1444,37 @@ Security mutations сериализуются внутри одного Server p
 - accidental removal последней management authority должен fail-safe до commit;
 - current `SecurityCatalog` должен изменяться вместе с durable configuration, иначе S08B authorization временно применял бы stale authority;
 - credential reset является более сильной операцией, чем display-name/Enabled update, и требует обе management capabilities.
+
+---
+
+## D-069 — Users/Roles Web отражает отдельные management capabilities и refresh-ит current actor projection
+
+**Status:** Accepted
+
+V2-S09B добавляет `/security` как Web administration service поверх S09A API. Доступ к самому route/navigation определяется:
+
+```text
+Users.Manage OR Roles.Manage
+```
+
+Внутри screen возможности разделены так же, как Server endpoints:
+
+```text
+Users.Manage                 → user management
+Roles.Manage                 → role management
+Users.Manage + Roles.Manage  → role assignments + password reset
+```
+
+Web не проверяет имена `Viewer`, `Operator`, `Engineer`, `Administrator` для authorization. `SecurityRoleDto.BuiltIn` используется только чтобы показать system-managed role read-only.
+
+Layout сохраняет engineering spatial model: local Users/Roles navigation слева, плотная таблица в центре, свойства/effective permissions справа. После successful security mutation client вызывает `AuthenticationClient.RefreshAsync()` и перечитывает доступные management lists, поэтому self-change текущего actor немедленно отражается в header/navigation.
+
+Причина:
+
+- Web должен отражать уже существующую S09A Server capability boundary, а не создавать новую role taxonomy;
+- admin-only custom role без `Runtime.Read` должен иметь доступ к security service без фиктивного operational permission;
+- не следует вызывать endpoint, который current actor заведомо не имеет права читать, только для построения UI;
+- built-in/custom — свойство редактируемости role entity, а не authorization shortcut;
+- current actor projection после self-mutation не должна оставаться stale до browser refresh;
+- client-side visibility/disabled state по-прежнему не заменяет Server policies и administrative survivability invariant.
+

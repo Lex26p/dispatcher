@@ -2761,3 +2761,82 @@ exists user where
 
 S09A не добавляет Web admin screen и actor-aware audit events. Следующий подшаг — V2-S09B.
 
+## 90. Web security management boundary
+
+V2-S09B добавляет Web service поверх уже authoritative S09A API:
+
+```text
+CurrentUser.EffectivePermissions[]
+        ↓
+AuthenticationClient
+        ↓
+/security
+        ↓
+SecurityManagementClient
+        ↓ same-origin cookie requests
+/api/security/users + /api/security/roles
+```
+
+`SecurityManagementClient` не хранит отдельный security catalog и не вычисляет privileges из role names. Он сериализует/читает public S09A contracts и сохраняет Server `ProblemDetails.detail` для наблюдаемого UI error.
+
+Route `/security` является отдельным administrative service и не требует `Runtime.Read`. Web допускает его когда:
+
+```text
+Users.Manage OR Roles.Manage
+```
+
+Server policies S09A остаются окончательной authority для каждого конкретного endpoint.
+
+## 91. Users / Roles spatial model и capability split
+
+Admin screen следует общему engineering layout:
+
+```text
+┌──────────────┬──────────────────────────────────────┬─────────────────┐
+│ Users/Roles  │ toolbar + dense users/roles table   │ selected object │
+│ local nav    │                                      │ properties      │
+└──────────────┴──────────────────────────────────────┴─────────────────┘
+```
+
+Capability projection:
+
+```text
+Users.Manage
+    → users section/list/create/profile/Enabled
+
+Roles.Manage
+    → roles section/list/custom-role CRUD
+
+Users.Manage + Roles.Manage
+    → selected-user role assignments
+    → password reset
+```
+
+Web не делает forbidden API call только ради отображения недоступного раздела: user-only actor не запрашивает roles list, role-only actor не запрашивает users list. Если доступны обе capability, один screen позволяет связать user и roles.
+
+Built-in role определяется public `SecurityRoleDto.BuiltIn`: его properties/permissions visible, mutation controls отсутствуют. Этот flag управляет editability конкретной configuration entity и не используется для granting access.
+
+## 92. Current actor refresh после security mutation
+
+После successful user/role mutation Web выполняет:
+
+```text
+mutation API response
+      ↓
+AuthenticationClient.RefreshAsync()
+      ↓ GET /api/auth/current
+current DisplayName + EffectivePermissions[]
+      ↓
+MainLayout / App route projection
+      ↓
+reload доступных security lists
+```
+
+Это важно для self-management случаев: изменение собственного display name, disable или role assignment сразу отражается в текущем header/navigation/route visibility. Cookie не расширяется и не становится permission snapshot.
+
+S09B не добавляет actor-aware Event Journal records. Следующий подшаг:
+
+```text
+V2-S09C — Actor-aware security audit wiring
+```
+
