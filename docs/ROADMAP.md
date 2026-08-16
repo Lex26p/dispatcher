@@ -156,12 +156,21 @@ Phase 8 завершена. V2-S13 разбит на проверяемые по
 [x] V2-S13B — Mimic Editor template integration
 ```
 
-V2-S13 завершён: S13A добавил durable concrete Mimic templates, TagId parameters, permission-protected CRUD и instantiate-by-copy; S13B добавил permission-aware Web management и placement в Mimic Editor. Общий Template Catalog по-прежнему не вводится до второго concrete use case V2-S14.
+V2-S13 завершён: S13A добавил durable concrete Mimic templates, TagId parameters, permission-protected CRUD и instantiate-by-copy; S13B добавил permission-aware Web management и placement в Mimic Editor.
 
-Следующий шаг после принятия V2-S13B:
+V2-S14 разделён на два проверяемых подшага:
 
 ```text
-V2-S14 — Device/Tag templates и общий Template Catalog
+[x] V2-S14A — Device/Tag template Server/storage/API + общий Template Catalog
+[ ] V2-S14B — Device Editor template integration
+```
+
+V2-S14A добавляет configuration schema v9, миграцию existing Mimic template metadata в общий `TemplateId/Name/Kind/Version/Parameters` catalog, concrete Modbus/SNMP device template payloads, versioning, permission-protected CRUD и instantiate через existing atomic device live-apply boundary. Web layout Device Editor в S14A не меняется.
+
+Следующий шаг после принятия V2-S14A:
+
+```text
+V2-S14B — Device Editor template integration
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

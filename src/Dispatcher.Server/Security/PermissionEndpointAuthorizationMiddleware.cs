@@ -137,6 +137,24 @@ public sealed class PermissionEndpointAuthorizationMiddleware
         }
 
         if (path.StartsWithSegments(
+                "/api/configuration/templates"))
+        {
+            if (HttpMethods.IsPost(
+                    request.Method)
+                && path.Value?.EndsWith(
+                    "/instantiate",
+                    StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return PermissionNames.DevicesEdit;
+            }
+
+            return IsReadMethod(
+                    request.Method)
+                ? PermissionNames.RuntimeRead
+                : PermissionNames.TemplatesEdit;
+        }
+
+        if (path.StartsWithSegments(
                 "/api/configuration/modbus")
             || path.StartsWithSegments(
                 "/api/configuration/snmp"))

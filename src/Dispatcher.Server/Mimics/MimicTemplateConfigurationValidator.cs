@@ -20,6 +20,12 @@ public static class MimicTemplateConfigurationValidator
         ArgumentNullException.ThrowIfNull(
             template.Elements);
 
+        if (template.Version < 1)
+        {
+            throw new InvalidOperationException(
+                $"Mimic template '{template.TemplateId}' Version must be greater than zero.");
+        }
+
         if (template.Width is < 1 or > MaxCanvasSize)
         {
             throw new InvalidOperationException(

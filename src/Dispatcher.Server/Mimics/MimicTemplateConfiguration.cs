@@ -6,4 +6,5 @@ public sealed record MimicTemplateConfiguration(
     int Width,
     int Height,
     IReadOnlyList<MimicTemplateParameterConfiguration> Parameters,
-    IReadOnlyList<MimicTemplateElementConfiguration> Elements);
+    IReadOnlyList<MimicTemplateElementConfiguration> Elements,
+    int Version = 1);

@@ -1736,3 +1736,43 @@ Template editor сохраняет client-side draft/explicit Save, fixed `TagId
 - placement должен использовать authoritative S13A response и Server-generated ElementId;
 - template UX должен повторять уже освоенную spatial model Mimic Editor, а не создавать крупный новый dashboard;
 - второй concrete use case V2-S14 всё ещё должен появиться раньше generic Template Catalog/Kind/Version.
+
+---
+
+## D-077 — Общий Template Catalog выделяется только после второго use case; device instantiate остаётся concrete copy через ConfigurationEditorService
+
+**Status:** Accepted
+
+V2-S14A повышает configuration SQLite `v8 → v9` и нормализует общую часть двух подтверждённых template domains:
+
+```text
+TemplateId
+Name
+Kind = Mimic | ModbusDevice | SnmpDevice
+Version
+Parameters
+```
+
+Concrete payload не переносится в универсальный JSON/document engine. Mimic сохраняет visual fragment; Modbus template хранит `UnitId` и tag `Address/Writable`; SNMP template хранит tag OID и explicit Community parameter. Instance parameters связываются через named reference fields вместо expression/interpolation language.
+
+Existing S13 Mimic templates мигрируют с прежним `TemplateId`, `Kind=Mimic`, `Version=1`; public Mimic Template API остаётся совместимым. New template получает version 1, successful update того же ID/Kind увеличивает version, а один ID не может принадлежать разным Kind.
+
+Device instantiate строит ordinary `ModbusDeviceConfiguration` или `SnmpDeviceConfiguration` и передаёт full device+tags в existing `ConfigurationEditorService` как одну mutation. Resulting device не хранит template back-reference/version.
+
+Permissions разделены по изменяемой сущности:
+
+```text
+read template/catalog → Runtime.Read
+edit reusable template → Templates.Edit
+instantiate device     → Devices.Edit
+```
+
+Причина:
+
+- два concrete use cases теперь действительно доказывают общую identity/version/parameter metadata, но не общий payload;
+- protocol-specific address/OID semantics нельзя скрывать за ложной универсальностью;
+- explicit parameter references проще валидировать и безопаснее будущего arbitrary expression engine;
+- atomic reuse `ConfigurationEditorService` сохраняет cross-protocol uniqueness, durable replace и live apply без дублирования device mutation pipeline;
+- approved template должен быть usable инженером с `Devices.Edit` без права менять сам template catalog;
+- copy semantics исключает неявное propagation изменения template в уже работающие devices.
+

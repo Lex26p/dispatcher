@@ -9,7 +9,7 @@ namespace Dispatcher.Server.Tests;
 public sealed class AlarmDefinitionStoreTests
 {
     [TestMethod]
-    public async Task InitializeAsync_CreatesSchemaVersion8_AndRoundTripsAlarmDefinitions()
+    public async Task InitializeAsync_CreatesSchemaVersion9_AndRoundTripsAlarmDefinitions()
     {
         using var database =
             TemporaryConfigurationDatabase.Create();
@@ -21,7 +21,7 @@ public sealed class AlarmDefinitionStoreTests
         await store.InitializeAsync();
 
         Assert.AreEqual(
-            8,
+            9,
             await ReadSchemaVersionAsync(
                 database.DatabasePath));
 
@@ -109,7 +109,7 @@ public sealed class AlarmDefinitionStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion6ToVersion8_WithoutRemovingExistingConfiguration()
+    public async Task InitializeAsync_MigratesVersion6ToVersion9_WithoutRemovingExistingConfiguration()
     {
         using var database =
             TemporaryConfigurationDatabase.Create();
@@ -146,7 +146,7 @@ public sealed class AlarmDefinitionStoreTests
         await store.InitializeAsync();
 
         Assert.AreEqual(
-            8,
+            9,
             await ReadSchemaVersionAsync(
                 database.DatabasePath));
 

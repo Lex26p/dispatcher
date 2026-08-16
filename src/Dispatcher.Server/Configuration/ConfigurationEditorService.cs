@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Dispatcher.Server.Configuration;
 
-public sealed class ConfigurationEditorService
+public sealed partial class ConfigurationEditorService
 {
     private readonly SqliteConfigurationStore _store;
     private readonly ConfigurationCatalog _catalog;

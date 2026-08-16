@@ -1099,41 +1099,53 @@ Template management/editing UI и placement соблюдают существу�
 
 ## [ ] V2-S14 — Device/Tag templates и общий Template Catalog
 
-Второй конкретный use case — повторяющаяся device/tag configuration.
+Второй concrete use case разделён на два проверяемых подшага.
 
-Первый scope должен быть protocol-aware, а не притворяться полностью generic.
+### [x] V2-S14A — Server/storage/API + общий Template Catalog
 
-Примеры:
+Реализовано:
 
-```text
-Modbus TCP device template
-SNMP v2c device template
-```
+- configuration SQLite `v8 → v9`;
+- existing S13 Mimic template IDs сохраняются, common metadata мигрирует в `templates`;
+- общий catalog хранит только доказанную общую часть: `TemplateId`, `Name`, `Kind`, `Version`, `Parameters`;
+- `Kind = Mimic | ModbusDevice | SnmpDevice`;
+- concrete Mimic payload остаётся visual fragment, без generic payload engine;
+- concrete Modbus device template хранит `UnitId`, port/timing, Enabled и tags с `Address/Writable`;
+- concrete SNMP device template хранит port/timing, Enabled и tags с OID;
+- instance string parameters явно назначаются ролям `DeviceName?`, `Host`, `TagIdPrefix`, а для SNMP также `Community`;
+- `GET /api/configuration/templates` читает общий catalog;
+- Modbus/SNMP template CRUD разделён по concrete REST routes;
+- template read требует `Runtime.Read`, mutation — `Templates.Edit`;
+- instantiate требует `Devices.Edit`, но не `Templates.Edit`;
+- instantiate строит обычный full device+tags и выполняет один atomic mutation через existing `ConfigurationEditorService`, сохраняя cross-protocol DeviceId/TagId validation, SQLite replace, live apply и SignalR configuration notification;
+- created device не хранит TemplateId/version back-reference;
+- первый save получает version `1`, successful update того же TemplateId+Kind увеличивает version;
+- один TemplateId не может одновременно принадлежать разным Kind;
+- successful template mutation/instantiate использует existing actor-aware `ConfigurationChanged`; operational schema не меняется.
 
-Template может задавать:
-
-- набор tags;
-- default names;
-- protocol-specific point settings;
-- writable flags где применимо;
-- параметры экземпляра.
-
-После появления двух concrete use cases:
-
-```text
-Mimic template
-Device/tag template
-```
-
-выделить только действительно общие свойства:
+Не добавлено в S14A:
 
 ```text
-TemplateId
-Name
-Kind
-Version
-Parameters
+Device Editor template management/instantiate UI
+linked device instances
+automatic propagation
+parameter expression/interpolation language
+generic protocol payload
 ```
+
+### [ ] V2-S14B — Device Editor template integration
+
+Web должен добавить dense permission-aware workflow:
+
+```text
+manage Modbus/SNMP templates при Templates.Edit
+→ выбрать approved template
+→ заполнить instance parameters + DeviceId
+→ instantiate при Devices.Edit
+→ получить ordinary editable device/tags
+```
+
+S14B не должен менять Server copy semantics или превращать common catalog в отдельный dashboard без необходимости.
 
 ### Результат Phase 9
 

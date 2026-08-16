@@ -1,5 +1,6 @@
 using Dispatcher.Contracts.Mimics;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Templates;
 
 namespace Dispatcher.Server.Mimics;
 
@@ -7,17 +8,19 @@ public sealed class MimicTemplateService
 {
     private readonly SqliteConfigurationStore _store;
     private readonly MimicConfigurationService _mimicService;
-    private readonly SemaphoreSlim _mutationLock =
-        new(1, 1);
+    private readonly TemplateMutationGate _mutationGate;
 
     public MimicTemplateService(
         SqliteConfigurationStore store,
-        MimicConfigurationService mimicService)
+        MimicConfigurationService mimicService,
+        TemplateMutationGate mutationGate)
     {
         _store =
             store;
         _mimicService =
             mimicService;
+        _mutationGate =
+            mutationGate;
     }
 
     public async Task<IReadOnlyList<MimicTemplateConfiguration>> GetAllAsync(
@@ -67,20 +70,18 @@ public sealed class MimicTemplateService
         MimicTemplateConfigurationValidator.Validate(
             template);
 
-        await _mutationLock.WaitAsync(
+        await _mutationGate.Semaphore.WaitAsync(
             cancellationToken);
 
         try
         {
-            await _store.UpsertMimicTemplateAsync(
+            return await _store.UpsertMimicTemplateAsync(
                 template,
                 cancellationToken);
-
-            return template;
         }
         finally
         {
-            _mutationLock.Release();
+            _mutationGate.Semaphore.Release();
         }
     }
 
@@ -91,7 +92,7 @@ public sealed class MimicTemplateService
         ArgumentException.ThrowIfNullOrWhiteSpace(
             templateId);
 
-        await _mutationLock.WaitAsync(
+        await _mutationGate.Semaphore.WaitAsync(
             cancellationToken);
 
         try
@@ -102,7 +103,7 @@ public sealed class MimicTemplateService
         }
         finally
         {
-            _mutationLock.Release();
+            _mutationGate.Semaphore.Release();
         }
     }
 

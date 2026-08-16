@@ -1,5 +1,6 @@
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Mimics;
+using Dispatcher.Server.Templates;
 using Microsoft.Data.Sqlite;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -9,7 +10,7 @@ namespace Dispatcher.Server.Tests;
 public sealed class MimicTemplateStoreTests
 {
     [TestMethod]
-    public async Task InitializeAsync_CreatesSchemaVersion8_AndRoundTripsMimicTemplate()
+    public async Task InitializeAsync_CreatesSchemaVersion9_AndRoundTripsMimicTemplate()
     {
         using var database =
             TemporaryDatabase.Create();
@@ -21,7 +22,7 @@ public sealed class MimicTemplateStoreTests
         await store.InitializeAsync();
 
         Assert.AreEqual(
-            8,
+            9,
             await ReadSchemaVersionAsync(
                 database.DatabasePath));
 
@@ -40,6 +41,9 @@ public sealed class MimicTemplateStoreTests
         var roundTripped =
             loaded[0];
 
+        Assert.AreEqual(
+            1,
+            roundTripped.Version);
         Assert.AreEqual(
             template.TemplateId,
             roundTripped.TemplateId);
@@ -71,10 +75,13 @@ public sealed class MimicTemplateStoreTests
         Assert.AreEqual(
             0,
             (await store.LoadMimicTemplatesAsync()).Count);
+        Assert.AreEqual(
+            0,
+            (await store.LoadTemplateCatalogAsync()).Count);
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion7ToVersion8_WithoutChangingExistingMimic()
+    public async Task InitializeAsync_MigratesVersion7ToVersion9_WithoutChangingExistingMimic()
     {
         using var database =
             TemporaryDatabase.Create();
@@ -125,7 +132,7 @@ public sealed class MimicTemplateStoreTests
         await store.InitializeAsync();
 
         Assert.AreEqual(
-            8,
+            9,
             await ReadSchemaVersionAsync(
                 database.DatabasePath));
 
@@ -148,6 +155,99 @@ public sealed class MimicTemplateStoreTests
         Assert.AreEqual(
             1,
             (await store.LoadMimicTemplatesAsync()).Count);
+    }
+
+
+    [TestMethod]
+    public async Task InitializeAsync_MigratesVersion8ToVersion9_AndMovesMimicMetadataIntoCatalog()
+    {
+        using var database =
+            TemporaryDatabase.Create();
+
+        await using (var connection =
+            new SqliteConnection(
+                CreateConnectionString(
+                    database.DatabasePath)))
+        {
+            await connection.OpenAsync();
+            await using var command =
+                connection.CreateCommand();
+            command.CommandText =
+                """
+                CREATE TABLE mimic_templates (
+                    template_id TEXT NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    width INTEGER NOT NULL CHECK (width > 0),
+                    height INTEGER NOT NULL CHECK (height > 0),
+                    parameters_json TEXT NOT NULL,
+                    elements_json TEXT NOT NULL
+                );
+
+                INSERT INTO mimic_templates (
+                    template_id,
+                    name,
+                    width,
+                    height,
+                    parameters_json,
+                    elements_json)
+                VALUES (
+                    'legacy-mimic-template',
+                    'Legacy mimic template',
+                    320,
+                    180,
+                    '[{"ParameterId":"state","Name":"State tag"}]',
+                    '[]');
+
+                PRAGMA user_version = 8;
+                """;
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store =
+            new SqliteConfigurationStore(
+                database.DatabasePath);
+
+        await store.InitializeAsync();
+
+        Assert.AreEqual(
+            9,
+            await ReadSchemaVersionAsync(
+                database.DatabasePath));
+
+        var templates =
+            await store.LoadMimicTemplatesAsync();
+        var catalog =
+            await store.LoadTemplateCatalogAsync();
+
+        Assert.AreEqual(
+            1,
+            templates.Count);
+        Assert.AreEqual(
+            "legacy-mimic-template",
+            templates[0].TemplateId);
+        Assert.AreEqual(
+            "Legacy mimic template",
+            templates[0].Name);
+        Assert.AreEqual(
+            1,
+            templates[0].Version);
+        Assert.AreEqual(
+            "state",
+            templates[0].Parameters.Single().ParameterId);
+
+        Assert.AreEqual(
+            1,
+            catalog.Count);
+        Assert.AreEqual(
+            TemplateKind.Mimic,
+            catalog[0].Kind);
+        Assert.AreEqual(
+            1,
+            catalog[0].Version);
+        Assert.AreEqual(
+            "state",
+            catalog[0].Parameters.Single().ParameterId);
     }
 
     private static MimicTemplateConfiguration CreateTemplate()

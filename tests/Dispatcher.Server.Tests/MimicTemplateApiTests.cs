@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Dispatcher.Contracts.Authentication;
 using Dispatcher.Contracts.Events;
 using Dispatcher.Contracts.Mimics;
+using Dispatcher.Contracts.Templates;
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Security;
 using Microsoft.AspNetCore.Identity;
@@ -147,6 +148,21 @@ public sealed class MimicTemplateApiTests
         Assert.AreEqual(
             HttpStatusCode.OK,
             updateResponse.StatusCode);
+
+        var catalog =
+            await client.GetFromJsonAsync<TemplateCatalogItemDto[]>(
+                "/api/configuration/templates");
+        Assert.IsNotNull(
+            catalog);
+        var mimicCatalogItem =
+            catalog.Single(item =>
+                item.TemplateId == "pump-fragment");
+        Assert.AreEqual(
+            TemplateKindDto.Mimic,
+            mimicCatalogItem.Kind);
+        Assert.AreEqual(
+            2,
+            mimicCatalogItem.Version);
 
         var persistedMimic =
             await client.GetFromJsonAsync<MimicDefinitionDto>(

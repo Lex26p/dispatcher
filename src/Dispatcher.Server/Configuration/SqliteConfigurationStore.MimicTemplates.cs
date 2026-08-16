@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dispatcher.Server.Mimics;
+using Dispatcher.Server.Templates;
 
 namespace Dispatcher.Server.Configuration;
 
@@ -18,15 +19,22 @@ public sealed partial class SqliteConfigurationStore
         command.CommandText =
             """
             SELECT
-                template_id,
-                name,
-                width,
-                height,
-                parameters_json,
-                elements_json
-            FROM mimic_templates
-            ORDER BY template_id;
+                t.template_id,
+                t.name,
+                t.version,
+                t.parameters_json,
+                m.width,
+                m.height,
+                m.elements_json
+            FROM templates t
+            INNER JOIN mimic_templates m
+                ON m.template_id = t.template_id
+            WHERE t.kind = $kind
+            ORDER BY t.template_id;
             """;
+        command.Parameters.AddWithValue(
+            "$kind",
+            (int)TemplateKind.Mimic);
 
         await using var reader =
             await command.ExecuteReaderAsync(
@@ -40,11 +48,11 @@ public sealed partial class SqliteConfigurationStore
         {
             var parameters =
                 JsonSerializer.Deserialize<MimicTemplateParameterConfiguration[]>(
-                    reader.GetString(4))
+                    reader.GetString(3))
                 ?? [];
             var elements =
                 JsonSerializer.Deserialize<MimicTemplateElementConfiguration[]>(
-                    reader.GetString(5))
+                    reader.GetString(6))
                 ?? [];
 
             var template =
@@ -54,13 +62,15 @@ public sealed partial class SqliteConfigurationStore
                     Name:
                         reader.GetString(1),
                     Width:
-                        reader.GetInt32(2),
+                        reader.GetInt32(4),
                     Height:
-                        reader.GetInt32(3),
+                        reader.GetInt32(5),
                     Parameters:
                         parameters,
                     Elements:
-                        elements);
+                        elements,
+                    Version:
+                        reader.GetInt32(2));
 
             MimicTemplateConfigurationValidator.Validate(
                 template);
@@ -72,7 +82,7 @@ public sealed partial class SqliteConfigurationStore
         return templates;
     }
 
-    public async Task UpsertMimicTemplateAsync(
+    public async Task<MimicTemplateConfiguration> UpsertMimicTemplateAsync(
         MimicTemplateConfiguration template,
         CancellationToken cancellationToken = default)
     {
@@ -83,30 +93,46 @@ public sealed partial class SqliteConfigurationStore
             await OpenConnectionAsync(
                 cancellationToken);
 
+        using var transaction =
+            connection.BeginTransaction();
+
+        var parameters =
+            template.Parameters
+                .Select(parameter =>
+                    new TemplateParameterConfiguration(
+                        parameter.ParameterId,
+                        parameter.Name))
+                .ToArray();
+        var version =
+            await UpsertTemplateCatalogEntryAsync(
+                connection,
+                transaction,
+                template.TemplateId,
+                template.Name,
+                TemplateKind.Mimic,
+                parameters,
+                cancellationToken);
+
         await using var command =
             connection.CreateCommand();
 
+        command.Transaction =
+            transaction;
         command.CommandText =
             """
             INSERT INTO mimic_templates (
                 template_id,
-                name,
                 width,
                 height,
-                parameters_json,
                 elements_json)
             VALUES (
                 $templateId,
-                $name,
                 $width,
                 $height,
-                $parametersJson,
                 $elementsJson)
             ON CONFLICT(template_id) DO UPDATE SET
-                name = excluded.name,
                 width = excluded.width,
                 height = excluded.height,
-                parameters_json = excluded.parameters_json,
                 elements_json = excluded.elements_json;
             """;
 
@@ -114,18 +140,11 @@ public sealed partial class SqliteConfigurationStore
             "$templateId",
             template.TemplateId);
         command.Parameters.AddWithValue(
-            "$name",
-            template.Name);
-        command.Parameters.AddWithValue(
             "$width",
             template.Width);
         command.Parameters.AddWithValue(
             "$height",
             template.Height);
-        command.Parameters.AddWithValue(
-            "$parametersJson",
-            JsonSerializer.Serialize(
-                template.Parameters));
         command.Parameters.AddWithValue(
             "$elementsJson",
             JsonSerializer.Serialize(
@@ -133,33 +152,22 @@ public sealed partial class SqliteConfigurationStore
 
         await command.ExecuteNonQueryAsync(
             cancellationToken);
+
+        transaction.Commit();
+
+        return template with
+        {
+            Version = version
+        };
     }
 
     public async Task<bool> DeleteMimicTemplateAsync(
         string templateId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            templateId);
-
-        await using var connection =
-            await OpenConnectionAsync(
-                cancellationToken);
-
-        await using var command =
-            connection.CreateCommand();
-
-        command.CommandText =
-            """
-            DELETE FROM mimic_templates
-            WHERE template_id = $templateId;
-            """;
-
-        command.Parameters.AddWithValue(
-            "$templateId",
-            templateId);
-
-        return await command.ExecuteNonQueryAsync(
-            cancellationToken) > 0;
+        return await DeleteTemplateAsync(
+            templateId,
+            TemplateKind.Mimic,
+            cancellationToken);
     }
 }

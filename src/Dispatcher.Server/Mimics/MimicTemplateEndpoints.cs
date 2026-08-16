@@ -1,5 +1,6 @@
 using Dispatcher.Contracts.Mimics;
 using Dispatcher.Server.Events;
+using Dispatcher.Server.Templates;
 
 namespace Dispatcher.Server.Mimics;
 
@@ -256,6 +257,15 @@ public static class MimicTemplateEndpoints
                         StatusCodes.Status404NotFound,
                     title:
                         "Mimic or template was not found.",
+                    detail:
+                        exception.Message),
+
+            TemplateConflictException =>
+                Results.Problem(
+                    statusCode:
+                        StatusCodes.Status409Conflict,
+                    title:
+                        "Template ID conflict.",
                     detail:
                         exception.Message),
 

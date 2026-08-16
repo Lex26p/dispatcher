@@ -8,7 +8,7 @@ namespace Dispatcher.Server.Configuration;
 
 public sealed partial class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 8;
+    private const int CurrentSchemaVersion = 9;
 
     private readonly string _connectionString;
 
@@ -74,6 +74,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 1:
@@ -104,6 +108,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
@@ -130,6 +138,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 3:
@@ -152,6 +164,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 4:
@@ -170,6 +186,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 5:
@@ -184,6 +204,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 6:
@@ -194,10 +218,24 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 7:
                 await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV8ToV9Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 8:
+                await MigrateV8ToV9Async(
                     connection,
                     cancellationToken);
                 return;
@@ -1448,6 +1486,110 @@ public sealed partial class SqliteConfigurationStore
             );
 
             PRAGMA user_version = 8;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV8ToV9Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE templates (
+                template_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                kind INTEGER NOT NULL CHECK (kind BETWEEN 0 AND 2),
+                version INTEGER NOT NULL CHECK (version >= 1),
+                parameters_json TEXT NOT NULL
+            );
+
+            INSERT INTO templates (
+                template_id,
+                name,
+                kind,
+                version,
+                parameters_json)
+            SELECT
+                template_id,
+                name,
+                0,
+                1,
+                parameters_json
+            FROM mimic_templates;
+
+            CREATE TABLE mimic_templates_v9 (
+                template_id TEXT NOT NULL PRIMARY KEY,
+                width INTEGER NOT NULL CHECK (width > 0),
+                height INTEGER NOT NULL CHECK (height > 0),
+                elements_json TEXT NOT NULL,
+                FOREIGN KEY (template_id)
+                    REFERENCES templates(template_id)
+                    ON DELETE CASCADE
+            );
+
+            INSERT INTO mimic_templates_v9 (
+                template_id,
+                width,
+                height,
+                elements_json)
+            SELECT
+                template_id,
+                width,
+                height,
+                elements_json
+            FROM mimic_templates;
+
+            DROP TABLE mimic_templates;
+            ALTER TABLE mimic_templates_v9 RENAME TO mimic_templates;
+
+            CREATE TABLE modbus_device_templates (
+                template_id TEXT NOT NULL PRIMARY KEY,
+                device_name TEXT NOT NULL,
+                device_name_parameter_id TEXT NULL,
+                host_parameter_id TEXT NOT NULL,
+                tag_id_prefix_parameter_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+                unit_id INTEGER NOT NULL CHECK (unit_id BETWEEN 0 AND 255),
+                poll_interval_ms INTEGER NOT NULL CHECK (poll_interval_ms > 0),
+                request_timeout_ms INTEGER NOT NULL CHECK (request_timeout_ms > 0),
+                tags_json TEXT NOT NULL,
+                FOREIGN KEY (template_id)
+                    REFERENCES templates(template_id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE TABLE snmp_device_templates (
+                template_id TEXT NOT NULL PRIMARY KEY,
+                device_name TEXT NOT NULL,
+                device_name_parameter_id TEXT NULL,
+                host_parameter_id TEXT NOT NULL,
+                community_parameter_id TEXT NOT NULL,
+                tag_id_prefix_parameter_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+                poll_interval_ms INTEGER NOT NULL CHECK (poll_interval_ms > 0),
+                request_timeout_ms INTEGER NOT NULL CHECK (request_timeout_ms > 0),
+                tags_json TEXT NOT NULL,
+                FOREIGN KEY (template_id)
+                    REFERENCES templates(template_id)
+                    ON DELETE CASCADE
+            );
+
+            PRAGMA user_version = 9;
             """;
 
         await command.ExecuteNonQueryAsync(

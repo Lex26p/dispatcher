@@ -279,7 +279,7 @@ public sealed class SecurityConfigurationTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion5Database_ToVersion8WithoutLosingLocalUsers()
+    public async Task InitializeAsync_MigratesVersion5Database_ToVersion9WithoutLosingLocalUsers()
     {
         var directory =
             Path.Combine(
@@ -388,7 +388,7 @@ public sealed class SecurityConfigurationTests
                     await versionCommand.ExecuteScalarAsync());
 
             Assert.AreEqual(
-                8,
+                9,
                 version);
         }
         finally

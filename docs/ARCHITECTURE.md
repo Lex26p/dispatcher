@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S13A
+## 1. Состояние после V2-S14A
 
-Application layer содержит operational services, permission-based administration, Alarm configuration/runtime и concrete Mimic template Server foundation:
+Application layer содержит operational services, permission-based administration, Alarm configuration/runtime, Mimic templates и protocol-aware Device/Tag template Server foundation:
 
 ```text
 Protocol workers
@@ -20,7 +20,8 @@ Mimic Editor   → mimic definition
 Security Admin → users / roles
 Alarm runtime  → current/history + ACK
 Alarm Editor   → alarm definitions
-Mimic templates → reusable concrete fragments
+Mimic templates → reusable visual fragments
+Device templates → reusable Modbus/SNMP configuration
 
 Configuration SQLite
       ↓
@@ -3640,3 +3641,81 @@ persisted clean mimic
 Это исключает race, при котором последующий Save старого draft перезаписал бы только что вставленные Server-side элементы. После successful instantiate Web сравнивает прежние `ElementId` с Server response и выбирает первый newly generated element; сами IDs по-прежнему генерируются Server.
 
 Placement panel находится в existing Mimic Editor workspace между compact toolbar и canvas. Отдельный runtime state/realtime transport для templates не создаётся. Configuration schema остаётся `8`, operational schema — `3`; linked instances/version propagation отсутствуют.
+
+## 119. V2-S14A common Template Catalog boundary
+
+Второй concrete template use case позволяет выделить только реально повторяющуюся metadata boundary:
+
+```text
+Configuration SQLite v9 / templates
+    TemplateId
+    Name
+    Kind
+    Version
+    Parameters[]
+        ↓
+    ├── mimic_templates
+    ├── modbus_device_templates
+    └── snmp_device_templates
+```
+
+`Kind` имеет только текущие concrete значения `Mimic`, `ModbusDevice`, `SnmpDevice`. Generic payload/renderer/instantiation engine не вводится: common catalog знает identity/version/parameters, а payload остаётся в domain-specific configuration type.
+
+Migration `v8 → v9` переносит `Name` и `Parameters` существующих S13 Mimic templates в `templates`, присваивает `Kind=Mimic`, `Version=1` и сохраняет прежний `TemplateId`. Public `/api/configuration/mimic-templates` остаётся совместимым и собирает прежний DTO join-ом common metadata + concrete visual payload.
+
+## 120. Device template concrete payload и parameters
+
+Device templates намеренно protocol-aware:
+
+```text
+ModbusDevice
+  fixed: Enabled / Port / UnitId / poll / timeout
+  parameters: Host / TagIdPrefix / optional DeviceName
+  tags: TagIdSuffix / Name / Address / Writable
+
+SnmpDevice
+  fixed: Enabled / Port / poll / timeout
+  parameters: Host / Community / TagIdPrefix / optional DeviceName
+  tags: TagIdSuffix / Name / OID
+```
+
+Parameter values остаются строковыми и имеют explicit reference fields; expression/interpolation language не добавляется. Resulting TagId строится как exact `TagIdPrefix + TagIdSuffix`, поэтому delimiter является частью пользовательского prefix. Перед instantiate Server требует полный набор declared parameters и отвергает unknown keys.
+
+## 121. Device template instantiate использует existing device mutation boundary
+
+Цепочка:
+
+```text
+approved template + instance values
+        ↓
+DeviceTemplateService
+        ↓ resolve concrete Modbus/SNMP configuration
+ConfigurationEditorService.Create*DeviceConfigurationAsync
+        ↓ existing single mutation lock
+ConfigurationSetValidator
+        ↓
+SQLite Replace + ConfigurationCatalog
+        ↓
+RuntimeConfigurationCoordinator.ApplyAsync
+        ↓
+ConfigurationChanged SignalR / RuntimeConfigurationApplied event
+```
+
+Full device и его tags добавляются одной mutation, а не последовательностью create-device/create-tag calls. Поэтому cross-protocol `DeviceId`/`TagId` uniqueness и live-apply semantics не обходятся. Created device не хранит `TemplateId` или `Version`; дальнейшее изменение template не меняет существующую configuration.
+
+## 122. S14A versioning, permissions и scope boundary
+
+Catalog identity глобальна по `TemplateId`. New definition получает `Version=1`; successful update того же `TemplateId + Kind` увеличивает version. Попытка сохранить тот же ID под другим Kind возвращает conflict. Shared `TemplateMutationGate` сериализует low-frequency template mutations одного Server process; SQLite PK остаётся durable uniqueness boundary.
+
+Permission matrix:
+
+```text
+GET/HEAD /api/configuration/templates* → Runtime.Read
+PUT/DELETE device template             → Templates.Edit
+POST .../instantiate                   → Devices.Edit
+```
+
+Instantiate не требует `Templates.Edit`, потому что изменяет target device configuration, а не reusable template. Successful template mutation и instantiate используют existing actor-aware `ConfigurationChanged`; operational schema остаётся `3`.
+
+S14A не меняет Web layout/navigation. Device Editor management/instantiate UX остаётся V2-S14B.
+
