@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. V2-S08 Permissions и Roles завершён: durable roles/permissions, permission-based Server enforcement и permission-aware Web visibility/enabled state работают как единый security vertical slice.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 продолжена V2-S09A: Server имеет permission-protected Users/Roles management API поверх существующей configuration SQLite v6; Web admin UI и actor-aware audit остаются следующими подшагами.
 
 ## Рабочая цепочка
 
@@ -58,6 +58,10 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 39. Возвращать `401` anonymous client и `403` authenticated user без требуемого permission.
 40. Проецировать current effective permissions в authenticated login/current-user response без добавления permission claims в cookie.
 41. Отражать permissions в Web service navigation, editor route access и tag/mimic mutation controls.
+42. Управлять local users через Server API: create, display-name/Enabled update и platform-hashed password reset.
+43. Управлять custom security roles и полным набором user-role assignments без изменения built-in role definitions.
+44. Немедленно обновлять `SecurityCatalog` после security configuration mutation.
+45. Не допускать security mutation, которая оставит систему без enabled user с `Users.Manage + Roles.Manage`.
 
 ## Базовый стек
 
@@ -330,6 +334,52 @@ Mimic Button command                         → Tags.Write
 ```
 
 Недоступные editor services не показываются в navigation и не рендерятся при direct route; writable tag controls без `Tags.Write` заменяются read-only marker, а mimic commands становятся disabled. Это только UX projection: REST/SignalR enforcement V2-S08B остаётся окончательной security authority.
+
+## Users / Roles management API
+
+V2-S09A добавляет Server management boundary поверх уже существующей configuration SQLite schema `6`; новая таблица или migration не требуется.
+
+Endpoints:
+
+```text
+GET  /api/security/users
+POST /api/security/users
+PUT  /api/security/users/{userId}
+PUT  /api/security/users/{userId}/password
+PUT  /api/security/users/{userId}/roles
+
+GET    /api/security/roles
+POST   /api/security/roles
+PUT    /api/security/roles/{roleId}
+DELETE /api/security/roles/{roleId}
+```
+
+Permission boundary:
+
+```text
+user list/create/profile/Enabled  → Users.Manage
+user role assignments             → Roles.Manage
+password reset                    → Users.Manage + Roles.Manage
+role list/CRUD                     → Roles.Manage
+```
+
+`UserName` после создания immutable; профиль меняет только `DisplayName` и `Enabled`. `GET /api/auth/current` теперь проецирует актуальные `UserName/DisplayName` из durable user record по cookie `UserId`, поэтому profile change не требует нового login для обновления identity metadata в Web. Новый password проверяется по тем же limits `12..256` и хешируется штатным `PasswordHasher<LocalUserConfiguration>`; plaintext/hash не возвращаются public API.
+
+Built-in roles остаются system-managed и не изменяются management API. Custom role хранит только известные `PermissionNames`; assigned custom role нельзя удалить до снятия assignments.
+
+После каждой mutation, влияющей на users/roles/assignments, Server перечитывает durable security configuration и атомарно заменяет in-memory projection `SecurityCatalog`. Поэтому текущие authorization checks применяют новую конфигурацию без перевыпуска cookie.
+
+Fail-safe invariant перед уменьшением authority:
+
+```text
+at least one Enabled user
+    has Users.Manage
+    AND Roles.Manage
+```
+
+Проверка выполняется по effective permissions, а не по role name. Это предотвращает случайный administrative lockout.
+
+S09A ещё не добавляет Web admin service и actor-aware audit events; они остаются V2-S09B/V2-S09C.
 
 ## Historian foundation
 
@@ -958,13 +1008,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S08C — Web permission visibility/enabled state
+V2-S09A — Users/Roles management API foundation
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S09 — Users/Roles Web + Audit
+V2-S09B — Users/Roles Web admin service
 ```
 
 ## Документы

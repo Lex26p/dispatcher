@@ -1411,3 +1411,36 @@ Direct route к editor без required permission не рендерит editor c
 - editor workspace без mutation permission создаёт ложное ожидание доступности действий, поэтому dedicated editor route скрывается/не рендерится;
 - runtime command elements остаются видимой частью operational representation, но mutation interaction disabled без `Tags.Write`;
 - client-side hiding/disable никогда не заменяет Server authorization.
+
+---
+
+## D-068 — Security management mutations используют permissions, proposed-state lockout guard и current SecurityCatalog refresh
+
+**Status:** Accepted
+
+V2-S09A добавляет `/api/security/users` и `/api/security/roles` поверх существующей configuration SQLite schema `6`. Новая security schema не создаётся.
+
+Authorization management boundary:
+
+```text
+user list/create/profile/Enabled → Users.Manage
+role assignments                 → Roles.Manage
+password reset                   → Users.Manage + Roles.Manage
+custom role CRUD                 → Roles.Manage
+```
+
+Built-in roles остаются system-managed. Business code не проверяет role names для granting authority.
+
+Password reset требует оба management permissions: `Users.Manage` сам по себе не должен становиться косвенным способом получить `Roles.Manage` через takeover credentials более привилегированного пользователя. Password hash создаётся тем же ASP.NET Core Identity `PasswordHasher<LocalUserConfiguration>`, который уже используется bootstrap/login foundation.
+
+Перед user-disable, role-assignment replacement и custom-role update proposed state должен сохранить хотя бы одного enabled user с effective `Users.Manage + Roles.Manage`. Это capability invariant, а не special-case `Administrator`.
+
+Security mutations сериализуются внутри одного Server process; multi-row role replacement выполняется SQLite transaction. После successful durable mutation Server перечитывает users/roles/assignments и вызывает `SecurityCatalog.ReplaceAll`, поэтому current request authorization не зависит от stale permission claims в cookie. Mutable `DisplayName` также не считается immutable cookie truth: `/api/auth/current` по `UserId` перечитывает актуальный durable user record.
+
+Причина:
+
+- user/role administration должна использовать уже принятую permission model;
+- built-in role name не является security bypass;
+- accidental removal последней management authority должен fail-safe до commit;
+- current `SecurityCatalog` должен изменяться вместе с durable configuration, иначе S08B authorization временно применял бы stale authority;
+- credential reset является более сильной операцией, чем display-name/Enabled update, и требует обе management capabilities.

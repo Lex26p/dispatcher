@@ -744,6 +744,51 @@ script execution
 
 Audit record должен содержать actor identity.
 
+### [x] V2-S09A — Users/Roles management API foundation
+
+Реализовано:
+
+- Server contracts для user/role management без password hash exposure;
+- `/api/security/users`:
+  - list;
+  - create;
+  - update `DisplayName` / `Enabled`;
+  - password reset;
+  - replace role assignments;
+- `/api/security/roles`:
+  - list;
+  - create custom role;
+  - update custom role;
+  - delete unassigned custom role;
+- `UserName` immutable после создания;
+- `/api/auth/current` читает актуальные user metadata из durable `local_users` по identity `UserId`, поэтому изменённый `DisplayName` не застывает в cookie projection;
+- password reset использует тот же platform `PasswordHasher<LocalUserConfiguration>` и limits `12..256`;
+- built-in roles system-managed и не изменяются management API;
+- role permissions принимают только declared `PermissionNames`;
+- user profile/create endpoints требуют `Users.Manage`;
+- role CRUD/assignments требуют `Roles.Manage`;
+- credential reset требует одновременно `Users.Manage + Roles.Manage`;
+- после security mutation current `SecurityCatalog` перечитывается из durable configuration;
+- mutation, уменьшающая authority, отклоняется если после неё не останется enabled user с обоими `Users.Manage` и `Roles.Manage`;
+- проверка administrative survivability использует effective permissions, а не role names;
+- configuration schema остаётся `6`;
+- Web admin UI и audit events в S09A не добавляются.
+
+### [ ] V2-S09B — Users/Roles Web admin service
+
+Добавить permission-aware Web service `Users / Roles` поверх S09A API:
+
+- users list + selected-user properties;
+- create/enable/disable/display-name/password-reset actions;
+- role assignment editor;
+- roles list/custom-role editor;
+- effective permissions;
+- `Users.Manage` / `Roles.Manage` visibility/enabled state без role-name checks.
+
+### [ ] V2-S09C — Actor-aware security audit wiring
+
+После стабилизации management boundary добавить actor identity в security-sensitive Event Journal records и покрыть минимум login/security-management/configuration/tag-write producers, не превращая audit в mutable configuration.
+
 ### Результат Phase 7
 
 Dispatcher имеет базовую локальную модель безопасности и трассируемость действий пользователя.

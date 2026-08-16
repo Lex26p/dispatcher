@@ -31,6 +31,7 @@ builder.Services.AddLocalAuthentication();
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddSingleton<HistorianPolicyCatalog>();
 builder.Services.AddSingleton<SecurityCatalog>();
+builder.Services.AddSingleton<SecurityManagementService>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
 
 builder.Services.AddSingleton(
@@ -165,6 +166,7 @@ app.MapHistoryEndpoints();
 app.MapEventEndpoints();
 app.MapMimicEndpoints();
 app.MapAuthenticationEndpoints();
+app.MapSecurityManagementEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
     RuntimeHubContract.Path);

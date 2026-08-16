@@ -68,6 +68,18 @@ public static class LocalAuthenticationExtensions
                 }
 
                 options.AddPolicy(
+                    SecurityManagementPolicyNames.CredentialReset,
+                    policy =>
+                    {
+                        policy.RequireAuthenticatedUser();
+                        policy.AddRequirements(
+                            new PermissionRequirement(
+                                PermissionNames.UsersManage),
+                            new PermissionRequirement(
+                                PermissionNames.RolesManage));
+                    });
+
+                options.AddPolicy(
                     PermissionEndpointAuthorizationMiddleware.DenyPolicyName,
                     policy =>
                         policy.RequireAssertion(

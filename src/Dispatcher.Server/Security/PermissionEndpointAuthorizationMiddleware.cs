@@ -93,6 +93,32 @@ public sealed class PermissionEndpointAuthorizationMiddleware
         }
 
         if (path.StartsWithSegments(
+                "/api/security/users"))
+        {
+            if (path.Value?.EndsWith(
+                    "/password",
+                    StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return SecurityManagementPolicyNames.CredentialReset;
+            }
+
+            if (path.Value?.EndsWith(
+                    "/roles",
+                    StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return PermissionNames.RolesManage;
+            }
+
+            return PermissionNames.UsersManage;
+        }
+
+        if (path.StartsWithSegments(
+                "/api/security/roles"))
+        {
+            return PermissionNames.RolesManage;
+        }
+
+        if (path.StartsWithSegments(
                 "/api/configuration/modbus")
             || path.StartsWithSegments(
                 "/api/configuration/snmp"))

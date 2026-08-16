@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S08C
+## 1. Состояние после V2-S09A
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -43,11 +43,17 @@ SecurityCatalog → effective permissions
 PermissionRequirement / PermissionAuthorizationHandler
       ↓
 REST + RuntimeHub permission enforcement
+
+/api/security/users + /api/security/roles
+      ↓ Users.Manage / Roles.Manage
+SecurityManagementService
+      ↓ durable mutation + reload
+Configuration SQLite v6 → SecurityCatalog.ReplaceAll
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, V2-S08B применяет effective permissions к REST/RuntimeHub, а V2-S08C проецирует current effective permissions в Web visibility/enabled state. Server остаётся единственной authoritative authorization boundary.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, V2-S08B применяет effective permissions к REST/RuntimeHub, V2-S08C проецирует current effective permissions в Web visibility/enabled state, а V2-S09A добавляет permission-protected Users/Roles management API и durable mutation → catalog refresh. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -2668,4 +2674,90 @@ security configuration mutation UI
 ```text
 V2-S09 — Users/Roles Web + Audit
 ```
+
+## 86. Users/Roles management boundary
+
+V2-S09A добавляет management API без изменения configuration schema `6`:
+
+```text
+/api/security/users
+/api/security/roles
+```
+
+Цепочка mutation:
+
+```text
+authenticated actor
+      ↓ permission policy
+SecurityManagementEndpoints
+      ↓
+SecurityManagementService
+      ↓ serialized mutation gate
+SqliteConfigurationStore
+      ↓ durable v6 users/roles/assignments
+reload full security state
+      ↓
+SecurityCatalog.ReplaceAll
+```
+
+`SecurityManagementService` сериализует низкочастотные security mutations одним process-local `SemaphoreSlim`. Это не заменяет SQLite transaction внутри multi-row assignment replacement, а предотвращает race между proposed-state validation и commit/catalog refresh в одном Server process.
+
+## 87. User management semantics
+
+Public management projection пользователя не содержит `PasswordHash`:
+
+```text
+UserId
+UserName
+DisplayName
+Enabled
+RoleIds[]
+EffectivePermissions[]
+```
+
+После create `UserName` immutable. S09A изменяет только `DisplayName`, `Enabled`, password hash и role assignments.
+
+Password reset:
+
+```text
+plaintext request
+  ↓ validate 12..256
+PasswordHasher<LocalUserConfiguration>
+  ↓
+local_users.password_hash
+```
+
+Plaintext password и encoded hash не возвращаются API. Existing cookie format не меняется. `GET /api/auth/current` использует cookie `UserId` только как identity key, а актуальные `UserName/DisplayName` перечитывает из `local_users`; поэтому mutable display metadata не застывает до следующего login. Disable/role removal немедленно влияет на protected authorization через refreshed `SecurityCatalog`; отдельный durable per-session revocation token в S09A не вводится.
+
+## 88. Role management и permission boundaries
+
+Built-in roles остаются canonical system-managed definitions и отклоняют update/delete через management API. Custom role получает stable generated `RoleId`, unique normalized name и набор только известных `PermissionNames`. Assigned custom role нельзя удалить до явного снятия assignments.
+
+Management authorization:
+
+```text
+users list/create/profile/Enabled → Users.Manage
+user role assignments            → Roles.Manage
+password reset                   → Users.Manage + Roles.Manage
+roles list/create/update/delete  → Roles.Manage
+```
+
+Password reset требует оба permissions, потому что credential takeover пользователя с более широкими roles не должен быть побочным способом обойти разделение user/role administration.
+
+## 89. Administrative survivability invariant
+
+Перед mutation, которая может уменьшить authority, Server строит proposed effective-permission state и требует:
+
+```text
+exists user where
+    Enabled
+    && HasPermission(Users.Manage)
+    && HasPermission(Roles.Manage)
+```
+
+Проверка применяется к user disable, replacement role assignments и custom-role update. Она не проверяет имя `Administrator` и допускает custom role/composed roles, если effective capabilities сохраняются.
+
+После successful mutation durable state перечитывается целиком и заменяет singleton `SecurityCatalog`, поэтому уже выданные identity-only cookies получают новую authorization authority на следующем protected request.
+
+S09A не добавляет Web admin screen и actor-aware audit events. Следующий подшаг — V2-S09B.
 

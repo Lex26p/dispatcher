@@ -121,10 +121,18 @@ V2-S08 разбит на проверяемые подшаги:
 
 V2-S08 завершён полным permission vertical slice: durable configuration → Server enforcement → Web projection.
 
-Следующий шаг после принятия V2-S08C:
+V2-S09 разбит на проверяемые подшаги:
 
 ```text
-V2-S09 — Users/Roles Web + Audit
+[x] V2-S09A — Users/Roles management API foundation
+[ ] V2-S09B — Users/Roles Web admin service
+[ ] V2-S09C — Actor-aware security audit wiring
+```
+
+Следующий шаг после принятия V2-S09A:
+
+```text
+V2-S09B — Users/Roles Web admin service
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

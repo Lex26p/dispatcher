@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Dispatcher.Contracts.Authentication;
+using Dispatcher.Server.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -26,7 +27,7 @@ public static class AuthenticationEndpoints
 
         group.MapGet(
             "/current",
-            GetCurrentUser);
+            GetCurrentUserAsync);
 
         return endpoints;
     }
@@ -101,9 +102,11 @@ public static class AuthenticationEndpoints
         return Results.NoContent();
     }
 
-    private static IResult GetCurrentUser(
+    private static async Task<IResult> GetCurrentUserAsync(
         HttpContext httpContext,
-        SecurityCatalog securityCatalog)
+        SqliteConfigurationStore store,
+        SecurityCatalog securityCatalog,
+        CancellationToken cancellationToken)
     {
         SetNoStore(
             httpContext.Response);
@@ -118,38 +121,33 @@ public static class AuthenticationEndpoints
             httpContext.User.FindFirst(
                 ClaimTypes.NameIdentifier)?.Value;
 
-        var userName =
-            httpContext.User.FindFirst(
-                ClaimTypes.Name)?.Value;
-
-        var displayName =
-            httpContext.User.FindFirst(
-                LocalAuthenticationDefaults.DisplayNameClaimType)?.Value;
-
         if (string.IsNullOrWhiteSpace(
-                userId)
-            || string.IsNullOrWhiteSpace(
-                userName)
-            || string.IsNullOrWhiteSpace(
-                displayName))
+                userId))
+        {
+            return Results.Ok(
+                AnonymousUser());
+        }
+
+        var users =
+            await store.LoadLocalUsersAsync(
+                cancellationToken);
+        var user =
+            users.SingleOrDefault(candidate =>
+                string.Equals(
+                    candidate.UserId,
+                    userId,
+                    StringComparison.Ordinal));
+
+        if (user is null)
         {
             return Results.Ok(
                 AnonymousUser());
         }
 
         return Results.Ok(
-            new CurrentUserDto(
-                Authenticated:
-                    true,
-                UserId:
-                    userId,
-                UserName:
-                    userName,
-                DisplayName:
-                    displayName,
-                EffectivePermissions:
-                    securityCatalog.GetEffectivePermissions(
-                        userId)));
+            ToDto(
+                user,
+                securityCatalog));
     }
 
     private static CurrentUserDto ToDto(

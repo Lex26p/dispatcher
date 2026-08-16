@@ -333,6 +333,144 @@ public sealed partial class SqliteConfigurationStore
         transaction.Commit();
     }
 
+    public async Task<bool> UpdateLocalUserAsync(
+        LocalUserConfiguration user,
+        CancellationToken cancellationToken = default)
+    {
+        LocalUserConfigurationValidator.Validate(
+            user);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            UPDATE local_users
+            SET
+                display_name = $displayName,
+                enabled = $enabled,
+                password_hash = $passwordHash
+            WHERE user_id = $userId;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$displayName",
+            user.DisplayName);
+        command.Parameters.AddWithValue(
+            "$enabled",
+            user.Enabled ? 1 : 0);
+        command.Parameters.AddWithValue(
+            "$passwordHash",
+            user.PasswordHash);
+        command.Parameters.AddWithValue(
+            "$userId",
+            user.UserId);
+
+        return await command.ExecuteNonQueryAsync(
+            cancellationToken) > 0;
+    }
+
+    public async Task ReplaceUserRoleAssignmentsAsync(
+        string userId,
+        IReadOnlyCollection<string> roleIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            userId);
+        ArgumentNullException.ThrowIfNull(
+            roleIds);
+
+        var distinctRoleIds =
+            roleIds
+                .Distinct(
+                    StringComparer.Ordinal)
+                .ToArray();
+
+        if (distinctRoleIds.Length != roleIds.Count)
+        {
+            throw new ArgumentException(
+                "Role assignments cannot contain duplicate role IDs.",
+                nameof(roleIds));
+        }
+
+        foreach (var roleId in distinctRoleIds)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                roleId);
+        }
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using (var delete =
+            connection.CreateCommand())
+        {
+            delete.Transaction =
+                transaction;
+            delete.CommandText =
+                """
+                DELETE FROM security_user_roles
+                WHERE user_id = $userId;
+                """;
+            delete.Parameters.AddWithValue(
+                "$userId",
+                userId);
+
+            await delete.ExecuteNonQueryAsync(
+                cancellationToken);
+        }
+
+        foreach (var roleId in distinctRoleIds)
+        {
+            await AssignUserRoleAsync(
+                connection,
+                transaction,
+                new UserRoleAssignment(
+                    UserId:
+                        userId,
+                    RoleId:
+                        roleId),
+                cancellationToken);
+        }
+
+        transaction.Commit();
+    }
+
+    public async Task<bool> DeleteSecurityRoleAsync(
+        string roleId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            roleId);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DELETE FROM security_roles
+            WHERE role_id = $roleId;
+            """;
+        command.Parameters.AddWithValue(
+            "$roleId",
+            roleId);
+
+        return await command.ExecuteNonQueryAsync(
+            cancellationToken) > 0;
+    }
+
     private static async Task UpsertSecurityRoleAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
