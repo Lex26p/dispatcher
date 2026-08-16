@@ -664,19 +664,32 @@ Web visibility/enabled state
 - cookie остаётся identity-only, roles/permissions в claims не копируются;
 - REST/SignalR endpoint enforcement в этом подшаге ещё не включается.
 
-### [ ] V2-S08B — Server permission enforcement
+### [x] V2-S08B — Server permission enforcement
 
-Следующий scope:
+Реализовано:
 
-- ASP.NET Core permission policies/requirements поверх `SecurityCatalog`;
-- runtime/history/events/mimic reads → `Runtime.Read`;
+- ASP.NET Core authorization policies/requirements поверх current `SecurityCatalog`;
+- permission handler получает `UserId` из authenticated principal и проверяет effective permission, а не role name;
+- protected read boundaries → `Runtime.Read`:
+  - `/api/tags`;
+  - `/api/devices`;
+  - Modbus/SNMP configuration reads;
+  - historian policy read;
+  - `/api/history`;
+  - `/api/events`;
+  - mimic runtime reads;
+- RuntimeHub `/hubs/runtime` → `Runtime.Read`;
 - tag writes → `Tags.Write`;
-- device configuration mutations → `Devices.Edit`;
-- mimic mutations → `Mimics.Edit`;
+- Modbus/SNMP configuration mutations → `Devices.Edit`;
+- mimic configuration mutations → `Mimics.Edit`;
 - historian policy mutations → `Historian.Configure`;
-- Server возвращает корректные `401/403`;
-- SignalR connection/read boundary также защищается Server-side;
-- никаких role-name checks в endpoints.
+- `/health` и authentication API остаются public;
+- anonymous protected request получает `401`;
+- authenticated user без effective permission получает `403`;
+- cookie challenge/forbid для API не делает redirect в SPA;
+- unknown non-read `/api` mutation fail-closed до появления явной permission mapping;
+- integration tests покрывают anonymous, Viewer, Operator, Engineer и изменение current `SecurityCatalog` после выдачи cookie;
+- role-name checks в request authorization отсутствуют.
 
 ### [ ] V2-S08C — Web permission visibility/enabled state
 

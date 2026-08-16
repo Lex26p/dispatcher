@@ -1,7 +1,15 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Security;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Dispatcher.Server.Tests;
 
@@ -80,9 +88,22 @@ internal sealed class TestConfigurationDatabase : IDisposable
 
 internal static class TestDispatcherFactory
 {
+    public const string TestAdministratorUserId =
+        "dispatcher-tests-administrator";
+
+    private const string TestAuthenticationScheme =
+        "Dispatcher.Tests";
+
     public static WebApplicationFactory<Program> Create(
-        string databasePath)
+        string databasePath,
+        bool authenticateAsAdministrator = true)
     {
+        if (authenticateAsAdministrator)
+        {
+            EnsureTestAdministrator(
+                databasePath);
+        }
+
         var operationalDatabasePath =
             GetOperationalDatabasePath(
                 databasePath);
@@ -103,6 +124,30 @@ internal static class TestDispatcherFactory
                                         operationalDatabasePath
                                 });
                         });
+
+                    if (authenticateAsAdministrator)
+                    {
+                        builder.ConfigureTestServices(
+                            services =>
+                            {
+                                services
+                                    .AddAuthentication(
+                                        options =>
+                                        {
+                                            options.DefaultAuthenticateScheme =
+                                                TestAuthenticationScheme;
+                                            options.DefaultChallengeScheme =
+                                                TestAuthenticationScheme;
+                                            options.DefaultForbidScheme =
+                                                TestAuthenticationScheme;
+                                        })
+                                    .AddScheme<AuthenticationSchemeOptions, TestAdministratorAuthenticationHandler>(
+                                        TestAuthenticationScheme,
+                                        _ =>
+                                        {
+                                        });
+                            });
+                    }
                 });
     }
 
@@ -119,6 +164,96 @@ internal static class TestDispatcherFactory
         return Path.Combine(
             directory,
             "dispatcher-operational.db");
+    }
+
+    private static void EnsureTestAdministrator(
+        string databasePath)
+    {
+        var store =
+            new SqliteConfigurationStore(
+                databasePath);
+
+        var users =
+            store.LoadLocalUsersAsync()
+                .GetAwaiter()
+                .GetResult();
+
+        if (users.Any(
+                user =>
+                    string.Equals(
+                        user.UserId,
+                        TestAdministratorUserId,
+                        StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var user =
+            new LocalUserConfiguration(
+                UserId:
+                    TestAdministratorUserId,
+                UserName:
+                    "dispatcher.tests.admin",
+                NormalizedUserName:
+                    LocalUserConfiguration.NormalizeUserName(
+                        "dispatcher.tests.admin"),
+                DisplayName:
+                    "Dispatcher Tests Administrator",
+                Enabled:
+                    true,
+                PasswordHash:
+                    "test-host-authentication-does-not-use-password");
+
+        store.InsertLocalUserWithRoleAsync(
+                user,
+                BuiltInSecurityRoles.All.Single(
+                    role =>
+                        role.RoleId
+                        == BuiltInSecurityRoles.AdministratorRoleId))
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private sealed class TestAdministratorAuthenticationHandler
+        : AuthenticationHandler<AuthenticationSchemeOptions>
+    {
+        public TestAdministratorAuthenticationHandler(
+            IOptionsMonitor<AuthenticationSchemeOptions> options,
+            ILoggerFactory logger,
+            UrlEncoder encoder)
+            : base(
+                options,
+                logger,
+                encoder)
+        {
+        }
+
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            var identity =
+                new ClaimsIdentity(
+                    [
+                        new Claim(
+                            ClaimTypes.NameIdentifier,
+                            TestAdministratorUserId),
+                        new Claim(
+                            ClaimTypes.Name,
+                            "dispatcher.tests.admin")
+                    ],
+                    TestAuthenticationScheme);
+
+            var principal =
+                new ClaimsPrincipal(
+                    identity);
+            var ticket =
+                new AuthenticationTicket(
+                    principal,
+                    TestAuthenticationScheme);
+
+            return Task.FromResult(
+                AuthenticateResult.Success(
+                    ticket));
+        }
     }
 }
 

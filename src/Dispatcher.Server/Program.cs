@@ -106,6 +106,7 @@ var app =
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<PermissionEndpointAuthorizationMiddleware>();
 
 app.MapGet(
     "/health",

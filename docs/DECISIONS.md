@@ -1316,3 +1316,51 @@ Initial transition:
 - one-time bridge сохраняет управляемость single-user installations при первом включении authorization;
 - ambiguous multi-user migration должна fail-safe не выдавать privilege случайному user.
 
+---
+
+## D-066 — Server authorization проверяет effective permissions через current SecurityCatalog
+
+**Status:** Accepted
+
+V2-S08B создаёт ASP.NET Core authorization policy для каждого declared `PermissionNames` identifier. Policy содержит authenticated-user requirement и `PermissionRequirement`, а handler разрешает request только если current `SecurityCatalog` подтверждает permission для `UserId` из `NameIdentifier` claim.
+
+Authorization не использует:
+
+```text
+role-name checks
+IsInRole("Administrator")
+role claims в cookie
+permission claims в cookie
+```
+
+Server permission matrix:
+
+```text
+runtime/configuration/history/events/mimic reads → Runtime.Read
+RuntimeHub                                  → Runtime.Read
+tag write                                   → Tags.Write
+Modbus/SNMP configuration mutation          → Devices.Edit
+mimic configuration mutation                → Mimics.Edit
+historian policy mutation                   → Historian.Configure
+```
+
+`/health` и `/api/auth/*` остаются public. Unknown non-read `/api` mutation fail-closed до появления explicit permission mapping.
+
+HTTP semantics:
+
+```text
+anonymous protected request                 → 401
+authenticated without required permission   → 403
+authenticated with required permission      → normal endpoint result
+```
+
+Cookie challenge/access-denied handlers возвращают status codes и не redirect-ят API client в Web UI.
+
+Причина:
+
+- Server должен быть authoritative security boundary до Web gating;
+- permission evaluation по current catalog применяет disable/role changes без ожидания expiration 8-hour cookie ticket;
+- business endpoints зависят от capability, а не от built-in role taxonomy;
+- единый mapping существующих Server boundaries уменьшает риск случайно оставить mutation без permission;
+- fail-closed unknown mutation безопаснее implicit allow при появлении нового API action.
+

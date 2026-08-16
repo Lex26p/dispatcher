@@ -113,14 +113,14 @@ V2-S08 разбит на проверяемые подшаги:
 
 ```text
 [x] V2-S08A — durable roles/permissions + effective-permission catalog
-[ ] V2-S08B — Server permission enforcement
+[x] V2-S08B — Server permission enforcement
 [ ] V2-S08C — Web permission visibility/enabled state
 ```
 
-Следующий шаг после принятия V2-S08A:
+Следующий шаг после принятия V2-S08B:
 
 ```text
-V2-S08B — Server permission enforcement
+V2-S08C — Web permission visibility/enabled state
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

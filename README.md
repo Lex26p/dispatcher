@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. Phase 7 продолжена V2-S08A: durable roles/permissions, built-in role definitions и effective-permission catalog подготовлены до Server enforcement.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. Phase 7 продолжена V2-S08B: durable roles/permissions дополнены permission-based Server enforcement для REST и SignalR; Web permission visibility остаётся V2-S08C.
 
 ## Рабочая цепочка
 
@@ -53,6 +53,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 34. Сохранять текущий Web route при login/logout, не выдавая client-side visibility за server authorization.
 35. Хранить roles, role permissions и user-role assignments в configuration SQLite.
 36. Вычислять effective permissions пользователя через Server `SecurityCatalog`, не проверяя role names в business endpoints.
+37. Защищать REST read boundaries и RuntimeHub permission `Runtime.Read`.
+38. Разделять mutation permissions для tag write, device configuration, mimic configuration и historian policies.
+39. Возвращать `401` anonymous client и `403` authenticated user без требуемого permission.
 
 ## Базовый стек
 
@@ -256,9 +259,9 @@ Logout вызывает existing `POST /api/auth/logout`, после чего We
 
 Скрытие рабочего shell/navigation для anonymous user является только UX boundary. На V2-S07C существующие Server endpoints ещё не получают permission enforcement; реальная server-side authorization начинается в V2-S08.
 
-## Roles / permissions foundation
+## Roles / permissions и Server authorization
 
-V2-S08A добавляет durable authorization configuration, но ещё не включает enforcement на REST/SignalR endpoints.
+V2-S08A добавил durable authorization configuration, а V2-S08B включает permission-based Server enforcement для REST и SignalR без role-name checks.
 
 Configuration SQLite schema `v5 → v6` добавляет:
 
@@ -296,9 +299,24 @@ Administrator → all declared permissions
 
 Первый bootstrap user получает built-in `Administrator`. При migration существующей V2-S07 installation с ровно одним local user и ещё без role assignments этот единственный user также получает `Administrator` как one-time compatibility bridge. Если существующих users несколько, Server не угадывает администратора автоматически.
 
-`SecurityCatalog` строит effective permissions как union permissions всех назначенных roles. Disabled user имеет пустой effective permission set. Cookie по-прежнему содержит только identity claims; role/permission claims в V2-S08A не добавляются.
+`SecurityCatalog` строит effective permissions как union permissions всех назначенных roles. Disabled user имеет пустой effective permission set. Cookie по-прежнему содержит только identity claims; role/permission claims не копируются в session ticket.
 
-V2-S08A **не защищает endpoints**. Permission-based Server enforcement вводится в V2-S08B, после него Web visibility/enabled state — в V2-S08C.
+V2-S08B добавляет ASP.NET Core authorization policies/requirements, которые на каждом protected request читают `UserId` из authenticated principal и проверяют current `SecurityCatalog`.
+
+Server permission matrix:
+
+```text
+GET/HEAD runtime/configuration/history/events/mimics → Runtime.Read
+RuntimeHub connection                              → Runtime.Read
+POST /api/tags/{tagId}/write                       → Tags.Write
+Modbus/SNMP configuration mutations                → Devices.Edit
+Mimic configuration mutations                      → Mimics.Edit
+Historian policy mutations                         → Historian.Configure
+```
+
+`/health` и `/api/auth/login|logout|current` остаются public boundaries. Anonymous request к protected boundary получает `401`; authenticated user без требуемого permission — `403`. Неизвестная non-read `/api` mutation fail-closed и не проходит без явно определённой permission mapping.
+
+V2-S08C после Server enforcement добавит только Web visibility/enabled state по effective permissions; client-side checks не заменят Server authorization.
 
 ## Historian foundation
 
@@ -927,13 +945,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S08A — Permission/role configuration foundation
+V2-S08B — Server permission enforcement
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S08B — Server permission enforcement
+V2-S08C — Web permission visibility/enabled state
 ```
 
 ## Документы

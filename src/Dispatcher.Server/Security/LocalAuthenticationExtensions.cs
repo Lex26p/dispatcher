@@ -1,4 +1,6 @@
+using Dispatcher.Contracts.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +12,7 @@ public static class LocalAuthenticationExtensions
         this IServiceCollection services)
     {
         services.AddSingleton<LocalAuthenticationService>();
+        services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         services
             .AddAuthentication(
@@ -32,9 +35,44 @@ public static class LocalAuthenticationExtensions
                         LocalAuthenticationDefaults.SessionLifetime;
                     options.SlidingExpiration =
                         true;
+                    options.Events.OnRedirectToLogin =
+                        context =>
+                        {
+                            context.Response.StatusCode =
+                                StatusCodes.Status401Unauthorized;
+                            return Task.CompletedTask;
+                        };
+                    options.Events.OnRedirectToAccessDenied =
+                        context =>
+                        {
+                            context.Response.StatusCode =
+                                StatusCodes.Status403Forbidden;
+                            return Task.CompletedTask;
+                        };
                 });
 
-        services.AddAuthorization();
+        services.AddAuthorization(
+            options =>
+            {
+                foreach (var permission in PermissionNames.All)
+                {
+                    options.AddPolicy(
+                        permission,
+                        policy =>
+                        {
+                            policy.RequireAuthenticatedUser();
+                            policy.AddRequirements(
+                                new PermissionRequirement(
+                                    permission));
+                        });
+                }
+
+                options.AddPolicy(
+                    PermissionEndpointAuthorizationMiddleware.DenyPolicyName,
+                    policy =>
+                        policy.RequireAssertion(
+                            _ => false));
+            });
 
         return services;
     }

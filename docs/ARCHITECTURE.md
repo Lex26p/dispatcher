@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S08A
+## 1. Состояние после V2-S08B
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -35,11 +35,15 @@ Configuration SQLite v6
 roles + role permissions + user-role assignments
       ↓
 SecurityCatalog → effective permissions
+      ↓
+PermissionRequirement / PermissionAuthorizationHandler
+      ↓
+REST + RuntimeHub permission enforcement
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, а V2-S08A добавляет durable roles/permissions и effective-permission catalog. Server permission enforcement ещё не включён и относится к V2-S08B.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, а V2-S08B применяет effective permissions к REST и RuntimeHub. Web permission visibility/enabled state остаётся V2-S08C.
 
 ## 2. Главная граница binding
 
@@ -2420,5 +2424,126 @@ audit actor records
 
 ```text
 V2-S08B — Server permission enforcement
+```
+
+## 79. Permission authorization policy boundary
+
+V2-S08B регистрирует отдельную ASP.NET Core authorization policy для каждого stable identifier из `PermissionNames`.
+
+Каждая policy содержит:
+
+```text
+RequireAuthenticatedUser
+        +
+PermissionRequirement(permission)
+        ↓
+PermissionAuthorizationHandler
+        ↓
+ClaimTypes.NameIdentifier → UserId
+        ↓
+SecurityCatalog.HasPermission(UserId, permission)
+```
+
+Handler не проверяет built-in/custom role names и не использует role claims. Cookie остаётся identity-only, поэтому effective permission определяется current `SecurityCatalog` на каждом authorization evaluation.
+
+Это даёт важное runtime-свойство:
+
+```text
+cookie already issued
+        +
+current SecurityCatalog user disabled / permission removed
+        ↓
+protected request denied
+```
+
+Перевыпуск cookie для применения текущей authorization configuration не требуется.
+
+## 80. Server permission matrix и HTTP semantics
+
+V2-S08B централизует mapping существующих REST/SignalR boundaries к permissions:
+
+```text
+GET/HEAD /api/tags
+GET/HEAD /api/devices
+GET/HEAD /api/configuration/modbus/*
+GET/HEAD /api/configuration/snmp/*
+GET/HEAD /api/configuration/historian/*
+GET/HEAD /api/history
+GET/HEAD /api/events
+GET/HEAD /api/mimics/*
+    → Runtime.Read
+
+/hubs/runtime
+    → Runtime.Read
+
+POST /api/tags/{tagId}/write
+    → Tags.Write
+
+non-read /api/configuration/modbus/*
+non-read /api/configuration/snmp/*
+    → Devices.Edit
+
+non-read /api/configuration/mimics/*
+    → Mimics.Edit
+
+non-read /api/configuration/historian/*
+    → Historian.Configure
+```
+
+Public boundaries сохраняются намеренно:
+
+```text
+/health
+/api/auth/login
+/api/auth/logout
+/api/auth/current
+static Web application assets/routes
+```
+
+Unknown non-read `/api` path не получает implicit read permission и fail-closed через deny policy до появления явной permission mapping.
+
+Response semantics:
+
+```text
+anonymous + protected boundary
+    → 401 Unauthorized
+
+authenticated + missing permission
+    → 403 Forbidden
+
+authenticated + permission
+    → endpoint normal semantics
+```
+
+Cookie handler для login/access-denied challenge возвращает status code вместо redirect, чтобы REST/SignalR clients не получали HTML navigation вместо `401/403`.
+
+## 81. V2-S08B scope boundary
+
+После V2-S08B есть:
+
+```text
+durable roles/permissions/assignments
+current effective-permission SecurityCatalog
+permission requirements + handler
+REST permission enforcement
+RuntimeHub permission enforcement
+401 anonymous / 403 insufficient permission
+fail-closed unmapped API mutations
+```
+
+Ещё нет:
+
+```text
+Web effective-permission projection
+permission-aware service navigation
+permission-aware mutation enabled state
+Users/Roles management API/Web
+audit actor records
+```
+
+Следующий шаг:
+
+```text
+V2-S08C — Web permission visibility/enabled state
 ```
 

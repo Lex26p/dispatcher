@@ -34,7 +34,9 @@ public sealed class AuthenticationApiTests
 
         using var factory =
             TestDispatcherFactory.Create(
-                database.DatabasePath);
+                database.DatabasePath,
+                authenticateAsAdministrator:
+                    false);
 
         using var client =
             factory.CreateClient(
@@ -169,7 +171,9 @@ public sealed class AuthenticationApiTests
 
         using var factory =
             TestDispatcherFactory.Create(
-                database.DatabasePath);
+                database.DatabasePath,
+                authenticateAsAdministrator:
+                    false);
 
         using var client =
             factory.CreateClient(
@@ -221,7 +225,9 @@ public sealed class AuthenticationApiTests
 
         using var factory =
             TestDispatcherFactory.Create(
-                database.DatabasePath);
+                database.DatabasePath,
+                authenticateAsAdministrator:
+                    false);
 
         using var client =
             factory.CreateClient(
