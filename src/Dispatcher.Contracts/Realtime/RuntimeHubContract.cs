@@ -7,4 +7,5 @@ public static class RuntimeHubContract
     public const string DeviceStateChanged = "DeviceStateChanged";
     public const string ConfigurationChanged = "ConfigurationChanged";
     public const string EventAdded = "EventAdded";
+    public const string AlarmChanged = "AlarmChanged";
 }

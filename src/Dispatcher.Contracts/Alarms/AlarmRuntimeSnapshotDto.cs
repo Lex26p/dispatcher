@@ -1,17 +1,17 @@
-using Dispatcher.Core.Tags;
+using Dispatcher.Contracts.Tags;
 
-namespace Dispatcher.Server.Alarms;
+namespace Dispatcher.Contracts.Alarms;
 
-public sealed record AlarmRuntimeSnapshot(
+public sealed record AlarmRuntimeSnapshotDto(
     string AlarmId,
     string Name,
     string TagId,
-    AlarmSeverity Severity,
+    AlarmSeverityDto Severity,
     string Message,
-    AlarmRuntimeState State,
+    AlarmRuntimeStateDto State,
     DateTimeOffset? RaisedAt,
     string? AcknowledgedByUserId,
     string? AcknowledgedByUserName,
     DateTimeOffset? AcknowledgedAt,
     DateTimeOffset? LastTransitionTimestamp,
-    TagValue? CurrentValue);
+    TagValueDto? CurrentValue);

@@ -982,7 +982,7 @@ Alarm имеет воспроизводимый four-state lifecycle и durable 
 
 ---
 
-## [ ] V2-S12 — Alarm ACK, realtime и Web
+## [x] V2-S12 — Alarm ACK, realtime и Web
 
 Новый operator service:
 
@@ -1016,13 +1016,26 @@ authenticated user
 + timestamp
 ```
 
-SignalR сообщает alarm transitions.
+Реализовано:
 
-Первый scope — acknowledge одной выбранной alarm instance. Bulk ACK можно добавить позже.
+- `GET /api/alarms/current` возвращает только non-normal runtime instances;
+- snapshot содержит severity, AlarmId/TagId, message, state, `RaisedAt`, ACK actor/time, last transition и current logical Tag value;
+- `GET /api/alarms/history` читает только `AlarmRaised / AlarmAcknowledged / AlarmReturned` из existing immutable Event Journal;
+- history paging сохраняет newest-first ordering и `limit + 1`/`HasMore`;
+- `POST /api/alarms/{alarmId}/acknowledge` выполняет ACK одной instance;
+- ACK endpoint требует `Alarms.Acknowledge`, а current/history reads — `Runtime.Read`;
+- verified actor берётся из authenticated principal и попадает в `AlarmAcknowledged` actor fields;
+- `RuntimeHubContract.AlarmChanged` сообщает current runtime changes;
+- operator Web `/alarms` показывает current alarms и alarm transition history;
+- current table показывает severity, TagId, state, raised time, ACK actor/time, current value и message;
+- ACK control доступен только при `Alarms.Acknowledge`;
+- existing Alarm Editor перенесён на `/alarms/editor` и по-прежнему требует `Runtime.Read + Alarms.Configure`;
+- operational schema остаётся `3`, configuration schema — `7`;
+- bulk ACK, shelving, suppression и groups не добавлены.
 
 ### Результат Phase 8
 
-Dispatcher имеет полноценный минимальный alarm lifecycle с идентифицированным оператором.
+Dispatcher имеет полноценный минимальный alarm lifecycle с идентифицированным оператором: definition → runtime transition → current/realtime projection → permission-protected ACK → immutable actor-aware history.
 
 ---
 

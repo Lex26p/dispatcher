@@ -507,6 +507,107 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
         return events;
     }
 
+    public async Task<IReadOnlyList<EventRecord>> QueryAlarmEventsAsync(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (from > to)
+        {
+            throw new ArgumentException(
+                "'from' must be less than or equal to 'to'.");
+        }
+
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(offset),
+                "Alarm history query offset cannot be negative.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(limit),
+                "Alarm history query limit must be greater than zero.");
+        }
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                event_id,
+                timestamp_utc_ticks,
+                category,
+                type,
+                severity,
+                source,
+                message,
+                data_json,
+                actor_user_id,
+                actor_user_name
+            FROM events
+            WHERE timestamp_utc_ticks >= $fromUtcTicks
+              AND timestamp_utc_ticks <= $toUtcTicks
+              AND type IN (
+                  $raisedType,
+                  $acknowledgedType,
+                  $returnedType)
+            ORDER BY
+                timestamp_utc_ticks DESC,
+                event_id DESC
+            LIMIT $limit
+            OFFSET $offset;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$fromUtcTicks",
+            from.UtcDateTime.Ticks);
+        command.Parameters.AddWithValue(
+            "$toUtcTicks",
+            to.UtcDateTime.Ticks);
+        command.Parameters.AddWithValue(
+            "$raisedType",
+            EventTypes.AlarmRaised);
+        command.Parameters.AddWithValue(
+            "$acknowledgedType",
+            EventTypes.AlarmAcknowledged);
+        command.Parameters.AddWithValue(
+            "$returnedType",
+            EventTypes.AlarmReturned);
+        command.Parameters.AddWithValue(
+            "$limit",
+            limit);
+        command.Parameters.AddWithValue(
+            "$offset",
+            offset);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        var events =
+            new List<EventRecord>();
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            events.Add(
+                ReadEvent(
+                    reader));
+        }
+
+        return events;
+    }
+
     public async Task<IReadOnlyList<EventRecord>> LoadAllEventsAsync(
         CancellationToken cancellationToken = default)
     {

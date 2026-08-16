@@ -352,7 +352,8 @@ Server authorization
 События           → Runtime.Read
 Редактор устройств → Runtime.Read + Devices.Edit
 Редактор мнемосхем → Runtime.Read + Mimics.Edit
-Тревоги            → Runtime.Read + Alarms.Configure
+Тревоги            → Runtime.Read
+Редактор тревог      → Runtime.Read + Alarms.Configure
 ```
 
 Dedicated editor service без edit permission не должен показываться как доступный workflow. Если пользователь вручную открывает такой URL, обычный global header сохраняется, но editor workspace не рендерится; вместо него показывается компактное состояние «Недостаточно прав» с требуемыми permission identifiers.
@@ -434,14 +435,14 @@ Roles.Manage only → no GET /api/security/users
 
 ## 19. Alarm Editor
 
-V2-S10B добавляет service:
+Engineering Alarm Editor после V2-S12 находится отдельно от operator runtime:
 
 ```text
-/alarms
-Тревоги
+/alarms/editor
+Редактор тревог
 ```
 
-Global navigation показывает его только при:
+Global navigation показывает editor только при:
 
 ```text
 Runtime.Read + Alarms.Configure
@@ -474,8 +475,79 @@ Message
 
 Persisted `AlarmId` read-only. Новый definition редактирует ID до первого Save. `TagId` выбирается из current Modbus/SNMP logical tags. Stale persisted binding не скрывается: selector показывает старый ID и explicit warning; Save остаётся недоступным, пока не выбран current tag.
 
-`DigitalTrue/DigitalFalse` не показывают numeric fields. `High/Low` показывают Threshold и Hysteresis. Это только configuration UX: экран не отображает Active/Acknowledged state и не пытается применять delay/hysteresis самостоятельно до V2-S11/V2-S12.
+`DigitalTrue/DigitalFalse` не показывают numeric fields. `High/Low` показывают Threshold и Hysteresis. Это только configuration UX: editor не вычисляет Active/Acknowledged state и не применяет delay/hysteresis самостоятельно; runtime state показывается отдельным operator screen `/alarms`.
 
 Dirty draft обозначается compact `несохранено`. Selection change и Refresh при dirty state требуют подтверждения discard. Server validation/error (`ProblemDetails.detail`) показывается в рабочей области рядом с toolbar.
 
 Client route visibility не является security mechanism; S10A Server authorization остаётся окончательной authority.
+
+
+## 20. Alarm operator runtime
+
+V2-S12 добавляет operator service:
+
+```text
+/alarms
+Тревоги
+```
+
+Global navigation показывает его при:
+
+```text
+Runtime.Read
+```
+
+`Alarms.Acknowledge` не требуется для просмотра: permission управляет только ACK action.
+
+Spatial model:
+
+```text
+┌──────────────┬───────────────────────────────────────────┬─────────────────┐
+│ Текущие      │ compact toolbar + dense current/history  │ selected alarm  │
+│ История      │ table                                     │ / event details │
+└──────────────┴───────────────────────────────────────────┴─────────────────┘
+```
+
+Left local navigation переключает:
+
+```text
+Текущие
+История
+```
+
+Current table обязательно показывает без открытия properties:
+
+```text
+Severity
+Alarm name / AlarmId
+TagId
+State
+Raised time
+ACK actor/time
+Current value
+Message
+```
+
+State не сводится к одному boolean badge. Явно различаются:
+
+```text
+Active / Unack
+Active / Ack
+Returned / Unack
+```
+
+Right properties повторяет полную identity/state информацию selected alarm и содержит единственную ACK action. Кнопка доступна только когда:
+
+```text
+state = ActiveUnacknowledged OR ReturnedUnacknowledged
+AND
+current user has Alarms.Acknowledge
+```
+
+Если ACK permission отсутствует, alarm остаётся полностью видимой как operational information; скрывается/заменяется только mutation control. Server permission boundary остаётся authoritative.
+
+History — отдельная dense table persisted `AlarmRaised / AlarmAcknowledged / AlarmReturned`. Toolbar даёт time presets, local from/to, row limit и paging. Realtime `EventAdded` не заменяет historical REST query; новые persisted transitions могут показываться как compact `Новые` indicator.
+
+Operator screen показывает состояние Alarm SignalR connection. `AlarmChanged` меняет current lifecycle list, а existing `TagChanged` обновляет current value visible alarms.
+
+Bulk ACK, shelving/suppression controls и alarm groups в V2-S12 отсутствуют.

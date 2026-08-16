@@ -1,0 +1,864 @@
+@page "/alarms"
+@implements IDisposable
+@using System.Text.Json
+@inject AlarmRuntimeClient AlarmRuntime
+@inject AuthenticationClient Authentication
+
+<PageTitle>Dispatcher — Тревоги</PageTitle>
+
+<div class="alarm-runtime-shell">
+    <aside class="alarm-runtime-nav">
+        <div class="alarm-runtime-panel-heading">Тревоги</div>
+
+        <button type="button"
+                class="alarm-runtime-nav-item @(_section == AlarmSection.Current ? "active" : string.Empty)"
+                @onclick="ShowCurrent">
+            <span>Текущие</span>
+            <span class="alarm-runtime-count">@_current.Count</span>
+        </button>
+
+        <button type="button"
+                class="alarm-runtime-nav-item @(_section == AlarmSection.History ? "active" : string.Empty)"
+                @onclick="ShowHistoryAsync">
+            <span>История</span>
+            @if (_pendingHistoryCount > 0)
+            {
+                <span class="alarm-runtime-count new">@_pendingHistoryCount</span>
+            }
+        </button>
+
+        <div class="alarm-runtime-nav-note">
+            Current state приходит из Alarm runtime. История — только persisted AlarmRaised / AlarmAcknowledged / AlarmReturned.
+        </div>
+    </aside>
+
+    <main class="alarm-runtime-workspace">
+        <div class="alarm-runtime-toolbar">
+            @if (_section == AlarmSection.Current)
+            {
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@_busy"
+                        @onclick="LoadCurrentAsync">
+                    @(_busy ? "Обновление…" : "Обновить")
+                </button>
+
+                <span class="alarm-runtime-summary">
+                    Текущих: @_current.Count
+                </span>
+            }
+            else
+            {
+                <button type="button"
+                        class="alarm-runtime-preset"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromMinutes(15))">
+                    15 мин
+                </button>
+                <button type="button"
+                        class="alarm-runtime-preset"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(1))">
+                    1 ч
+                </button>
+                <button type="button"
+                        class="alarm-runtime-preset"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(6))">
+                    6 ч
+                </button>
+                <button type="button"
+                        class="alarm-runtime-preset"
+                        @onclick="() => ApplyPresetAsync(TimeSpan.FromHours(24))">
+                    24 ч
+                </button>
+
+                <label class="alarm-runtime-time-field">
+                    <span>От</span>
+                    <input type="datetime-local"
+                           step="1"
+                           @bind="_historyFromLocal" />
+                </label>
+
+                <label class="alarm-runtime-time-field">
+                    <span>До</span>
+                    <input type="datetime-local"
+                           step="1"
+                           @bind="_historyToLocal" />
+                </label>
+
+                <label class="alarm-runtime-limit-field">
+                    <span>Строк</span>
+                    <select @bind="_historyLimit">
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </label>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@_busy"
+                        @onclick="QueryHistoryFirstPageAsync">
+                    @(_busy ? "Запрос…" : "Обновить")
+                </button>
+
+                @if (_pendingHistoryCount > 0)
+                {
+                    <button type="button"
+                            class="alarm-runtime-new"
+                            @onclick="ShowNewHistoryAsync">
+                        Новые: @_pendingHistoryCount
+                    </button>
+                }
+            }
+
+            <div class="alarm-runtime-toolbar-spacer"></div>
+
+            <span class="alarm-runtime-realtime @RealtimeCssClass"
+                  title="@AlarmRuntime.LastError">
+                @RealtimeLabel
+            </span>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alarm-runtime-error">@_error</div>
+        }
+
+        @if (_section == AlarmSection.Current)
+        {
+            <div class="alarm-runtime-table-wrap">
+                @if (_busy && _current.Count == 0)
+                {
+                    <div class="alarm-runtime-empty">Загрузка текущих тревог…</div>
+                }
+                else if (_current.Count == 0)
+                {
+                    <div class="alarm-runtime-empty">Текущих тревог нет.</div>
+                }
+                else
+                {
+                    <table class="alarm-runtime-table">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Alarm</th>
+                                <th>TagId</th>
+                                <th>State</th>
+                                <th>Raised</th>
+                                <th>ACK</th>
+                                <th>Current value</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var alarm in OrderedCurrent)
+                            {
+                                <tr class="@(IsSelected(alarm.AlarmId) ? "selected" : string.Empty)"
+                                    @onclick="() => SelectAlarm(alarm.AlarmId)">
+                                    <td>
+                                        <span class="alarm-severity @SeverityCss(alarm.Severity)">
+                                            @alarm.Severity
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="alarm-runtime-name">@alarm.Name</div>
+                                        <div class="alarm-runtime-id">@alarm.AlarmId</div>
+                                    </td>
+                                    <td class="alarm-runtime-mono">@alarm.TagId</td>
+                                    <td>
+                                        <span class="alarm-state @StateCss(alarm.State)">
+                                            @StateLabel(alarm.State)
+                                        </span>
+                                    </td>
+                                    <td>@FormatTimestamp(alarm.RaisedAt)</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(alarm.AcknowledgedByUserName))
+                                        {
+                                            <div>@alarm.AcknowledgedByUserName</div>
+                                            <div class="alarm-runtime-muted">@FormatTimestamp(alarm.AcknowledgedAt)</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="alarm-runtime-muted">—</span>
+                                        }
+                                    </td>
+                                    <td class="alarm-runtime-mono">@FormatValue(alarm.CurrentValue?.Value)</td>
+                                    <td class="alarm-runtime-message-cell">@alarm.Message</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="alarm-runtime-history-summary">
+                <span>страница @_historyPage</span>
+                <span>@_history.Count событий</span>
+                @if (_historyResult?.HasMore == true)
+                {
+                    <span>есть следующая страница</span>
+                }
+            </div>
+
+            <div class="alarm-runtime-table-wrap">
+                @if (_busy && _history.Count == 0)
+                {
+                    <div class="alarm-runtime-empty">Загрузка истории тревог…</div>
+                }
+                else if (_history.Count == 0)
+                {
+                    <div class="alarm-runtime-empty">В выбранном диапазоне alarm transitions нет.</div>
+                }
+                else
+                {
+                    <table class="alarm-runtime-table history">
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Severity</th>
+                                <th>Transition</th>
+                                <th>Alarm</th>
+                                <th>Actor</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var record in _history)
+                            {
+                                <tr class="@(_selectedEventId == record.EventId ? "selected" : string.Empty)"
+                                    @onclick="() => SelectHistory(record.EventId)">
+                                    <td>@record.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")</td>
+                                    <td>
+                                        <span class="alarm-severity @EventSeverityCss(record.Severity)">
+                                            @record.Severity
+                                        </span>
+                                    </td>
+                                    <td>@record.Type</td>
+                                    <td class="alarm-runtime-mono">@record.Source</td>
+                                    <td>@(record.ActorUserName ?? "—")</td>
+                                    <td class="alarm-runtime-message-cell">@record.Message</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="alarm-runtime-paging">
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(_busy || _historyPage <= 1)"
+                        @onclick="PreviousHistoryPageAsync">
+                    Назад
+                </button>
+                <span>Страница @_historyPage</span>
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(_busy || _historyResult?.HasMore != true)"
+                        @onclick="NextHistoryPageAsync">
+                    Далее
+                </button>
+            </div>
+        }
+    </main>
+
+    <aside class="alarm-runtime-properties">
+        <div class="alarm-runtime-panel-heading">Свойства</div>
+
+        @if (_section == AlarmSection.Current)
+        {
+            @if (SelectedAlarm is null)
+            {
+                <div class="alarm-runtime-empty properties">Выберите текущую тревогу.</div>
+            }
+            else
+            {
+                <dl class="alarm-runtime-details">
+                    <dt>AlarmId</dt>
+                    <dd class="alarm-runtime-mono">@SelectedAlarm.AlarmId</dd>
+                    <dt>Name</dt>
+                    <dd>@SelectedAlarm.Name</dd>
+                    <dt>TagId</dt>
+                    <dd class="alarm-runtime-mono">@SelectedAlarm.TagId</dd>
+                    <dt>Severity</dt>
+                    <dd>@SelectedAlarm.Severity</dd>
+                    <dt>State</dt>
+                    <dd>@StateLabel(SelectedAlarm.State)</dd>
+                    <dt>Raised</dt>
+                    <dd>@FormatTimestamp(SelectedAlarm.RaisedAt)</dd>
+                    <dt>ACK by</dt>
+                    <dd>@(SelectedAlarm.AcknowledgedByUserName ?? "—")</dd>
+                    <dt>ACK at</dt>
+                    <dd>@FormatTimestamp(SelectedAlarm.AcknowledgedAt)</dd>
+                    <dt>Current value</dt>
+                    <dd class="alarm-runtime-mono">@FormatValue(SelectedAlarm.CurrentValue?.Value)</dd>
+                    <dt>Value timestamp</dt>
+                    <dd>@FormatTimestamp(SelectedAlarm.CurrentValue?.Timestamp)</dd>
+                    <dt>Message</dt>
+                    <dd>@SelectedAlarm.Message</dd>
+                </dl>
+
+                @if (CanAcknowledgeSelected)
+                {
+                    <button type="button"
+                            class="toolbar-button primary alarm-runtime-ack"
+                            disabled="@_ackBusy"
+                            @onclick="AcknowledgeSelectedAsync">
+                        @(_ackBusy ? "ACK…" : "Подтвердить (ACK)")
+                    </button>
+                }
+                else if (IsAckable(
+                             SelectedAlarm.State))
+                {
+                    <div class="alarm-runtime-permission-note">
+                        Для ACK требуется @PermissionNames.AlarmsAcknowledge.
+                    </div>
+                }
+            }
+        }
+        else
+        {
+            @if (SelectedHistory is null)
+            {
+                <div class="alarm-runtime-empty properties">Выберите transition в истории.</div>
+            }
+            else
+            {
+                <dl class="alarm-runtime-details">
+                    <dt>EventId</dt>
+                    <dd>@SelectedHistory.EventId</dd>
+                    <dt>Timestamp</dt>
+                    <dd>@SelectedHistory.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")</dd>
+                    <dt>Type</dt>
+                    <dd>@SelectedHistory.Type</dd>
+                    <dt>Severity</dt>
+                    <dd>@SelectedHistory.Severity</dd>
+                    <dt>AlarmId</dt>
+                    <dd class="alarm-runtime-mono">@SelectedHistory.Source</dd>
+                    <dt>Actor</dt>
+                    <dd>@(SelectedHistory.ActorUserName ?? "—")</dd>
+                    <dt>Actor UserId</dt>
+                    <dd class="alarm-runtime-mono">@(SelectedHistory.ActorUserId ?? "—")</dd>
+                    <dt>Message</dt>
+                    <dd>@SelectedHistory.Message</dd>
+                    <dt>DataJson</dt>
+                    <dd><pre class="alarm-runtime-json">@PrettyJson(SelectedHistory.DataJson)</pre></dd>
+                </dl>
+            }
+        }
+    </aside>
+</div>
+
+@code {
+    private readonly List<AlarmRuntimeSnapshotDto> _current = [];
+    private readonly List<EventRecordDto> _history = [];
+
+    private AlarmSection _section = AlarmSection.Current;
+    private string? _selectedAlarmId;
+    private long? _selectedEventId;
+    private AlarmHistoryQueryResponseDto? _historyResult;
+    private DateTime _historyFromLocal = DateTime.Now.AddHours(-1);
+    private DateTime _historyToLocal = DateTime.Now;
+    private int _historyPage = 1;
+    private int _historyLimit = 200;
+    private int _pendingHistoryCount;
+    private bool _busy;
+    private bool _ackBusy;
+    private string? _error;
+
+    private IEnumerable<AlarmRuntimeSnapshotDto> OrderedCurrent =>
+        _current
+            .OrderByDescending(alarm => SeverityRank(alarm.Severity))
+            .ThenBy(alarm => StateRank(alarm.State))
+            .ThenBy(alarm => alarm.RaisedAt)
+            .ThenBy(alarm => alarm.AlarmId, StringComparer.Ordinal);
+
+    private AlarmRuntimeSnapshotDto? SelectedAlarm =>
+        _selectedAlarmId is null
+            ? null
+            : _current.FirstOrDefault(alarm =>
+                string.Equals(
+                    alarm.AlarmId,
+                    _selectedAlarmId,
+                    StringComparison.Ordinal));
+
+    private EventRecordDto? SelectedHistory =>
+        _selectedEventId is null
+            ? null
+            : _history.FirstOrDefault(record =>
+                record.EventId == _selectedEventId.Value);
+
+    private bool CanAcknowledgeSelected =>
+        SelectedAlarm is not null
+        && IsAckable(
+            SelectedAlarm.State)
+        && Authentication.HasPermission(
+            PermissionNames.AlarmsAcknowledge);
+
+    private string RealtimeLabel =>
+        AlarmRuntime.ConnectionState switch
+        {
+            AlarmRealtimeConnectionState.Connected => "Realtime: подключено",
+            AlarmRealtimeConnectionState.Connecting => "Realtime: подключение",
+            AlarmRealtimeConnectionState.Reconnecting => "Realtime: переподключение",
+            _ => "Realtime: отключено"
+        };
+
+    private string RealtimeCssClass =>
+        AlarmRuntime.ConnectionState switch
+        {
+            AlarmRealtimeConnectionState.Connected => "connected",
+            AlarmRealtimeConnectionState.Connecting => "connecting",
+            AlarmRealtimeConnectionState.Reconnecting => "connecting",
+            _ => "disconnected"
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        AlarmRuntime.AlarmChanged += OnAlarmChanged;
+        AlarmRuntime.AlarmEventAdded += OnAlarmEventAdded;
+        AlarmRuntime.TagChanged += OnTagChanged;
+        AlarmRuntime.ConnectionChanged += OnConnectionChanged;
+
+        await LoadCurrentAsync();
+        await AlarmRuntime.StartRealtimeAsync();
+    }
+
+    private async Task LoadCurrentAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var items =
+                await AlarmRuntime.GetCurrentAsync();
+
+            _current.Clear();
+            _current.AddRange(items);
+
+            if (_selectedAlarmId is not null
+                && SelectedAlarm is null)
+            {
+                _selectedAlarmId = null;
+            }
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ShowCurrent()
+    {
+        _section = AlarmSection.Current;
+        _error = null;
+    }
+
+    private async Task ShowHistoryAsync()
+    {
+        _section = AlarmSection.History;
+
+        if (_historyResult is null)
+        {
+            await QueryHistoryFirstPageAsync();
+        }
+    }
+
+    private async Task ApplyPresetAsync(
+        TimeSpan duration)
+    {
+        _historyToLocal = DateTime.Now;
+        _historyFromLocal = _historyToLocal - duration;
+        await QueryHistoryFirstPageAsync();
+    }
+
+    private Task QueryHistoryFirstPageAsync()
+    {
+        _historyPage = 1;
+        return QueryHistoryAsync();
+    }
+
+    private async Task QueryHistoryAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var from =
+                new DateTimeOffset(
+                    _historyFromLocal);
+            var to =
+                new DateTimeOffset(
+                    _historyToLocal);
+
+            _historyResult =
+                await AlarmRuntime.QueryHistoryAsync(
+                    from,
+                    to,
+                    _historyPage,
+                    _historyLimit);
+
+            _history.Clear();
+            _history.AddRange(
+                _historyResult.Items);
+            _pendingHistoryCount = 0;
+
+            if (_selectedEventId is not null
+                && SelectedHistory is null)
+            {
+                _selectedEventId = null;
+            }
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PreviousHistoryPageAsync()
+    {
+        if (_historyPage <= 1)
+        {
+            return;
+        }
+
+        _historyPage--;
+        await QueryHistoryAsync();
+    }
+
+    private async Task NextHistoryPageAsync()
+    {
+        if (_historyResult?.HasMore != true)
+        {
+            return;
+        }
+
+        _historyPage++;
+        await QueryHistoryAsync();
+    }
+
+    private async Task ShowNewHistoryAsync()
+    {
+        _historyToLocal = DateTime.Now;
+        _historyPage = 1;
+        await QueryHistoryAsync();
+    }
+
+    private void SelectAlarm(
+        string alarmId)
+    {
+        _selectedAlarmId = alarmId;
+    }
+
+    private void SelectHistory(
+        long eventId)
+    {
+        _selectedEventId = eventId;
+    }
+
+    private bool IsSelected(
+        string alarmId)
+    {
+        return string.Equals(
+            _selectedAlarmId,
+            alarmId,
+            StringComparison.Ordinal);
+    }
+
+    private async Task AcknowledgeSelectedAsync()
+    {
+        var selected =
+            SelectedAlarm;
+
+        if (selected is null
+            || !CanAcknowledgeSelected
+            || _ackBusy)
+        {
+            return;
+        }
+
+        _ackBusy = true;
+        _error = null;
+
+        try
+        {
+            var updated =
+                await AlarmRuntime.AcknowledgeAsync(
+                    selected.AlarmId);
+
+            ApplyAlarmSnapshot(
+                updated);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _ackBusy = false;
+        }
+    }
+
+    private void OnAlarmChanged(
+        AlarmRuntimeSnapshotDto snapshot)
+    {
+        _ = InvokeAsync(
+            () =>
+            {
+                ApplyAlarmSnapshot(
+                    snapshot);
+                StateHasChanged();
+            });
+    }
+
+    private void ApplyAlarmSnapshot(
+        AlarmRuntimeSnapshotDto snapshot)
+    {
+        var index =
+            _current.FindIndex(alarm =>
+                string.Equals(
+                    alarm.AlarmId,
+                    snapshot.AlarmId,
+                    StringComparison.Ordinal));
+
+        if (snapshot.State == AlarmRuntimeStateDto.Normal)
+        {
+            if (index >= 0)
+            {
+                _current.RemoveAt(index);
+            }
+
+            if (string.Equals(
+                    _selectedAlarmId,
+                    snapshot.AlarmId,
+                    StringComparison.Ordinal))
+            {
+                _selectedAlarmId = null;
+            }
+
+            return;
+        }
+
+        if (index >= 0)
+        {
+            _current[index] = snapshot;
+        }
+        else
+        {
+            _current.Add(snapshot);
+        }
+    }
+
+    private void OnTagChanged(
+        TagValueDto value)
+    {
+        _ = InvokeAsync(
+            () =>
+            {
+                for (var index = 0;
+                     index < _current.Count;
+                     index++)
+                {
+                    var alarm =
+                        _current[index];
+
+                    if (string.Equals(
+                            alarm.TagId,
+                            value.TagId,
+                            StringComparison.Ordinal))
+                    {
+                        _current[index] =
+                            alarm with
+                            {
+                                CurrentValue =
+                                    value
+                            };
+                    }
+                }
+
+                StateHasChanged();
+            });
+    }
+
+    private void OnAlarmEventAdded(
+        EventRecordDto record)
+    {
+        _ = InvokeAsync(
+            () =>
+            {
+                if (_historyResult is not null)
+                {
+                    _pendingHistoryCount++;
+                    StateHasChanged();
+                }
+            });
+    }
+
+    private void OnConnectionChanged()
+    {
+        _ = InvokeAsync(
+            async () =>
+            {
+                if (AlarmRuntime.ConnectionState
+                    == AlarmRealtimeConnectionState.Connected)
+                {
+                    await LoadCurrentAsync();
+                }
+
+                StateHasChanged();
+            });
+    }
+
+    private static bool IsAckable(
+        AlarmRuntimeStateDto state)
+    {
+        return state == AlarmRuntimeStateDto.ActiveUnacknowledged
+            || state == AlarmRuntimeStateDto.ReturnedUnacknowledged;
+    }
+
+    private static int SeverityRank(
+        AlarmSeverityDto severity)
+    {
+        return severity switch
+        {
+            AlarmSeverityDto.Error => 3,
+            AlarmSeverityDto.Warning => 2,
+            _ => 1
+        };
+    }
+
+    private static int StateRank(
+        AlarmRuntimeStateDto state)
+    {
+        return state switch
+        {
+            AlarmRuntimeStateDto.ActiveUnacknowledged => 0,
+            AlarmRuntimeStateDto.ReturnedUnacknowledged => 1,
+            AlarmRuntimeStateDto.ActiveAcknowledged => 2,
+            _ => 3
+        };
+    }
+
+    private static string SeverityCss(
+        AlarmSeverityDto severity)
+    {
+        return severity.ToString().ToLowerInvariant();
+    }
+
+    private static string EventSeverityCss(
+        EventSeverityDto severity)
+    {
+        return severity.ToString().ToLowerInvariant();
+    }
+
+    private static string StateCss(
+        AlarmRuntimeStateDto state)
+    {
+        return state switch
+        {
+            AlarmRuntimeStateDto.ActiveUnacknowledged => "active-unack",
+            AlarmRuntimeStateDto.ActiveAcknowledged => "active-ack",
+            AlarmRuntimeStateDto.ReturnedUnacknowledged => "returned-unack",
+            _ => "normal"
+        };
+    }
+
+    private static string StateLabel(
+        AlarmRuntimeStateDto state)
+    {
+        return state switch
+        {
+            AlarmRuntimeStateDto.ActiveUnacknowledged => "Active / Unack",
+            AlarmRuntimeStateDto.ActiveAcknowledged => "Active / Ack",
+            AlarmRuntimeStateDto.ReturnedUnacknowledged => "Returned / Unack",
+            _ => "Normal"
+        };
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset? timestamp)
+    {
+        return timestamp?.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")
+            ?? "—";
+    }
+
+    private static string FormatValue(
+        object? value)
+    {
+        if (value is null)
+        {
+            return "—";
+        }
+
+        if (value is JsonElement element)
+        {
+            return element.ValueKind == JsonValueKind.String
+                ? element.GetString() ?? string.Empty
+                : element.GetRawText();
+        }
+
+        return value.ToString()
+            ?? "—";
+    }
+
+    private static string PrettyJson(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "—";
+        }
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(value);
+
+            return JsonSerializer.Serialize(
+                document.RootElement,
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+        }
+        catch (JsonException)
+        {
+            return value;
+        }
+    }
+
+    public void Dispose()
+    {
+        AlarmRuntime.AlarmChanged -= OnAlarmChanged;
+        AlarmRuntime.AlarmEventAdded -= OnAlarmEventAdded;
+        AlarmRuntime.TagChanged -= OnTagChanged;
+        AlarmRuntime.ConnectionChanged -= OnConnectionChanged;
+    }
+
+    private enum AlarmSection
+    {
+        Current,
+        History
+    }
+}

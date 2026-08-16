@@ -65,6 +65,7 @@ builder.Services.AddHostedService<HistorianRetentionHostedService>();
 builder.Services.AddSingleton<HistorianPolicyService>();
 builder.Services.AddSingleton<HistoryQueryService>();
 builder.Services.AddSingleton<AlarmDefinitionService>();
+builder.Services.AddSingleton<AlarmHistoryQueryService>();
 
 builder.Services.AddSingleton(
     services =>
@@ -93,6 +94,8 @@ builder.Services.AddSingleton<AlarmRuntimeService>();
 builder.Services.AddHostedService<AlarmRuntimeService>(
     services =>
         services.GetRequiredService<AlarmRuntimeService>());
+
+builder.Services.AddHostedService<AlarmHubPublisher>();
 
 builder.Services.AddSingleton<ModbusRuntimeHostedService>();
 builder.Services.AddHostedService<ModbusRuntimeHostedService>(
@@ -173,6 +176,7 @@ app.MapPost(
 
 app.MapConfigurationEndpoints();
 app.MapAlarmDefinitionEndpoints();
+app.MapAlarmRuntimeEndpoints();
 app.MapHistorianPolicyEndpoints();
 app.MapHistoryEndpoints();
 app.MapEventEndpoints();

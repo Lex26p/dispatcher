@@ -1,0 +1,300 @@
+.alarm-runtime-shell {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr) 300px;
+    height: 100%;
+    min-height: 0;
+}
+
+.alarm-runtime-nav,
+.alarm-runtime-properties {
+    min-width: 0;
+    overflow: auto;
+    background: var(--panel-background, #171a1f);
+}
+
+.alarm-runtime-nav {
+    border-right: 1px solid var(--border-color, #343a40);
+}
+
+.alarm-runtime-properties {
+    border-left: 1px solid var(--border-color, #343a40);
+}
+
+.alarm-runtime-panel-heading {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    font-weight: 600;
+}
+
+.alarm-runtime-nav-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.alarm-runtime-nav-item:hover,
+.alarm-runtime-nav-item.active {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.alarm-runtime-count {
+    min-width: 1.5rem;
+    padding: 0.08rem 0.35rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    text-align: center;
+    font-size: 0.75rem;
+}
+
+.alarm-runtime-count.new,
+.alarm-runtime-new {
+    font-weight: 600;
+}
+
+.alarm-runtime-nav-note {
+    padding: 0.7rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    opacity: 0.7;
+}
+
+.alarm-runtime-workspace {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.alarm-runtime-toolbar {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.55rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    flex-wrap: wrap;
+}
+
+.alarm-runtime-toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.alarm-runtime-summary,
+.alarm-runtime-history-summary,
+.alarm-runtime-realtime {
+    font-size: 0.78rem;
+    opacity: 0.8;
+}
+
+.alarm-runtime-realtime.connected {
+    opacity: 1;
+}
+
+.alarm-runtime-realtime.disconnected {
+    opacity: 0.65;
+}
+
+.alarm-runtime-preset,
+.alarm-runtime-new {
+    padding: 0.32rem 0.5rem;
+    border: 1px solid var(--border-color, #343a40);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.alarm-runtime-time-field,
+.alarm-runtime-limit-field {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-size: 0.75rem;
+}
+
+.alarm-runtime-time-field input,
+.alarm-runtime-limit-field select {
+    min-height: 28px;
+}
+
+.alarm-runtime-error {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    background: rgba(180, 45, 45, 0.17);
+    font-size: 0.82rem;
+}
+
+.alarm-runtime-history-summary {
+    display: flex;
+    gap: 1rem;
+    padding: 0.3rem 0.55rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+}
+
+.alarm-runtime-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.alarm-runtime-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.alarm-runtime-table th,
+.alarm-runtime-table td {
+    padding: 0.34rem 0.45rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    vertical-align: top;
+    text-align: left;
+}
+
+.alarm-runtime-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel-background, #171a1f);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.alarm-runtime-table tbody tr {
+    cursor: pointer;
+}
+
+.alarm-runtime-table tbody tr:hover,
+.alarm-runtime-table tbody tr.selected {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.alarm-runtime-name {
+    font-weight: 600;
+}
+
+.alarm-runtime-id,
+.alarm-runtime-muted {
+    opacity: 0.62;
+    font-size: 0.72rem;
+}
+
+.alarm-runtime-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.alarm-runtime-message-cell {
+    max-width: 28rem;
+}
+
+.alarm-severity,
+.alarm-state {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.alarm-severity.information {
+    background: rgba(70, 120, 190, 0.18);
+}
+
+.alarm-severity.warning {
+    background: rgba(190, 145, 40, 0.22);
+}
+
+.alarm-severity.error {
+    background: rgba(190, 55, 55, 0.24);
+}
+
+.alarm-state.active-unack {
+    background: rgba(190, 55, 55, 0.24);
+}
+
+.alarm-state.active-ack {
+    background: rgba(190, 145, 40, 0.20);
+}
+
+.alarm-state.returned-unack {
+    background: rgba(90, 130, 180, 0.20);
+}
+
+.alarm-runtime-empty {
+    padding: 0.8rem;
+    opacity: 0.68;
+}
+
+.alarm-runtime-empty.properties {
+    font-size: 0.8rem;
+}
+
+.alarm-runtime-details {
+    display: grid;
+    grid-template-columns: 105px minmax(0, 1fr);
+    gap: 0;
+    margin: 0;
+    font-size: 0.78rem;
+}
+
+.alarm-runtime-details dt,
+.alarm-runtime-details dd {
+    margin: 0;
+    padding: 0.34rem 0.5rem;
+    border-bottom: 1px solid var(--border-color, #343a40);
+    overflow-wrap: anywhere;
+}
+
+.alarm-runtime-details dt {
+    opacity: 0.65;
+}
+
+.alarm-runtime-json {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.72rem;
+}
+
+.alarm-runtime-ack {
+    margin: 0.65rem;
+    width: calc(100% - 1.3rem);
+}
+
+.alarm-runtime-permission-note {
+    margin: 0.65rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color, #343a40);
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.alarm-runtime-paging {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0.4rem;
+    border-top: 1px solid var(--border-color, #343a40);
+    font-size: 0.78rem;
+}
+
+@media (max-width: 1100px) {
+    .alarm-runtime-shell {
+        grid-template-columns: 180px minmax(0, 1fr);
+    }
+
+    .alarm-runtime-properties {
+        display: none;
+    }
+}

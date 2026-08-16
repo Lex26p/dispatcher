@@ -119,6 +119,24 @@ public sealed class PermissionEndpointAuthorizationMiddleware
         }
 
         if (path.StartsWithSegments(
+                "/api/alarms"))
+        {
+            if (HttpMethods.IsPost(
+                    request.Method)
+                && path.Value?.EndsWith(
+                    "/acknowledge",
+                    StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return PermissionNames.AlarmsAcknowledge;
+            }
+
+            return IsReadMethod(
+                    request.Method)
+                ? PermissionNames.RuntimeRead
+                : DenyPolicyName;
+        }
+
+        if (path.StartsWithSegments(
                 "/api/configuration/modbus")
             || path.StartsWithSegments(
                 "/api/configuration/snmp"))

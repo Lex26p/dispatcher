@@ -93,6 +93,8 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
+    public event Action<AlarmRuntimeSnapshot>? Changed;
+
     public IReadOnlyList<AlarmRuntimeSnapshot> GetAll()
     {
         lock (_gate)
@@ -142,10 +144,19 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
                 if (!_configuration.ContainsTagId(
                         entry.Definition.TagId))
                 {
-                    entry.State =
-                        AlarmRuntimeState.Normal;
-                    entry.LastTransitionTimestamp =
-                        null;
+                    var changed =
+                        entry.State != AlarmRuntimeState.Normal
+                        || entry.RaisedAt is not null
+                        || entry.AcknowledgedAt is not null;
+
+                    ResetLifecycleLocked(
+                        entry);
+
+                    if (changed)
+                    {
+                        NotifyChangedLocked(
+                            entry);
+                    }
                 }
             }
         }
@@ -201,6 +212,12 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
 
             entry.LastTransitionTimestamp =
                 transitionTimestamp;
+            entry.AcknowledgedAt =
+                transitionTimestamp;
+            entry.AcknowledgedByUserId =
+                actor?.UserId;
+            entry.AcknowledgedByUserName =
+                actor?.UserName;
 
             PublishTransitionLocked(
                 entry,
@@ -212,8 +229,14 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
                     null,
                 actor);
 
-            return CreateSnapshot(
-                entry);
+            var snapshot =
+                CreateSnapshot(
+                    entry);
+
+            NotifyChangedLocked(
+                snapshot);
+
+            return snapshot;
         }
     }
 
@@ -279,6 +302,15 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
 
             CancelPendingRaiseLocked(
                 removed);
+
+            if (removed.State != AlarmRuntimeState.Normal)
+            {
+                removed.State =
+                    AlarmRuntimeState.Normal;
+                NotifyChangedLocked(
+                    removed);
+            }
+
             _entries.Remove(
                 removedId);
         }
@@ -292,22 +324,48 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
                     definition.AlarmId,
                     out var entry))
             {
+                var previousDefinition =
+                    entry.Definition;
+                var definitionChanged =
+                    !Equals(
+                        previousDefinition,
+                        definition);
+
                 if (HasEvaluationSemanticsChanged(
-                        entry.Definition,
+                        previousDefinition,
                         definition))
                 {
+                    var wasVisible =
+                        entry.State != AlarmRuntimeState.Normal;
+
                     CancelPendingRaiseLocked(
                         entry);
-                    entry.State =
-                        AlarmRuntimeState.Normal;
-                    entry.LastTransitionTimestamp =
-                        null;
+                    ResetLifecycleLocked(
+                        entry);
                     shouldEvaluate =
                         definition.Enabled;
-                }
 
-                entry.Definition =
-                    definition;
+                    entry.Definition =
+                        definition;
+
+                    if (wasVisible)
+                    {
+                        NotifyChangedLocked(
+                            entry);
+                    }
+                }
+                else
+                {
+                    entry.Definition =
+                        definition;
+
+                    if (definitionChanged
+                        && entry.State != AlarmRuntimeState.Normal)
+                    {
+                        NotifyChangedLocked(
+                            entry);
+                    }
+                }
             }
             else
             {
@@ -323,12 +381,20 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
 
             if (!definition.Enabled)
             {
+                var wasVisible =
+                    entry.State != AlarmRuntimeState.Normal;
+
                 CancelPendingRaiseLocked(
                     entry);
-                entry.State =
-                    AlarmRuntimeState.Normal;
-                entry.LastTransitionTimestamp =
-                    null;
+                ResetLifecycleLocked(
+                    entry);
+
+                if (wasVisible)
+                {
+                    NotifyChangedLocked(
+                        entry);
+                }
+
                 continue;
             }
 
@@ -532,6 +598,14 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
             AlarmRuntimeState.ActiveUnacknowledged;
         entry.LastTransitionTimestamp =
             timestamp.ToUniversalTime();
+        entry.RaisedAt =
+            entry.LastTransitionTimestamp;
+        entry.AcknowledgedAt =
+            null;
+        entry.AcknowledgedByUserId =
+            null;
+        entry.AcknowledgedByUserName =
+            null;
 
         PublishTransitionLocked(
             entry,
@@ -542,6 +616,9 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
             tagValue.Value,
             actor:
                 null);
+
+        NotifyChangedLocked(
+            entry);
     }
 
     private void ReturnToNormalLocked(
@@ -567,6 +644,9 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
             tagValue.Value,
             actor:
                 null);
+
+        NotifyChangedLocked(
+            entry);
     }
 
     private void PublishTransitionLocked(
@@ -876,7 +956,7 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
         };
     }
 
-    private static AlarmRuntimeSnapshot CreateSnapshot(
+    private AlarmRuntimeSnapshot CreateSnapshot(
         RuntimeEntry entry)
     {
         var definition =
@@ -889,7 +969,55 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
             definition.Severity,
             definition.Message,
             entry.State,
-            entry.LastTransitionTimestamp);
+            entry.RaisedAt,
+            entry.AcknowledgedByUserId,
+            entry.AcknowledgedByUserName,
+            entry.AcknowledgedAt,
+            entry.LastTransitionTimestamp,
+            _tagService.Get(
+                definition.TagId));
+    }
+
+    private void ResetLifecycleLocked(
+        RuntimeEntry entry)
+    {
+        entry.State =
+            AlarmRuntimeState.Normal;
+        entry.RaisedAt =
+            null;
+        entry.AcknowledgedAt =
+            null;
+        entry.AcknowledgedByUserId =
+            null;
+        entry.AcknowledgedByUserName =
+            null;
+        entry.LastTransitionTimestamp =
+            null;
+    }
+
+    private void NotifyChangedLocked(
+        RuntimeEntry entry)
+    {
+        NotifyChangedLocked(
+            CreateSnapshot(
+                entry));
+    }
+
+    private void NotifyChangedLocked(
+        AlarmRuntimeSnapshot snapshot)
+    {
+        try
+        {
+            Changed?.Invoke(
+                snapshot);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Alarm runtime change notification failed for {AlarmId}.",
+                snapshot.AlarmId);
+        }
     }
 
     public void Dispose()
@@ -934,6 +1062,14 @@ public sealed class AlarmRuntimeService : IHostedService, IDisposable
 
         public AlarmRuntimeState State { get; set; } =
             AlarmRuntimeState.Normal;
+
+        public DateTimeOffset? RaisedAt { get; set; }
+
+        public string? AcknowledgedByUserId { get; set; }
+
+        public string? AcknowledgedByUserName { get; set; }
+
+        public DateTimeOffset? AcknowledgedAt { get; set; }
 
         public DateTimeOffset? LastTransitionTimestamp { get; set; }
 

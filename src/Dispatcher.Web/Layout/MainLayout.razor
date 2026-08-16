@@ -98,13 +98,24 @@
                     </NavLink>
                 }
 
-                @if (CanEditAlarms)
+                @if (CanReadRuntime)
                 {
                     <NavLink class="global-nav-link"
                              ActiveClass="active"
                              href="alarms"
+                             Match="NavLinkMatch.All"
                              @onclick="CloseGlobalNavigation">
                         Тревоги
+                    </NavLink>
+                }
+
+                @if (CanEditAlarms)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="alarms/editor"
+                             @onclick="CloseGlobalNavigation">
+                        Редактор тревог
                     </NavLink>
                 }
 
@@ -190,6 +201,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "События";
+            }
+
+            if (path.StartsWith(
+                    "alarms/editor",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Редактор тревог";
             }
 
             if (path.StartsWith(

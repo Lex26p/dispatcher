@@ -15,6 +15,7 @@ builder.Services.AddScoped(_ => new HttpClient
 
 builder.Services.AddScoped<AuthenticationClient>();
 builder.Services.AddScoped<AlarmClient>();
+builder.Services.AddScoped<AlarmRuntimeClient>();
 builder.Services.AddScoped<SecurityManagementClient>();
 builder.Services.AddScoped<RuntimeStateClient>();
 builder.Services.AddScoped<ConfigurationClient>();

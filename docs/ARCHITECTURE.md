@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S11
+## 1. Состояние после V2-S12
 
-Application layer содержит operational services, permission-based administration, Alarm configuration editor и Alarm runtime state machine:
+Application layer содержит operational services, permission-based administration, Alarm configuration/editor, Alarm runtime state machine и operator Alarm runtime:
 
 ```text
 Protocol workers
@@ -18,6 +18,7 @@ REST + SignalR
 Device Editor  → device configuration
 Mimic Editor   → mimic definition
 Security Admin → users / roles
+Alarm runtime  → current/history + ACK
 Alarm Editor   → alarm definitions
 
 Configuration SQLite
@@ -65,7 +66,7 @@ AlarmDefinitionCatalog
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, V2-S10B завершает configuration slice Web Alarm Editor, а V2-S11 добавляет Server alarm lifecycle с delay/hysteresis и durable transition events. Server остаётся единственной authoritative authorization boundary.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, V2-S10B завершает configuration slice Web Alarm Editor, V2-S11 добавляет Server alarm lifecycle с delay/hysteresis и durable transition events, а V2-S12 раскрывает current/history/ACK через REST, SignalR и operator Web. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -3114,7 +3115,7 @@ CurrentUser.EffectivePermissions[]
         ↓
 App / MainLayout
         ↓ Runtime.Read + Alarms.Configure
-/alarms
+/alarms/editor
         ↓
 AlarmClient
         ↓
@@ -3126,6 +3127,9 @@ S10A AlarmDefinitionService / SQLite v7
 Web не получает отдельный alarm configuration cache. После create/update/delete editor перечитывает durable definitions через existing REST boundary. `AlarmClient` только сериализует public contracts и сохраняет `ProblemDetails.detail` как наблюдаемую operation error.
 
 `Runtime.Read` требуется вместе с `Alarms.Configure`, потому что editor одновременно читает alarm definitions и current Modbus/SNMP tag configuration для logical `TagId` picker. Client gating является UX projection; Server middleware по-прежнему отдельно авторизует каждый request.
+
+
+На V2-S10B editor первоначально занимал `/alarms`; V2-S12 переносит его на `/alarms/editor`, освобождая `/alarms` для operator runtime.
 
 ## 102. Alarm Editor spatial/draft model и S10 boundary
 
@@ -3356,3 +3360,143 @@ complex expression language
 ```
 
 Эти operator-facing boundaries остаются V2-S12.
+
+
+## 108. V2-S12 operator Alarm boundary
+
+V2-S12 не меняет evaluation semantics V2-S11 и не создаёт новую persistence model. Operator boundary строится поверх current `AlarmRuntimeService` и existing immutable Event Journal:
+
+```text
+AlarmRuntimeService
+   ├── GET /api/alarms/current
+   ├── POST /api/alarms/{AlarmId}/acknowledge
+   └── Changed
+          ↓
+      AlarmHubPublisher
+          ↓
+      RuntimeHub.AlarmChanged
+
+operational SQLite v3 events
+          ↓
+SqliteOperationalStore.QueryAlarmEventsAsync
+          ↓
+AlarmHistoryQueryService
+          ↓
+GET /api/alarms/history
+```
+
+Current endpoint возвращает только states, которые требуют operator visibility:
+
+```text
+ActiveUnacknowledged
+ActiveAcknowledged
+ReturnedUnacknowledged
+```
+
+`Normal` definitions не входят в current list.
+
+Public runtime snapshot:
+
+```text
+AlarmId
+Name
+TagId
+Severity
+Message
+State
+RaisedAt?
+AcknowledgedByUserId?
+AcknowledgedByUserName?
+AcknowledgedAt?
+LastTransitionTimestamp?
+CurrentValue?
+```
+
+`CurrentValue` остаётся logical `TagId` value и не содержит Modbus/SNMP addressing.
+
+## 109. ACK authorization и actor semantics
+
+Permission matrix:
+
+```text
+GET/HEAD /api/alarms/current
+GET/HEAD /api/alarms/history
+    → Runtime.Read
+
+POST /api/alarms/{AlarmId}/acknowledge
+    → Alarms.Acknowledge
+```
+
+ACK endpoint не использует role names и не требует `Alarms.Configure`: configuration authority и operator acknowledgement являются разными capabilities.
+
+После успешной Server authorization:
+
+```text
+HttpContext.User
+    ↓ EventActor.FromAuthenticatedPrincipal
+UserId + UserName
+    ↓
+AlarmRuntimeService.Acknowledge
+```
+
+Фактический transition `ActiveUnacknowledged → ActiveAcknowledged` или `ReturnedUnacknowledged → Normal` записывает `AlarmAcknowledged` с actor identity и UTC timestamp. Повторный ACK уже acknowledged/normal instance не создаёт второй audit transition.
+
+Bulk ACK в первом scope отсутствует.
+
+## 110. Alarm realtime и history
+
+`AlarmRuntimeService.Changed` публикуется для current-state changes, включая raise/return/ACK и configuration-driven removal/reset visible instance. `AlarmHubPublisher` отправляет public snapshot через existing authenticated `RuntimeHub`:
+
+```text
+RuntimeHubContract.AlarmChanged
+```
+
+Hub уже требует `Runtime.Read`, поэтому отдельный anonymous alarm channel не создаётся.
+
+Current Tag value между alarm transitions продолжает обновляться через existing `TagChanged`; Web Alarm client использует оба сообщения:
+
+```text
+AlarmChanged → lifecycle/current list
+TagChanged   → current value в visible alarm rows
+```
+
+Alarm history не фильтрует generic `/api/events` client-side после paging. `QueryAlarmEventsAsync` выполняет server-side predicate:
+
+```text
+type IN (
+  AlarmRaised,
+  AlarmAcknowledged,
+  AlarmReturned)
+```
+
+и сохраняет existing ordering:
+
+```text
+timestamp_utc_ticks DESC
+event_id DESC
+```
+
+Operational schema остаётся `3`; отдельная alarm history table не создаётся.
+
+## 111. Alarm operator Web
+
+Routes разделены:
+
+```text
+/alarms         → operator runtime → Runtime.Read
+/alarms/editor  → engineering editor → Runtime.Read + Alarms.Configure
+```
+
+Operator screen следует общему engineering layout:
+
+```text
+слева  → Текущие / История
+центр  → compact toolbar + dense current/history table
+справа → выбранная alarm/event details + single ACK
+```
+
+Current table показывает severity, AlarmId/TagId, state, raised time, ACK actor/time, current value и message. ACK action видима только при `Alarms.Acknowledge` и ackable state; окончательная authority остаётся Server middleware.
+
+History использует bounded query `100/200/500`, presets времени и paging. Persisted `EventAdded` используется как notification о новых alarm events, а historical truth перечитывается через REST.
+
+Phase 8 после V2-S12 завершена. Shelving, suppression, groups, bulk ACK и complex expressions остаются вне текущего scope.

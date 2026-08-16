@@ -1562,7 +1562,7 @@ Successful mutations используют existing actor-aware `ConfigurationCha
 
 ## D-072 — Alarm Editor использует S10A CRUD, client-side draft и `Runtime.Read + Alarms.Configure`
 
-**Status:** Accepted
+**Status:** Superseded by D-074 for route/navigation split; draft/editor semantics remain accepted
 
 V2-S10B добавляет `/alarms` как engineering editor без нового Server/storage boundary. Web читает и изменяет definitions только через S10A `/api/configuration/alarms/definitions`.
 
@@ -1636,3 +1636,43 @@ Operational SQLite остаётся schema `3`; новый `EventCategory.Alarm`
 - новый event category сам по себе не даёт S11 функциональной ценности, но потребовал бы operational table migration/rebuild;
 - configuration disable/delete нельзя выдавать за физический return condition;
 - actor-aware ACK уже подготовлен в domain boundary, но authorization/API остаются отдельно проверяемым V2-S12.
+
+
+---
+
+## D-074 — Alarm operator runtime разделяет Runtime.Read, Alarms.Acknowledge и Alarms.Configure
+
+**Status:** Accepted
+
+V2-S12 раскрывает V2-S11 lifecycle через отдельный operator boundary:
+
+```text
+/alarms
+GET /api/alarms/current
+GET /api/alarms/history
+RuntimeHub.AlarmChanged
+```
+
+Чтение current/history и hub connection требует `Runtime.Read`. ACK одной selected instance выполняется через:
+
+```text
+POST /api/alarms/{AlarmId}/acknowledge
+```
+
+и требует `Alarms.Acknowledge`. Engineering configuration editor переносится на `/alarms/editor` и сохраняет `Runtime.Read + Alarms.Configure`.
+
+ACK actor извлекается только после Server authorization из authenticated principal и передаётся в existing `AlarmRuntimeService.Acknowledge`, поэтому `AlarmAcknowledged` Event Journal record получает machine-readable `ActorUserId/ActorUserName` и transition timestamp. Role names в этой цепочке не проверяются.
+
+Current alarm state остаётся process runtime state, а durable history — existing immutable operational `events`. Dedicated history query фильтрует только `AlarmRaised`, `AlarmAcknowledged`, `AlarmReturned`; operational schema остаётся `3`, configuration schema — `7`.
+
+SignalR не создаёт новый hub: `AlarmChanged` добавляется в existing permission-protected `RuntimeHub`. Current Tag value между lifecycle transitions продолжает приходить через existing `TagChanged`.
+
+Причина:
+
+- operator ACK и engineering configuration являются разными capabilities;
+- actor-aware ACK должен повторно использовать уже принятую audit identity boundary;
+- separate alarm table не нужна, пока Event Journal полностью хранит transition timeline;
+- server-side alarm history filtering корректно работает с paging, в отличие от post-filter generic Events page;
+- reuse existing RuntimeHub сохраняет один realtime transport;
+- `/alarms` должен быть доступен Viewer-like runtime user, тогда как `/alarms/editor` остаётся engineering workflow;
+- bulk ACK, shelving/suppression и alarm groups не нужны для минимального Phase 8 lifecycle.

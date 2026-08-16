@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 продолжена V2-S10A/B и V2-S11: Alarm definitions имеют durable Server CRUD foundation и permission-aware Web Alarm Editor, а Server runtime вычисляет alarm lifecycle по logical Tag changes. Operator ACK API/realtime/Web runtime остаются V2-S12.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 завершена V2-S10A/B, V2-S11 и V2-S12: Alarm definitions имеют durable Server CRUD и engineering editor, Server runtime вычисляет four-state lifecycle, а операторский Web показывает current/history alarms и выполняет actor-aware ACK через permission-protected API и SignalR.
 
 ## Рабочая цепочка
 
@@ -71,13 +71,19 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 52. Описывать `DigitalTrue`, `DigitalFalse`, `High`, `Low` alarm conditions без expression language.
 53. Управлять Alarm definitions через Server CRUD с `Runtime.Read` для чтения и `Alarms.Configure` для mutations.
 54. Аудировать successful Alarm definition mutations через actor-aware `ConfigurationChanged`.
-55. Редактировать Alarm definitions через Web `/alarms` с плотным engineering layout: список слева, rules table в центре, properties справа.
+55. Редактировать Alarm definitions через Web `/alarms/editor` с плотным engineering layout: список слева, rules table в центре, properties справа.
 56. Показывать Alarm Editor только при `Runtime.Read + Alarms.Configure`, не подменяя client visibility Server authorization.
 57. Выбирать logical `TagId` из общей Modbus/SNMP configuration и явно показывать stale binding.
 58. Использовать client-side draft + explicit Save/Delete без запуска alarm runtime evaluation.
 59. Вычислять Alarm runtime lifecycle `Normal / ActiveUnacknowledged / ActiveAcknowledged / ReturnedUnacknowledged` по logical Tag changes.
 60. Применять High/Low hysteresis и continuous raise delay только в Server runtime.
 61. Записывать `AlarmRaised / AlarmAcknowledged / AlarmReturned` в immutable Event Journal без отдельного operational state database.
+62. Читать текущие non-normal Alarm instances через `GET /api/alarms/current`.
+63. Подтверждать одну Alarm instance через `POST /api/alarms/{alarmId}/acknowledge` только при `Alarms.Acknowledge`.
+64. Записывать ACK actor/timestamp в существующий immutable AlarmAcknowledged Event Journal record.
+65. Запрашивать только alarm transition history через `GET /api/alarms/history` без новой operational schema.
+66. Получать Alarm runtime changes через существующий RuntimeHub / SignalR.
+67. Использовать операторский `/alarms` для current/history и отдельный `/alarms/editor` для engineering configuration.
 
 ## Базовый стек
 
@@ -1039,7 +1045,7 @@ DELETE /api/configuration/alarms/definitions/{alarmId}
 V2-S10B добавляет Web Alarm Editor:
 
 ```text
-/alarms
+/alarms/editor
 ```
 
 Layout:
@@ -1078,12 +1084,21 @@ ReturnedUnacknowledged + raise → ActiveUnacknowledged
 
 Каждый фактический transition публикуется в существующий immutable Event Journal как `System` event с `source = AlarmId` и типом `AlarmRaised`, `AlarmAcknowledged` или `AlarmReturned`. Operational SQLite остаётся schema `3`: отдельная таблица current alarm state и новый EventCategory для S11 не нужны. Automatic raise/return actor-less; internal ACK transition принимает optional `EventActor`, что подготавливает actor-aware `Alarms.Acknowledge` API V2-S12.
 
-S11 не добавляет operator ACK endpoint, Alarm SignalR contract или runtime Alarm Web screen — это V2-S12.
+V2-S12 раскрывает runtime как operator boundary:
 
+```text
+GET  /api/alarms/current
+GET  /api/alarms/history?from=&to=&page=&limit=
+POST /api/alarms/{alarmId}/acknowledge
+```
+
+Current/history read требуют `Runtime.Read`. ACK требует `Alarms.Acknowledge`; endpoint извлекает verified actor из authenticated principal и передаёт его в уже существующий runtime transition. ACK одной instance остаётся единственной operator mutation — bulk ACK не добавлен.
+
+`AlarmRuntimeSnapshotDto` содержит lifecycle state, `RaisedAt`, ACK actor/time, last transition и current logical Tag value. Runtime changes публикуются через existing `/hubs/runtime` message `AlarmChanged`; persisted `AlarmAcknowledged` одновременно остаётся обычным actor-aware Event Journal record. Alarm history API выбирает только `AlarmRaised / AlarmAcknowledged / AlarmReturned` из existing operational `events`, поэтому schema остаётся `3`.
 
 ## Web
 
-Глобальная навигация:
+Глобальная навигация сохраняет существующие services и разделяет alarm runtime/editor:
 
 ```text
 Мониторинг
@@ -1091,8 +1106,12 @@ S11 не добавляет operator ACK endpoint, Alarm SignalR contract или
 Мнемосхемы
 История / Тренды
 События
-Тревоги
+Тревоги            → /alarms         → Runtime.Read
+Редактор тревог    → /alarms/editor  → Runtime.Read + Alarms.Configure
+Пользователи / Роли
 ```
+
+Операторский `/alarms` показывает current non-normal alarms и persisted alarm transition history. ACK control появляется только при `Alarms.Acknowledge`; client visibility не заменяет Server authorization.
 
 URL runtime:
 
@@ -1141,10 +1160,12 @@ Editor использует client-side draft и explicit `Сохранить`. 
 docs/ROADMAP_V2.md
 ```
 
-V2-S10 завершён подшагами S10A/S10B, V2-S11 реализует Alarm runtime state machine. Следующий шаг после принятия V2-S11:
+Phase 8 завершена: V2-S10A/B дали Alarm configuration/editor, V2-S11 — runtime state machine, V2-S12 — actor-aware ACK, SignalR и operator Web.
+
+Следующий шаг после принятия V2-S12:
 
 ```text
-V2-S12 — Alarm ACK, realtime и Web
+V2-S13 — Mimic templates
 ```
 
 ## Документы
