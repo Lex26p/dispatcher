@@ -593,7 +593,7 @@ Dispatcher имеет полный минимальный local authentication v
 
 ---
 
-## [ ] V2-S08 — Permissions и Roles
+## [x] V2-S08 — Permissions и Roles
 
 Авторизация строится по permissions, а не по scattered role-name checks.
 
@@ -691,17 +691,26 @@ Web visibility/enabled state
 - integration tests покрывают anonymous, Viewer, Operator, Engineer и изменение current `SecurityCatalog` после выдачи cookie;
 - role-name checks в request authorization отсутствуют.
 
-### [ ] V2-S08C — Web permission visibility/enabled state
+### [x] V2-S08C — Web permission visibility/enabled state
 
-После Server enforcement:
+Реализовано после Server enforcement:
 
-- Web получает effective permissions из Server-projected identity/access state;
-- service visibility и mutation controls отражают permissions;
-- client checks остаются UX и не заменяют Server authorization.
+- authenticated login/current-user response содержит current `EffectivePermissions[]` из `SecurityCatalog`;
+- cookie остаётся identity-only и не получает role/permission claims;
+- `AuthenticationClient` хранит Server-projected permissions и предоставляет `HasPermission` / `HasAllPermissions`;
+- Monitoring, Mimics runtime, History и Events требуют `Runtime.Read` в Web route/navigation projection;
+- Device Editor требует `Runtime.Read + Devices.Edit`;
+- Mimic Editor требует `Runtime.Read + Mimics.Edit`;
+- direct route к недоступному editor не рендерит editor и показывает явное insufficient-permission state;
+- Monitoring tag write controls показываются только при `Tags.Write`;
+- Mimic Button command становится disabled без `Tags.Write`;
+- editor navigation/action visibility отражает соответствующий permission;
+- History/Events остаются read-only services; текущего Historian configuration Web control ещё нет;
+- client checks остаются UX и не заменяют Server authorization V2-S08B.
 
 ### Результат V2-S08
 
-Операторские и инженерные действия имеют server-side permission boundary, а Web только отражает уже существующую Server authority.
+Операторские и инженерные действия имеют server-side permission boundary, а Web отражает уже существующую Server authority через effective-permission projection. Authentication cookie остаётся identity-only; изменение Web visibility не является механизмом защиты.
 
 ---
 

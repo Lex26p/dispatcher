@@ -1364,3 +1364,50 @@ Cookie challenge/access-denied handlers возвращают status codes и н�
 - единый mapping существующих Server boundaries уменьшает риск случайно оставить mutation без permission;
 - fail-closed unknown mutation безопаснее implicit allow при появлении нового API action.
 
+
+---
+
+## D-067 — Web получает effective permissions из current-user projection и использует их только как UX state
+
+**Status:** Accepted
+
+V2-S08C расширяет authenticated `CurrentUserDto`:
+
+```text
+Authenticated
+UserId
+UserName
+DisplayName
+EffectivePermissions[]
+```
+
+`EffectivePermissions[]` формируется Server из current `SecurityCatalog` при successful login и `GET /api/auth/current`. Authentication cookie остаётся identity-only; role/permission claims в ticket не добавляются.
+
+Web использует projection для:
+
+```text
+service navigation visibility
+editor route visibility/access state
+Tags.Write mutation controls
+Mimic Button enabled state
+```
+
+Current mapping:
+
+```text
+Monitoring / Mimics / History / Events → Runtime.Read
+Device Editor                          → Runtime.Read + Devices.Edit
+Mimic Editor                           → Runtime.Read + Mimics.Edit
+Tag write / Mimic command              → Tags.Write
+```
+
+Direct route к editor без required permission не рендерит editor component и показывает explicit insufficient-permission state. Это не является authorization mechanism: Server policies V2-S08B остаются authoritative и могут вернуть `401/403` независимо от client projection.
+
+Причина:
+
+- Web должен отражать capability model, уже enforced Server-side, а не дублировать role taxonomy;
+- reuse `CurrentUserDto` избегает отдельного access-token/role-claims state и дополнительного permission endpoint только для shell initialization;
+- current `SecurityCatalog` остаётся source of truth, а Web projection может быть перечитана через existing current-session flow;
+- editor workspace без mutation permission создаёт ложное ожидание доступности действий, поэтому dedicated editor route скрывается/не рендерится;
+- runtime command elements остаются видимой частью operational representation, но mutation interaction disabled без `Tags.Write`;
+- client-side hiding/disable никогда не заменяет Server authorization.

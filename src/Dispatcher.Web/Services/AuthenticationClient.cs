@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dispatcher.Contracts.Authentication;
+using Dispatcher.Contracts.Authorization;
 
 namespace Dispatcher.Web.Services;
 
@@ -12,7 +13,8 @@ public sealed class AuthenticationClient
             Authenticated: false,
             UserId: null,
             UserName: null,
-            DisplayName: null);
+            DisplayName: null,
+            EffectivePermissions: Array.Empty<string>());
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<AuthenticationClient> _logger;
@@ -36,6 +38,35 @@ public sealed class AuthenticationClient
     public bool IsInitialized { get; private set; }
 
     public string? LastError { get; private set; }
+
+    public bool HasPermission(string permission)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            permission);
+
+        if (!PermissionNames.IsKnown(
+                permission))
+        {
+            throw new ArgumentException(
+                $"Unknown permission '{permission}'.",
+                nameof(permission));
+        }
+
+        return CurrentUser.Authenticated
+            && CurrentUser.EffectivePermissions.Contains(
+                permission,
+                StringComparer.Ordinal);
+    }
+
+    public bool HasAllPermissions(
+        params string[] permissions)
+    {
+        ArgumentNullException.ThrowIfNull(
+            permissions);
+
+        return permissions.All(
+            HasPermission);
+    }
 
     public Task InitializeAsync(
         CancellationToken cancellationToken = default)
@@ -94,21 +125,9 @@ public sealed class AuthenticationClient
                     cancellationToken:
                         cancellationToken);
 
-            if (user is null
-                || !user.Authenticated
-                || string.IsNullOrWhiteSpace(
-                    user.UserId)
-                || string.IsNullOrWhiteSpace(
-                    user.UserName)
-                || string.IsNullOrWhiteSpace(
-                    user.DisplayName))
-            {
-                throw new InvalidOperationException(
-                    "Authentication endpoint returned an invalid authenticated user response.");
-            }
-
             CurrentUser =
-                user;
+                ValidateAuthenticatedUser(
+                    user);
             LastError =
                 null;
             IsInitialized =
@@ -193,6 +212,26 @@ public sealed class AuthenticationClient
             cancellationToken);
     }
 
+    private static CurrentUserDto ValidateAuthenticatedUser(
+        CurrentUserDto? user)
+    {
+        if (user is null
+            || !user.Authenticated
+            || string.IsNullOrWhiteSpace(
+                user.UserId)
+            || string.IsNullOrWhiteSpace(
+                user.UserName)
+            || string.IsNullOrWhiteSpace(
+                user.DisplayName)
+            || user.EffectivePermissions is null)
+        {
+            throw new InvalidOperationException(
+                "Authentication endpoint returned an invalid authenticated user response.");
+        }
+
+        return user;
+    }
+
     private async Task RefreshCoreAsync(
         bool initialLoad,
         CancellationToken cancellationToken)
@@ -206,7 +245,8 @@ public sealed class AuthenticationClient
 
             CurrentUser =
                 user is { Authenticated: true }
-                    ? user
+                    ? ValidateAuthenticatedUser(
+                        user)
                     : AnonymousUser;
             LastError =
                 null;
@@ -219,7 +259,8 @@ public sealed class AuthenticationClient
         catch (Exception exception)
             when (exception is HttpRequestException
                 or JsonException
-                or NotSupportedException)
+                or NotSupportedException
+                or InvalidOperationException)
         {
             _logger.LogWarning(
                 exception,

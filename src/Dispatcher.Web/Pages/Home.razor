@@ -1,5 +1,6 @@
 @page "/"
 @implements IDisposable
+@inject AuthenticationClient Authentication
 @inject RuntimeStateClient RuntimeState
 
 <PageTitle>Dispatcher — Мониторинг</PageTitle>
@@ -103,31 +104,41 @@
                                 <td class="write-cell">
                                     @if (tag.Writable)
                                     {
-                                        <div class="write-control">
-                                            <input type="number"
-                                                   min="0"
-                                                   max="65535"
-                                                   step="1"
-                                                   class="write-input"
-                                                   value="@GetWriteValue(tag)"
-                                                   disabled="@IsWriting(tag.TagId)"
-                                                   @oninput="(ChangeEventArgs args) => SetWriteValue(tag.TagId, args.Value?.ToString())" />
+                                        @if (CanWriteTags)
+                                        {
+                                            <div class="write-control">
+                                                <input type="number"
+                                                       min="0"
+                                                       max="65535"
+                                                       step="1"
+                                                       class="write-input"
+                                                       value="@GetWriteValue(tag)"
+                                                       disabled="@IsWriting(tag.TagId)"
+                                                       @oninput="(ChangeEventArgs args) => SetWriteValue(tag.TagId, args.Value?.ToString())" />
 
-                                            <button type="button"
-                                                    class="write-button"
-                                                    disabled="@IsWriting(tag.TagId)"
-                                                    @onclick="() => WriteTagAsync(tag)">
-                                                @(IsWriting(tag.TagId) ? "Запись…" : "Записать")
-                                            </button>
+                                                <button type="button"
+                                                        class="write-button"
+                                                        disabled="@IsWriting(tag.TagId)"
+                                                        @onclick="() => WriteTagAsync(tag)">
+                                                    @(IsWriting(tag.TagId) ? "Запись…" : "Записать")
+                                                </button>
 
-                                            @if (_writeErrors.TryGetValue(tag.TagId, out var error))
-                                            {
-                                                <span class="write-error"
-                                                      title="@error">
-                                                    @error
-                                                </span>
-                                            }
-                                        </div>
+                                                @if (_writeErrors.TryGetValue(tag.TagId, out var error))
+                                                {
+                                                    <span class="write-error"
+                                                          title="@error">
+                                                        @error
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="read-only-marker"
+                                                  title="Требуется permission Tags.Write">
+                                                нет права записи
+                                            </span>
+                                        }
                                     }
                                     else
                                     {
@@ -155,8 +166,13 @@
 
     private bool _refreshing;
 
+    private bool CanWriteTags =>
+        Authentication.HasPermission(
+            PermissionNames.TagsWrite);
+
     protected override async Task OnInitializedAsync()
     {
+        Authentication.Changed += OnAuthenticationChanged;
         RuntimeState.Changed += OnRuntimeChanged;
         await RuntimeState.StartAsync();
     }
@@ -177,6 +193,11 @@
 
     private async Task WriteTagAsync(TagValueDto tag)
     {
+        if (!CanWriteTags)
+        {
+            return;
+        }
+
         var text = GetWriteValue(tag);
 
         if (!ushort.TryParse(text, out var value))
@@ -232,6 +253,12 @@
     private bool IsWriting(string tagId)
     {
         return _writingTags.Contains(tagId);
+    }
+
+    private void OnAuthenticationChanged()
+    {
+        _ = InvokeAsync(
+            StateHasChanged);
     }
 
     private void OnRuntimeChanged()
@@ -306,6 +333,7 @@
 
     public void Dispose()
     {
+        Authentication.Changed -= OnAuthenticationChanged;
         RuntimeState.Changed -= OnRuntimeChanged;
     }
 }

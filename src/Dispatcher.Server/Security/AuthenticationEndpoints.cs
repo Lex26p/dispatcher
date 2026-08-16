@@ -35,6 +35,7 @@ public static class AuthenticationEndpoints
         LoginRequest request,
         HttpContext httpContext,
         LocalAuthenticationService authenticationService,
+        SecurityCatalog securityCatalog,
         CancellationToken cancellationToken)
     {
         SetNoStore(
@@ -84,7 +85,8 @@ public static class AuthenticationEndpoints
 
         return Results.Ok(
             ToDto(
-                user));
+                user,
+                securityCatalog));
     }
 
     private static async Task<IResult> LogoutAsync(
@@ -100,7 +102,8 @@ public static class AuthenticationEndpoints
     }
 
     private static IResult GetCurrentUser(
-        HttpContext httpContext)
+        HttpContext httpContext,
+        SecurityCatalog securityCatalog)
     {
         SetNoStore(
             httpContext.Response);
@@ -143,11 +146,15 @@ public static class AuthenticationEndpoints
                 UserName:
                     userName,
                 DisplayName:
-                    displayName));
+                    displayName,
+                EffectivePermissions:
+                    securityCatalog.GetEffectivePermissions(
+                        userId)));
     }
 
     private static CurrentUserDto ToDto(
-        LocalUserConfiguration user)
+        LocalUserConfiguration user,
+        SecurityCatalog securityCatalog)
     {
         return new CurrentUserDto(
             Authenticated:
@@ -157,7 +164,10 @@ public static class AuthenticationEndpoints
             UserName:
                 user.UserName,
             DisplayName:
-                user.DisplayName);
+                user.DisplayName,
+            EffectivePermissions:
+                securityCatalog.GetEffectivePermissions(
+                    user.UserId));
     }
 
     private static CurrentUserDto AnonymousUser()
@@ -170,7 +180,9 @@ public static class AuthenticationEndpoints
             UserName:
                 null,
             DisplayName:
-                null);
+                null,
+            EffectivePermissions:
+                Array.Empty<string>());
     }
 
     private static void SetNoStore(

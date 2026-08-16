@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. Phase 7 продолжена V2-S08B: durable roles/permissions дополнены permission-based Server enforcement для REST и SignalR; Web permission visibility остаётся V2-S08C.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. V2-S08 Permissions и Roles завершён: durable roles/permissions, permission-based Server enforcement и permission-aware Web visibility/enabled state работают как единый security vertical slice.
 
 ## Рабочая цепочка
 
@@ -56,6 +56,8 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 37. Защищать REST read boundaries и RuntimeHub permission `Runtime.Read`.
 38. Разделять mutation permissions для tag write, device configuration, mimic configuration и historian policies.
 39. Возвращать `401` anonymous client и `403` authenticated user без требуемого permission.
+40. Проецировать current effective permissions в authenticated login/current-user response без добавления permission claims в cookie.
+41. Отражать permissions в Web service navigation, editor route access и tag/mimic mutation controls.
 
 ## Базовый стек
 
@@ -220,6 +222,7 @@ Authenticated
 UserId?
 UserName?
 DisplayName?
+EffectivePermissions[]
 ```
 
 Unknown user, неверный password и disabled user не создают session и получают одинаковый `401`.
@@ -261,7 +264,7 @@ Logout вызывает existing `POST /api/auth/logout`, после чего We
 
 ## Roles / permissions и Server authorization
 
-V2-S08A добавил durable authorization configuration, а V2-S08B включает permission-based Server enforcement для REST и SignalR без role-name checks.
+V2-S08A добавил durable authorization configuration, V2-S08B включил permission-based Server enforcement для REST и SignalR без role-name checks, а V2-S08C проецирует current effective permissions в Web и использует их только как UX state.
 
 Configuration SQLite schema `v5 → v6` добавляет:
 
@@ -299,7 +302,7 @@ Administrator → all declared permissions
 
 Первый bootstrap user получает built-in `Administrator`. При migration существующей V2-S07 installation с ровно одним local user и ещё без role assignments этот единственный user также получает `Administrator` как one-time compatibility bridge. Если существующих users несколько, Server не угадывает администратора автоматически.
 
-`SecurityCatalog` строит effective permissions как union permissions всех назначенных roles. Disabled user имеет пустой effective permission set. Cookie по-прежнему содержит только identity claims; role/permission claims не копируются в session ticket.
+`SecurityCatalog` строит effective permissions как union permissions всех назначенных roles. Disabled user имеет пустой effective permission set. Cookie по-прежнему содержит только identity claims; role/permission claims не копируются в session ticket. Successful login и `GET /api/auth/current` возвращают current `EffectivePermissions[]` как Server-projected access state для Web.
 
 V2-S08B добавляет ASP.NET Core authorization policies/requirements, которые на каждом protected request читают `UserId` из authenticated principal и проверяют current `SecurityCatalog`.
 
@@ -316,7 +319,17 @@ Historian policy mutations                         → Historian.Configure
 
 `/health` и `/api/auth/login|logout|current` остаются public boundaries. Anonymous request к protected boundary получает `401`; authenticated user без требуемого permission — `403`. Неизвестная non-read `/api` mutation fail-closed и не проходит без явно определённой permission mapping.
 
-V2-S08C после Server enforcement добавит только Web visibility/enabled state по effective permissions; client-side checks не заменят Server authorization.
+V2-S08C использует `AuthenticationClient.HasPermission(...)` поверх Server-projected `EffectivePermissions[]`. Web mapping:
+
+```text
+Monitoring / Mimics runtime / History / Events → Runtime.Read
+Device Editor                                → Runtime.Read + Devices.Edit
+Mimic Editor                                 → Runtime.Read + Mimics.Edit
+Monitoring tag write                         → Tags.Write
+Mimic Button command                         → Tags.Write
+```
+
+Недоступные editor services не показываются в navigation и не рендерятся при direct route; writable tag controls без `Tags.Write` заменяются read-only marker, а mimic commands становятся disabled. Это только UX projection: REST/SignalR enforcement V2-S08B остаётся окончательной security authority.
 
 ## Historian foundation
 
@@ -945,13 +958,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S08B — Server permission enforcement
+V2-S08C — Web permission visibility/enabled state
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S08C — Web permission visibility/enabled state
+V2-S09 — Users/Roles Web + Audit
 ```
 
 ## Документы

@@ -1,5 +1,6 @@
 @page "/mimics"
 @implements IDisposable
+@inject AuthenticationClient Authentication
 @inject MimicClient MimicApi
 @inject RuntimeStateClient RuntimeState
 
@@ -56,10 +57,13 @@
             </div>
 
             <div class="mimic-toolbar-right">
-                <a class="toolbar-button mimic-toolbar-link"
-                   href="/mimics/editor">
-                    Редактор
-                </a>
+                @if (CanEditMimics)
+                {
+                    <a class="toolbar-button mimic-toolbar-link"
+                       href="/mimics/editor">
+                        Редактор
+                    </a>
+                }
 
                 <span class="realtime-state @ConnectionClass(RuntimeState.ConnectionState)">
                     <span class="status-dot" aria-hidden="true"></span>
@@ -103,7 +107,9 @@
                         Выберите мнемосхему
                     </div>
                     <div class="mimic-empty-text">
-                        Создайте первую схему в визуальном редакторе.
+                        @(CanEditMimics
+                            ? "Создайте первую схему в визуальном редакторе."
+                            : "Доступных мнемосхем пока нет.")
                     </div>
                 </div>
             }
@@ -200,6 +206,7 @@
 
                             case MimicElementTypeDto.Button:
                                 <g class="mimic-button @ButtonClass(element)"
+                                   aria-disabled="@(!CanExecuteButton(element))"
                                    @onclick="() => ExecuteButtonAsync(element)">
                                     <rect x="@element.X"
                                           y="@element.Y"
@@ -238,8 +245,18 @@
     private readonly HashSet<string> _writingElements =
         new(StringComparer.Ordinal);
 
+    private bool CanWriteTags =>
+        Authentication.HasPermission(
+            PermissionNames.TagsWrite);
+
+    private bool CanEditMimics =>
+        Authentication.HasAllPermissions(
+            PermissionNames.RuntimeRead,
+            PermissionNames.MimicsEdit);
+
     protected override async Task OnInitializedAsync()
     {
+        Authentication.Changed += OnAuthenticationChanged;
         RuntimeState.Changed += OnRuntimeChanged;
         await RuntimeState.StartAsync();
         await LoadMimicsAsync();
@@ -380,7 +397,8 @@
             FindTag(
                 element.TagId);
 
-        return tag?.Writable == true
+        return CanWriteTags
+               && tag?.Writable == true
                && element.CommandValue is not null
                && !_writingElements.Contains(
                    element.ElementId);
@@ -570,6 +588,12 @@
         };
     }
 
+    private void OnAuthenticationChanged()
+    {
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
     private void OnRuntimeChanged()
     {
         _ = InvokeAsync(
@@ -578,6 +602,8 @@
 
     public void Dispose()
     {
+        Authentication.Changed -=
+            OnAuthenticationChanged;
         RuntimeState.Changed -=
             OnRuntimeChanged;
     }

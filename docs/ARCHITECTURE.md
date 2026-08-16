@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S08B
+## 1. Состояние после V2-S08C
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -28,7 +28,11 @@ ASP.NET Core cookie → HttpContext.User
       ↓
 GET /api/auth/current
       ↓
-Web AuthenticationClient → login shell / authenticated application shell
+identity + EffectivePermissions[]
+      ↓
+Web AuthenticationClient
+      ├── login / current-user shell
+      └── permission-aware routes/navigation/actions
 
 Configuration SQLite v6
       ↓
@@ -43,7 +47,7 @@ REST + RuntimeHub permission enforcement
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, а V2-S08B применяет effective permissions к REST и RuntimeHub. Web permission visibility/enabled state остаётся V2-S08C.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, V2-S08B применяет effective permissions к REST/RuntimeHub, а V2-S08C проецирует current effective permissions в Web visibility/enabled state. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -2545,5 +2549,123 @@ audit actor records
 
 ```text
 V2-S08C — Web permission visibility/enabled state
+```
+
+## 82. Web effective-permission projection
+
+V2-S08C расширяет authenticated Server projection, но не authentication cookie.
+
+Successful login и `GET /api/auth/current` возвращают:
+
+```text
+Authenticated
+UserId
+UserName
+DisplayName
+EffectivePermissions[]
+```
+
+`EffectivePermissions[]` вычисляется через current `SecurityCatalog` в момент ответа. Anonymous response содержит empty permission list. Cookie principal остаётся identity-only и по-прежнему не содержит roles/permissions.
+
+Web `AuthenticationClient` хранит эту Server projection и предоставляет только UX helpers:
+
+```text
+HasPermission(permission)
+HasAllPermissions(...)
+```
+
+Если security configuration изменена другим actor/process, Server enforcement V2-S08B применяется немедленно независимо от того, успел ли Web refresh-нуть свою projection. Web state обновляется при login/current-session refresh и в будущих management flows может быть перечитан через existing `RefreshAsync`.
+
+## 83. Permission-aware Web routes и navigation
+
+Current Web service mapping:
+
+```text
+Monitoring      → Runtime.Read
+Mimics runtime → Runtime.Read
+History        → Runtime.Read
+Events         → Runtime.Read
+Device Editor  → Runtime.Read + Devices.Edit
+Mimic Editor   → Runtime.Read + Mimics.Edit
+```
+
+Global navigation показывает только доступные current services. Editor-specific entry point скрывается без соответствующего edit permission.
+
+Direct URL не является обходом UX gating:
+
+```text
+/devices         without Devices.Edit
+/mimics/editor   without Mimics.Edit
+        ↓
+MainLayout + insufficient-permission state
+        ↓
+editor component is not rendered
+```
+
+`Runtime.Read` также требуется editor routes, потому что editor workflow сначала читает current configuration/runtime state, а уже затем выполняет mutation.
+
+User без `Runtime.Read` остаётся authenticated, видит identity/logout в global header, но не получает current operational services в drawer. Это корректное состояние для future custom/admin-only roles.
+
+## 84. Permission-aware mutation controls
+
+S08C отражает только уже существующие mutation permissions:
+
+```text
+Monitoring writable tag control
+    → Tags.Write
+
+Mimic runtime Button command
+    → Tags.Write
+
+Device Editor route/workspace
+    → Devices.Edit + Runtime.Read
+
+Mimic Editor route/workspace
+    → Mimics.Edit + Runtime.Read
+```
+
+Если configured tag writable, но user не имеет `Tags.Write`, Monitoring не показывает editable input/write button и отображает read-only marker. Mimic Button остаётся visible как часть runtime definition, но получает disabled interaction state.
+
+History и Events на текущем этапе read-only. `Historian.Configure` уже защищает Server mutation API, но отдельного historian-policy mutation control в current Web нет, поэтому S08C не создаёт искусственный UI только ради permission demonstration.
+
+Client checks являются UX only:
+
+```text
+Web control hidden/disabled
+        ≠
+permission granted/denied
+```
+
+Окончательный результат всегда определяет Server policy V2-S08B.
+
+## 85. V2-S08 result и scope boundary
+
+После V2-S08A/B/C есть полный permission vertical slice:
+
+```text
+durable roles / role permissions / user-role assignments
+        ↓
+current effective-permission SecurityCatalog
+        ↓
+Server REST + SignalR enforcement
+        ↓
+Server-projected EffectivePermissions[]
+        ↓
+Web route/navigation/action visibility
+```
+
+По-прежнему не реализованы:
+
+```text
+Users/Roles management API/Web
+audit actor records
+login audit
+security configuration mutation UI
+```
+
+Следующий шаг:
+
+```text
+V2-S09 — Users/Roles Web + Audit
 ```
 

@@ -328,3 +328,52 @@ UserName
 Login/logout не должны принудительно сбрасывать текущий service route. Если пользователь открыл `/events`, `/history` или другой route до входа, successful login возвращает его в этот же context; после logout URL также может сохраняться для повторного входа.
 
 Скрытие navigation/workspace для anonymous user является UX behavior, а не security mechanism. Web visibility/enabled state может отражать permissions только после появления соответствующей Server authorization boundary; client-side hiding никогда не заменяет Server enforcement.
+
+## 17. Permission-aware visibility и enabled state
+
+Начиная с V2-S08C Web отражает effective permissions, которые Server возвращает для текущего authenticated user.
+
+Это правило относится только к UX:
+
+```text
+Web visibility / disabled state
+        ≠
+Server authorization
+```
+
+Окончательная защита REST/SignalR всегда выполняется Server-side.
+
+Текущая service visibility:
+
+```text
+Мониторинг        → Runtime.Read
+Мнемосхемы        → Runtime.Read
+История / Тренды  → Runtime.Read
+События           → Runtime.Read
+Редактор устройств → Runtime.Read + Devices.Edit
+Редактор мнемосхем → Runtime.Read + Mimics.Edit
+```
+
+Dedicated editor service без edit permission не должен показываться как доступный workflow. Если пользователь вручную открывает такой URL, обычный global header сохраняется, но editor workspace не рендерится; вместо него показывается компактное состояние «Недостаточно прав» с требуемыми permission identifiers.
+
+Mutation controls внутри доступного runtime service отражают permission отдельно от технической writable capability:
+
+```text
+configured tag Writable + Tags.Write
+    → input / Записать
+
+configured tag Writable + no Tags.Write
+    → read-only marker
+
+Mimic Button + Tags.Write + writable TagId
+    → enabled command
+
+Mimic Button + no Tags.Write
+    → visible but disabled
+```
+
+Mimic Button остаётся видимым, потому что является частью operational схемы; скрывать элемент целиком означало бы искажать саму мнемосхему. Отключается только command interaction.
+
+Если authenticated user не имеет `Runtime.Read`, global header с identity/logout остаётся доступным, а drawer сообщает, что доступных текущих сервисов нет. Это допускает будущие admin-only/custom roles без фиктивного доступа к runtime.
+
+Web не должен проверять role names (`Viewer`, `Engineer`, `Administrator`) для visibility. Используются только stable permission identifiers, совпадающие с Server authorization model.

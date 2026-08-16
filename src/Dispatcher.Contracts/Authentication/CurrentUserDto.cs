@@ -4,4 +4,5 @@ public sealed record CurrentUserDto(
     bool Authenticated,
     string? UserId,
     string? UserName,
-    string? DisplayName);
+    string? DisplayName,
+    IReadOnlyList<string> EffectivePermissions);

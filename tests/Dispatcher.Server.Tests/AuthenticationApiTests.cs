@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using Dispatcher.Contracts.Authentication;
+using Dispatcher.Contracts.Authorization;
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -30,7 +32,11 @@ public sealed class AuthenticationApiTests
                 displayName:
                     "Operator One",
                 enabled:
-                    true);
+                    true,
+                role:
+                    BuiltInSecurityRoles.All.Single(role =>
+                        role.RoleId
+                        == BuiltInSecurityRoles.OperatorRoleId));
 
         using var factory =
             TestDispatcherFactory.Create(
@@ -62,6 +68,9 @@ public sealed class AuthenticationApiTests
             beforeLogin.UserName);
         Assert.IsNull(
             beforeLogin.DisplayName);
+        Assert.AreEqual(
+            0,
+            beforeLogin.EffectivePermissions.Count);
 
         var loginResponse =
             await client.PostAsJsonAsync(
@@ -109,6 +118,8 @@ public sealed class AuthenticationApiTests
         Assert.AreEqual(
             "Operator One",
             loginUser.DisplayName);
+        AssertEffectiveOperatorPermissions(
+            loginUser.EffectivePermissions);
 
         var current =
             await client.GetFromJsonAsync<CurrentUserDto>(
@@ -127,6 +138,8 @@ public sealed class AuthenticationApiTests
         Assert.AreEqual(
             "Operator One",
             current.DisplayName);
+        AssertEffectiveOperatorPermissions(
+            current.EffectivePermissions);
 
         var logoutResponse =
             await client.PostAsync(
@@ -152,6 +165,92 @@ public sealed class AuthenticationApiTests
             afterLogout.UserName);
         Assert.IsNull(
             afterLogout.DisplayName);
+        Assert.AreEqual(
+            0,
+            afterLogout.EffectivePermissions.Count);
+    }
+
+    [TestMethod]
+    public async Task AuthenticationApi_CurrentUserProjectsCurrentSecurityCatalogPermissions()
+    {
+        using var database =
+            await TestConfigurationDatabase.CreateAsync();
+
+        var operatorRole =
+            BuiltInSecurityRoles.All.Single(role =>
+                role.RoleId
+                == BuiltInSecurityRoles.OperatorRoleId);
+        var user =
+            await InsertUserAsync(
+                database.DatabasePath,
+                userName:
+                    "operator.current",
+                displayName:
+                    "Operator Current",
+                enabled:
+                    true,
+                role:
+                    operatorRole);
+
+        using var factory =
+            TestDispatcherFactory.Create(
+                database.DatabasePath,
+                authenticateAsAdministrator:
+                    false);
+
+        using var client =
+            factory.CreateClient(
+                new WebApplicationFactoryClientOptions
+                {
+                    AllowAutoRedirect =
+                        false,
+                    HandleCookies =
+                        true
+                });
+
+        var loginResponse =
+            await client.PostAsJsonAsync(
+                "/api/auth/login",
+                new LoginRequest(
+                    UserName:
+                        user.UserName,
+                    Password:
+                        Password));
+
+        Assert.AreEqual(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var viewerRole =
+            BuiltInSecurityRoles.All.Single(role =>
+                role.RoleId
+                == BuiltInSecurityRoles.ViewerRoleId);
+        var securityCatalog =
+            factory.Services.GetRequiredService<SecurityCatalog>();
+
+        securityCatalog.ReplaceAll(
+            [user],
+            [viewerRole],
+            [
+                new UserRoleAssignment(
+                    user.UserId,
+                    viewerRole.RoleId)
+            ]);
+
+        var current =
+            await client.GetFromJsonAsync<CurrentUserDto>(
+                "/api/auth/current");
+
+        Assert.IsNotNull(
+            current);
+        Assert.IsTrue(
+            current.Authenticated);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                PermissionNames.RuntimeRead
+            },
+            current.EffectivePermissions.ToArray());
     }
 
     [TestMethod]
@@ -266,7 +365,8 @@ public sealed class AuthenticationApiTests
         string databasePath,
         string userName,
         string displayName,
-        bool enabled)
+        bool enabled,
+        SecurityRoleConfiguration? role = null)
     {
         var store =
             new SqliteConfigurationStore(
@@ -302,9 +402,31 @@ public sealed class AuthenticationApiTests
                         Password)
             };
 
-        await store.InsertLocalUserAsync(
-            user);
+        if (role is null)
+        {
+            await store.InsertLocalUserAsync(
+                user);
+        }
+        else
+        {
+            await store.InsertLocalUserWithRoleAsync(
+                user,
+                role);
+        }
 
         return user;
+    }
+
+    private static void AssertEffectiveOperatorPermissions(
+        IReadOnlyList<string> permissions)
+    {
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                PermissionNames.RuntimeRead,
+                PermissionNames.TagsWrite,
+                PermissionNames.AlarmsAcknowledge
+            },
+            permissions.ToArray());
     }
 }

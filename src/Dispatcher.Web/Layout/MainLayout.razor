@@ -53,41 +53,57 @@
                  @onclick:stopPropagation="true">
                 <div class="global-nav-title">Сервисы</div>
 
-                <NavLink class="global-nav-link"
-                         ActiveClass="active"
-                         href=""
-                         Match="NavLinkMatch.All"
-                         @onclick="CloseGlobalNavigation">
-                    Мониторинг
-                </NavLink>
+                @if (CanReadRuntime)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href=""
+                             Match="NavLinkMatch.All"
+                             @onclick="CloseGlobalNavigation">
+                        Мониторинг
+                    </NavLink>
+                }
 
-                <NavLink class="global-nav-link"
-                         ActiveClass="active"
-                         href="devices"
-                         @onclick="CloseGlobalNavigation">
-                    Редактор устройств
-                </NavLink>
+                @if (CanEditDevices)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="devices"
+                             @onclick="CloseGlobalNavigation">
+                        Редактор устройств
+                    </NavLink>
+                }
 
-                <NavLink class="global-nav-link"
-                         ActiveClass="active"
-                         href="mimics"
-                         @onclick="CloseGlobalNavigation">
-                    Мнемосхемы
-                </NavLink>
+                @if (CanReadRuntime)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="mimics"
+                             @onclick="CloseGlobalNavigation">
+                        Мнемосхемы
+                    </NavLink>
 
-                <NavLink class="global-nav-link"
-                         ActiveClass="active"
-                         href="history"
-                         @onclick="CloseGlobalNavigation">
-                    История / Тренды
-                </NavLink>
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="history"
+                             @onclick="CloseGlobalNavigation">
+                        История / Тренды
+                    </NavLink>
 
-                <NavLink class="global-nav-link"
-                         ActiveClass="active"
-                         href="events"
-                         @onclick="CloseGlobalNavigation">
-                    События
-                </NavLink>
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="events"
+                             @onclick="CloseGlobalNavigation">
+                        События
+                    </NavLink>
+                }
+
+                @if (!CanReadRuntime)
+                {
+                    <div class="compact-empty">
+                        Нет доступных сервисов.
+                    </div>
+                }
             </nav>
         </div>
     }
@@ -100,6 +116,15 @@
 @code {
     private bool _globalNavigationOpen;
     private bool _logoutBusy;
+
+    private bool CanReadRuntime =>
+        Authentication.HasPermission(
+            PermissionNames.RuntimeRead);
+
+    private bool CanEditDevices =>
+        Authentication.HasAllPermissions(
+            PermissionNames.RuntimeRead,
+            PermissionNames.DevicesEdit);
 
     private string CurrentSection
     {
@@ -142,6 +167,7 @@
 
     protected override void OnInitialized()
     {
+        Authentication.Changed += OnAuthenticationChanged;
         NavigationManager.LocationChanged += OnLocationChanged;
     }
 
@@ -178,6 +204,15 @@
         }
     }
 
+    private void OnAuthenticationChanged()
+    {
+        _globalNavigationOpen =
+            false;
+
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
     private void OnLocationChanged(
         object? sender,
         LocationChangedEventArgs args)
@@ -190,6 +225,7 @@
 
     public void Dispose()
     {
+        Authentication.Changed -= OnAuthenticationChanged;
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }

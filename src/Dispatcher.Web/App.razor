@@ -23,8 +23,22 @@ else
 {
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData"
-                       DefaultLayout="@typeof(MainLayout)" />
+            @if (CanAccessRoute(
+                    routeData.PageType))
+            {
+                <RouteView RouteData="@routeData"
+                           DefaultLayout="@typeof(MainLayout)" />
+            }
+            else
+            {
+                <LayoutView Layout="@typeof(MainLayout)">
+                    <div class="not-found">
+                        Недостаточно прав для этого раздела.
+                        Требуется:
+                        <span>@MissingPermissions(routeData.PageType)</span>.
+                    </div>
+                </LayoutView>
+            }
         </Found>
         <NotFound>
             <LayoutView Layout="@typeof(MainLayout)">
@@ -38,6 +52,54 @@ else
 
 @code {
     private bool _authenticationReady;
+
+    private bool CanAccessRoute(
+        Type pageType)
+    {
+        return RequiredPermissions(
+                pageType)
+            .All(
+                Authentication.HasPermission);
+    }
+
+    private string MissingPermissions(
+        Type pageType)
+    {
+        return string.Join(
+            ", ",
+            RequiredPermissions(
+                    pageType)
+                .Where(permission =>
+                    !Authentication.HasPermission(
+                        permission)));
+    }
+
+    private static IReadOnlyList<string> RequiredPermissions(
+        Type pageType)
+    {
+        if (pageType == typeof(DeviceEditor))
+        {
+            return
+            [
+                PermissionNames.RuntimeRead,
+                PermissionNames.DevicesEdit
+            ];
+        }
+
+        if (pageType == typeof(MimicEditor))
+        {
+            return
+            [
+                PermissionNames.RuntimeRead,
+                PermissionNames.MimicsEdit
+            ];
+        }
+
+        return
+        [
+            PermissionNames.RuntimeRead
+        ];
+    }
 
     protected override async Task OnInitializedAsync()
     {
