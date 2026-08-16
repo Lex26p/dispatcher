@@ -874,6 +874,30 @@ Editor использует стандартную схему:
 сверху → add/save/delete
 ```
 
+### [x] V2-S10A — Alarm definitions + Server configuration foundation
+
+Реализовано:
+
+- configuration SQLite schema `v6 → v7`;
+- durable `alarm_definitions`;
+- stable immutable `AlarmId`;
+- protocol-neutral binding только по `TagId`;
+- conditions `DigitalTrue`, `DigitalFalse`, `High`, `Low`;
+- alarm-specific severity type с первым набором `Information`, `Warning`, `Error`, выровненным с текущей Event Journal taxonomy;
+- digital conditions не имеют `Threshold/Hysteresis`;
+- `High/Low` требуют decimal threshold и non-negative decimal hysteresis;
+- decimal threshold/hysteresis сохраняются как invariant text без binary floating conversion;
+- non-negative `DelayMilliseconds`;
+- Server CRUD `/api/configuration/alarms/definitions`;
+- reads требуют `Runtime.Read`; mutations требуют `Alarms.Configure`;
+- create/update проверяют current logical `TagId`; definition не получает FK/cascade к protocol tag table и может стать stale после последующего удаления tag;
+- successful create/update/delete пишут actor-aware `ConfigurationChanged`;
+- Alarm runtime state, transitions, ACK и realtime в S10A не добавляются.
+
+### [ ] V2-S10B — Alarm Editor Web
+
+Добавить engineering Web editor поверх S10A API: список definitions, плотная таблица/rules workspace, properties справа, add/save/delete и permission-aware `Alarms.Configure` UX. Server остаётся authoritative boundary.
+
 ### Результат
 
 Инженер может определить alarm rule без scripting.

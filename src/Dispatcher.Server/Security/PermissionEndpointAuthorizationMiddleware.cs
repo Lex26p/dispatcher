@@ -147,6 +147,15 @@ public sealed class PermissionEndpointAuthorizationMiddleware
                 : PermissionNames.HistorianConfigure;
         }
 
+        if (path.StartsWithSegments(
+                "/api/configuration/alarms"))
+        {
+            return IsReadMethod(
+                    request.Method)
+                ? PermissionNames.RuntimeRead
+                : PermissionNames.AlarmsConfigure;
+        }
+
         if (IsReadMethod(
                 request.Method))
         {

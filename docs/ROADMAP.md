@@ -131,10 +131,17 @@ V2-S09 разбит на проверяемые подшаги:
 
 V2-S09 завершён: Users/Roles management API, Web administration и actor-aware audit собраны в один permission-based vertical slice.
 
-Следующий шаг после принятия V2-S09C:
+V2-S10 разбит на проверяемые подшаги:
 
 ```text
-V2-S10 — Alarm definitions и Alarm Editor
+[x] V2-S10A — Alarm definitions + Server configuration foundation
+[ ] V2-S10B — Alarm Editor Web
+```
+
+Следующий подшаг после принятия V2-S10A:
+
+```text
+V2-S10B — Alarm Editor Web
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

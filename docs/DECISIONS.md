@@ -1512,3 +1512,49 @@ Event Journal остаётся append-only/read-only и продолжает и�
 - audit должен повторно использовать уже существующий immutable Event Journal/REST/SignalR boundary, а не создавать параллельную историю;
 - separating `ConfigurationChanged` от `RuntimeConfigurationApplied` различает user intent и runtime consequence;
 - credential secrets не являются audit metadata.
+
+---
+
+## D-071 — Alarm definitions хранятся в configuration schema v7 как protocol-neutral TagId rules без runtime state
+
+**Status:** Accepted
+
+V2-S10A повышает configuration SQLite:
+
+```text
+v6 → v7
+```
+
+и добавляет `alarm_definitions`. Definition имеет stable immutable `AlarmId` и binding только по logical `TagId`; отдельные Modbus address/SNMP OID в Alarm domain не попадают.
+
+Первый condition set:
+
+```text
+DigitalTrue
+DigitalFalse
+High
+Low
+```
+
+Digital conditions не имеют threshold/hysteresis. High/Low требуют decimal threshold и non-negative decimal hysteresis; numeric values сохраняются invariant text. Delay задаётся non-negative milliseconds. Alarm severity использует отдельный typed contract со значениями `Information/Warning/Error`, намеренно выровненными с текущей Event Journal severity taxonomy.
+
+Create/update валидируют наличие current `TagId`, но SQLite FK на protocol tag tables не создаётся. Причина: TagId является cross-protocol logical identity, а позднейшее удаление source tag не должно каскадно уничтожать инженерную alarm configuration; stale definition должна оставаться наблюдаемой.
+
+CRUD authorization:
+
+```text
+read      → Runtime.Read
+mutation  → Alarms.Configure
+```
+
+Successful mutations используют existing actor-aware `ConfigurationChanged`. S10A не подписывается на `TagService`, не вычисляет active state, не применяет delay/hysteresis и не реализует ACK. Эти runtime semantics остаются V2-S11/V2-S12.
+
+Причина:
+
+- definition является low-frequency configuration, а не operational state/history;
+- Alarm binding должен сохранять существующую protocol-neutral `TagId` architecture;
+- lossless decimal configuration не должна зависеть от binary floating representation;
+- отдельный Alarm severity type не связывает definition contract с Events implementation detail, но сохраняет одну текущую severity taxonomy;
+- Server permission enforcement должен появиться раньше Web editor visibility;
+- separating definition persistence from runtime state machine делает первый Alarm шаг отдельно проверяемым.
+

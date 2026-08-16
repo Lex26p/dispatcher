@@ -115,7 +115,7 @@ Public boundary находится в `Dispatcher.Contracts.Mimics`.
 Configuration SQLite schema version:
 
 ```text
-6
+7
 ```
 
 Tables, добавленные после базовой protocol configuration:
@@ -127,6 +127,7 @@ local_users
 security_roles
 security_role_permissions
 security_user_roles
+alarm_definitions
 ```
 
 Schema migration:
@@ -143,9 +144,11 @@ v4  historian_policies
 v5  local_users
  ↓
 v6  security roles / permissions / assignments
+ ↓
+v7  alarm_definitions
 ```
 
-При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются.
+При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются. При `v6 → v7` existing protocol/mimic/historian/user/security configuration также сохраняется; добавляется только `alarm_definitions`.
 
 Operational SQLite schema развивается независимо: V2-S05 поднял её до `2`, а V2-S09C — до `3` для nullable audit actor columns.
 
@@ -2951,3 +2954,142 @@ Journal остаётся append-only и не получает update/delete API.
 S09C намеренно сохраняет существующий bounded asynchronous ingestion contract (`DroppedEventCount` / retry persistence). Это базовая operational traceability Dispatcher, а не отдельный compliance-grade synchronous audit ledger.
 
 После V2-S09C Phase 7 завершена. Следующий шаг — V2-S10 Alarm definitions / Alarm Editor.
+
+## 97. Alarm definition configuration boundary
+
+V2-S10A начинает Phase 8 только с durable definitions. Alarm runtime state machine не запускается.
+
+Цепочка configuration:
+
+```text
+AlarmDefinitionDto / requests
+        ↓
+AlarmDefinitionEndpoints
+        ↓
+AlarmDefinitionService
+        ↓
+SqliteConfigurationStore
+        ↓
+dispatcher.db / alarm_definitions
+```
+
+Configuration SQLite повышается:
+
+```text
+v6 → v7
+```
+
+Таблица хранит:
+
+```text
+alarm_id
+name
+enabled
+tag_id
+condition
+threshold_text?
+severity
+message
+delay_ms
+hysteresis_text?
+```
+
+`AlarmId` является stable immutable identifier: create принимает его в body, update/delete адресуют его path и не переименовывают definition.
+
+## 98. Alarm condition и numeric semantics
+
+Первый condition set без expression language:
+
+```text
+DigitalTrue
+DigitalFalse
+High
+Low
+```
+
+Semantics definition validation:
+
+```text
+DigitalTrue / DigitalFalse
+    Threshold  = null
+    Hysteresis = null
+
+High / Low
+    Threshold  = required decimal
+    Hysteresis = required decimal >= 0
+
+DelayMilliseconds >= 0
+```
+
+Threshold/Hysteresis сохраняются в SQLite как invariant decimal text. Это избегает необязательной binary floating conversion configuration values до появления runtime evaluator.
+
+Alarm severity имеет отдельный typed alarm contract, но первый value set намеренно выровнен с текущей Event Journal taxonomy:
+
+```text
+Information
+Warning
+Error
+```
+
+Так Alarm domain не зависит от Event DTO type, при этом S10A не изобретает вторую severity scale.
+
+## 99. Alarm TagId binding, CRUD authorization и audit
+
+Definition binding остаётся logical:
+
+```text
+AlarmDefinition → TagId
+```
+
+Create/update требуют, чтобы `ConfigurationCatalog.ContainsTagId(TagId)` был true в момент mutation. `alarm_definitions` не имеет FK на Modbus/SNMP tag tables: logical TagId живёт поверх нескольких protocol stores, а последующее удаление tag не должно неявно стирать инженерную alarm configuration. Stale binding остаётся читаемым и будет явно обработан будущим Alarm runtime/editor.
+
+Server API:
+
+```text
+GET    /api/configuration/alarms/definitions  → Runtime.Read
+POST   /api/configuration/alarms/definitions  → Alarms.Configure
+PUT    /api/configuration/alarms/definitions/{alarmId} → Alarms.Configure
+DELETE /api/configuration/alarms/definitions/{alarmId} → Alarms.Configure
+```
+
+Successful mutation после durable write публикует existing actor-aware:
+
+```text
+Category = Configuration
+Type     = ConfigurationChanged
+Area     = Alarms
+ActorUserId / ActorUserName
+```
+
+Web visibility в S10A не добавляется; Server permission boundary является authoritative.
+
+## 100. V2-S10A scope boundary
+
+После S10A есть:
+
+```text
+durable alarm definitions
+configuration schema v7
+validated Digital/High/Low definition contract
+permission-protected Server CRUD
+actor-aware configuration audit
+```
+
+Ещё нет:
+
+```text
+Alarm Editor Web
+alarm evaluation
+delay/hysteresis runtime behavior
+alarm instance state
+raise / return transitions
+acknowledgement
+realtime alarms
+```
+
+Следующий подшаг:
+
+```text
+V2-S10B — Alarm Editor Web
+```
+

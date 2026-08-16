@@ -4,6 +4,7 @@ using Dispatcher.Contracts.Tags;
 using Dispatcher.Core.Devices;
 using Dispatcher.Core.Tags;
 using Dispatcher.Modbus;
+using Dispatcher.Server.Alarms;
 using Dispatcher.Server.Configuration;
 using Dispatcher.Server.Events;
 using Dispatcher.Server.Historian;
@@ -62,6 +63,7 @@ builder.Services.AddHostedService<HistorianService>(
 builder.Services.AddHostedService<HistorianRetentionHostedService>();
 builder.Services.AddSingleton<HistorianPolicyService>();
 builder.Services.AddSingleton<HistoryQueryService>();
+builder.Services.AddSingleton<AlarmDefinitionService>();
 
 builder.Services.AddSingleton(
     services =>
@@ -164,6 +166,7 @@ app.MapPost(
             cancellationToken));
 
 app.MapConfigurationEndpoints();
+app.MapAlarmDefinitionEndpoints();
 app.MapHistorianPolicyEndpoints();
 app.MapHistoryEndpoints();
 app.MapEventEndpoints();

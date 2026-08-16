@@ -8,7 +8,7 @@ namespace Dispatcher.Server.Configuration;
 
 public sealed partial class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 6;
+    private const int CurrentSchemaVersion = 7;
 
     private readonly string _connectionString;
 
@@ -66,6 +66,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 1:
@@ -88,6 +92,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
@@ -106,6 +114,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 3:
@@ -120,6 +132,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 4:
@@ -130,10 +146,24 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 5:
                 await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 6:
+                await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
                 return;
@@ -1304,6 +1334,54 @@ public sealed partial class SqliteConfigurationStore
                 ON security_user_roles(role_id);
 
             PRAGMA user_version = 6;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV6ToV7Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS alarm_definitions (
+                alarm_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                tag_id TEXT NOT NULL,
+                condition INTEGER NOT NULL CHECK (condition BETWEEN 0 AND 3),
+                threshold_text TEXT NULL,
+                severity INTEGER NOT NULL CHECK (severity BETWEEN 0 AND 2),
+                message TEXT NOT NULL,
+                delay_ms INTEGER NOT NULL CHECK (delay_ms >= 0),
+                hysteresis_text TEXT NULL,
+                CHECK (
+                    (condition IN (0, 1)
+                        AND threshold_text IS NULL
+                        AND hysteresis_text IS NULL)
+                    OR
+                    (condition IN (2, 3)
+                        AND threshold_text IS NOT NULL
+                        AND hysteresis_text IS NOT NULL)
+                )
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_alarm_definitions_tag_id
+                ON alarm_definitions(tag_id);
+
+            PRAGMA user_version = 7;
             """;
 
         await command.ExecuteNonQueryAsync(

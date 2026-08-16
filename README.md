@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 начата V2-S10A: Alarm definitions получили durable configuration и Server CRUD foundation; Alarm Editor остаётся V2-S10B.
 
 ## Рабочая цепочка
 
@@ -67,6 +67,10 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 48. Показывать effective permissions выбранного пользователя и обновлять current Web identity/access projection после security mutation.
 49. Хранить nullable `ActorUserId` / `ActorUserName` в immutable operational events.
 50. Аудировать login success/failure, security management, tag writes и configuration mutations без сохранения plaintext credentials.
+51. Хранить Alarm definitions как durable configuration, привязанную только к logical `TagId`.
+52. Описывать `DigitalTrue`, `DigitalFalse`, `High`, `Low` alarm conditions без expression language.
+53. Управлять Alarm definitions через Server CRUD с `Runtime.Read` для чтения и `Alarms.Configure` для mutations.
+54. Аудировать successful Alarm definition mutations через actor-aware `ConfigurationChanged`.
 
 ## Базовый стек
 
@@ -107,10 +111,10 @@ TagId
 
 ## SQLite schema
 
-Configuration SQLite schema version после V2-S08A:
+Configuration SQLite schema version после V2-S10A:
 
 ```text
-6
+7
 ```
 
 Таблицы:
@@ -126,9 +130,10 @@ local_users
 security_roles
 security_role_permissions
 security_user_roles
+alarm_definitions
 ```
 
-Существующая schema `1/2/3/4/5` автоматически мигрируется в `6` без удаления protocol/mimic/historian/user configuration.
+Существующая schema `1/2/3/4/5/6` автоматически мигрируется в `7` без удаления protocol/mimic/historian/user/security configuration.
 
 Таблица `mimics` хранит:
 
@@ -988,6 +993,43 @@ DELETE /api/configuration/mimics/{mimicId}
 
 S11 не добавляет Web-editor. PUT нужен для persistence/integration testing и является backend foundation для S12.
 
+## Alarm definitions
+
+V2-S10A добавляет durable Alarm definition foundation без запуска Alarm runtime state machine. Binding остаётся protocol-neutral:
+
+```text
+AlarmDefinition → TagId
+```
+
+Первый contract:
+
+```text
+AlarmId
+Name
+Enabled
+TagId
+Condition = DigitalTrue | DigitalFalse | High | Low
+Threshold?
+Severity = Information | Warning | Error
+Message
+DelayMilliseconds
+Hysteresis?
+```
+
+`DigitalTrue/DigitalFalse` не используют `Threshold/Hysteresis`; `High/Low` требуют threshold и non-negative hysteresis. Numeric configuration хранится lossless как invariant decimal text. `AlarmId` после создания immutable.
+
+Server API:
+
+```text
+GET    /api/configuration/alarms/definitions
+POST   /api/configuration/alarms/definitions
+PUT    /api/configuration/alarms/definitions/{alarmId}
+DELETE /api/configuration/alarms/definitions/{alarmId}
+```
+
+Чтение требует `Runtime.Read`, mutations — `Alarms.Configure`. Create/update проверяют существование current logical `TagId`; позднейшее удаление tag не каскадно удаляет definition. Successful mutation пишет actor-aware `ConfigurationChanged`. Alarm state/raise/return/ACK в S10A не вычисляются.
+
+
 ## Web
 
 Глобальная навигация:
@@ -1037,7 +1079,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S08A создаёт schema version `6` и idempotently seeds built-in security roles при startup; user assignment создаётся только по bootstrap/one-time legacy transition rules.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics/alarms. Local user также не создаётся без явно заданного bootstrap password. После V2-S10A schema version — `7`; built-in security roles по-прежнему idempotently поддерживаются при startup, а Alarm definitions появляются только через явную configuration mutation.
 
 ## Roadmap v2
 
@@ -1050,13 +1092,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S09C — Actor-aware security audit wiring
+V2-S10A — Alarm definitions + Server configuration foundation
 ```
 
-Следующий шаг после локальной проверки и нового Git SHA:
+Следующий подшаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S10 — Alarm definitions и Alarm Editor
+V2-S10B — Alarm Editor Web
 ```
 
 ## Документы
