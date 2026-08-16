@@ -1234,3 +1234,35 @@ Existing runtime/configuration endpoints на V2-S07B не закрываютс�
 - authentication identity не должна преждевременно кодировать roles/permissions;
 - разделение V2-S07/V2-S08 позволяет сначала стабилизировать identity/session semantics, а затем добавить server-side permission enforcement;
 - generic `401` для invalid/disabled credentials не раскрывает через response причину отказа.
+
+---
+
+## D-063 — Web authentication state следует Server current-user API; UI gating не является security boundary
+
+**Status:** Accepted
+
+V2-S07C использует один scoped Web service:
+
+```text
+AuthenticationClient
+```
+
+как projection текущей Server session. При startup/refresh Web вызывает:
+
+```text
+GET /api/auth/current
+```
+
+и не читает `Dispatcher.Auth` напрямую. HttpOnly cookie остаётся browser/server-managed credential; отдельный bearer token, localStorage token или дублирующий client credential format не создаётся.
+
+Anonymous user получает compact login shell без service drawer/workspace. Successful login сохраняет исходный browser route. Authenticated header показывает `DisplayName`/`UserName` и logout action, который вызывает Server `POST /api/auth/logout`.
+
+Client-side hiding navigation/content не считается authorization. V2-S07C не добавляет role/permission checks в Web и не закрывает Server endpoints. V2-S08 обязан сначала ввести permission-based Server enforcement и только затем использовать effective permissions для Web visibility/enabled state.
+
+Причина:
+
+- Server уже является source of truth для authenticated identity через V2-S07B;
+- same-origin HttpOnly cookie не нужно дублировать в browser storage;
+- direct route refresh должен восстанавливать session через Server, а не зависеть от transient WASM memory;
+- сохранение current route уменьшает лишнюю navigation state machine и возвращает инженера в исходный service context;
+- UI visibility не должна создавать ложное ощущение защиты до появления Server authorization.

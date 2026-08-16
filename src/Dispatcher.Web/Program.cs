@@ -13,6 +13,7 @@ builder.Services.AddScoped(_ => new HttpClient
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
 });
 
+builder.Services.AddScoped<AuthenticationClient>();
 builder.Services.AddScoped<RuntimeStateClient>();
 builder.Services.AddScoped<ConfigurationClient>();
 builder.Services.AddScoped<MimicClient>();

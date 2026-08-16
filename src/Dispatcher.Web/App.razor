@@ -1,13 +1,65 @@
-<Router AppAssembly="@typeof(App).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData"
-                   DefaultLayout="@typeof(MainLayout)" />
-    </Found>
-    <NotFound>
-        <LayoutView Layout="@typeof(MainLayout)">
-            <div class="not-found">
-                Страница не найдена.
+@implements IDisposable
+@inject AuthenticationClient Authentication
+
+@if (!_authenticationReady)
+{
+    <div class="application-shell authentication-shell">
+        <header class="global-header authentication-header">
+            <div class="brand">Dispatcher</div>
+            <div class="global-section">Аутентификация</div>
+        </header>
+        <div class="application-content authentication-workspace">
+            <div class="authentication-status">
+                Проверка текущей сессии…
             </div>
-        </LayoutView>
-    </NotFound>
-</Router>
+        </div>
+    </div>
+}
+else if (!Authentication.CurrentUser.Authenticated)
+{
+    <Login />
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData"
+                       DefaultLayout="@typeof(MainLayout)" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div class="not-found">
+                    Страница не найдена.
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private bool _authenticationReady;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Authentication.Changed += OnAuthenticationChanged;
+
+        await Authentication.InitializeAsync();
+
+        _authenticationReady =
+            true;
+    }
+
+    private void OnAuthenticationChanged()
+    {
+        _authenticationReady =
+            Authentication.IsInitialized;
+
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Authentication.Changed -= OnAuthenticationChanged;
+    }
+}

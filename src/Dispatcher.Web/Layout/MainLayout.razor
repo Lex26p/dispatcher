@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@inject AuthenticationClient Authentication
 @inject NavigationManager NavigationManager
 
 <div class="application-shell">
@@ -13,6 +14,34 @@
 
         <div class="brand">Dispatcher</div>
         <div class="global-section">@CurrentSection</div>
+
+        <div class="global-header-spacer"></div>
+
+        @if (!string.IsNullOrWhiteSpace(
+                Authentication.LastError))
+        {
+            <div class="global-auth-error"
+                 title="@Authentication.LastError">
+                @Authentication.LastError
+            </div>
+        }
+
+        <div class="global-user"
+             title="@Authentication.CurrentUser.UserName">
+            <span class="global-user-display-name">
+                @Authentication.CurrentUser.DisplayName
+            </span>
+            <span class="global-user-name">
+                @Authentication.CurrentUser.UserName
+            </span>
+        </div>
+
+        <button class="header-action-button"
+                type="button"
+                disabled="@_logoutBusy"
+                @onclick="LogoutAsync">
+            @(_logoutBusy ? "Выход…" : "Выйти")
+        </button>
     </header>
 
     @if (_globalNavigationOpen)
@@ -70,6 +99,7 @@
 
 @code {
     private bool _globalNavigationOpen;
+    private bool _logoutBusy;
 
     private string CurrentSection
     {
@@ -125,10 +155,36 @@
         _globalNavigationOpen = false;
     }
 
+    private async Task LogoutAsync()
+    {
+        if (_logoutBusy)
+        {
+            return;
+        }
+
+        _logoutBusy =
+            true;
+        _globalNavigationOpen =
+            false;
+
+        try
+        {
+            await Authentication.LogoutAsync();
+        }
+        finally
+        {
+            _logoutBusy =
+                false;
+        }
+    }
+
     private void OnLocationChanged(
         object? sender,
         LocationChangedEventArgs args)
     {
+        _globalNavigationOpen =
+            false;
+
         _ = InvokeAsync(StateHasChanged);
     }
 

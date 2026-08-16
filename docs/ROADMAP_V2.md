@@ -494,7 +494,7 @@ Operational SQLite schema остаётся version `2`.
 
 # Phase 7 — Users / Roles / Audit
 
-## [ ] V2-S07 — Authentication foundation
+## [x] V2-S07 — Authentication foundation
 
 Цель: ввести идентичность пользователя без самодельной криптографии.
 
@@ -569,18 +569,27 @@ Authentication:BootstrapAdministrator:Password
 
 Roles, permissions, audit login events и Web login по-прежнему не входят в этот подшаг.
 
-### [ ] V2-S07C — Web authentication integration
+### [x] V2-S07C — Web authentication integration
 
-Следующий Web scope после Server boundary:
+Реализовано:
 
-- login screen/state;
-- current user в application shell;
-- logout action;
-- корректное anonymous/authenticated navigation behavior без попытки подменить server authorization Web-видимостью.
+- scoped `AuthenticationClient` в Blazor WebAssembly;
+- startup/current-session check через `GET /api/auth/current`;
+- compact login screen для anonymous user;
+- anonymous state не показывает service drawer и service workspace;
+- login использует existing `POST /api/auth/login`;
+- successful login сохраняет текущий browser route;
+- authenticated global header показывает `DisplayName` и `UserName`;
+- logout action использует existing `POST /api/auth/logout`;
+- logout возвращает Web в anonymous login state, сохраняя текущий route для следующего login;
+- invalid credentials показывают generic login error;
+- client не хранит отдельный auth token/localStorage state и не читает HttpOnly cookie напрямую;
+- roles/permissions не добавлены;
+- Web visibility явно не считается security boundary: Server permission enforcement остаётся V2-S08.
 
 ### Результат V2-S07
 
-Server различает anonymous и конкретного authenticated user.
+Dispatcher имеет полный минимальный local authentication vertical slice: durable local user, platform password hashing, cookie session, Server current-user identity и Web login/current-user/logout flow. Anonymous/authenticated UX различается, но permission-based Server authorization начинается только в V2-S08.
 
 ---
 

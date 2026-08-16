@@ -1,0 +1,103 @@
+@inject AuthenticationClient Authentication
+
+<div class="application-shell authentication-shell">
+    <header class="global-header authentication-header">
+        <div class="brand">Dispatcher</div>
+        <div class="global-section">Вход</div>
+    </header>
+
+    <div class="application-content authentication-workspace">
+        <form class="login-panel"
+              @onsubmit="SignInAsync"
+              @onsubmit:preventDefault="true">
+            <div class="login-heading">
+                <div class="login-title">Вход в Dispatcher</div>
+                <div class="login-subtitle">
+                    Используйте локальную учётную запись Dispatcher.
+                </div>
+            </div>
+
+            <label class="login-field">
+                <span>Имя пользователя</span>
+                <input type="text"
+                       autocomplete="username"
+                       maxlength="128"
+                       disabled="@_busy"
+                       @bind="_userName"
+                       @bind:event="oninput" />
+            </label>
+
+            <label class="login-field">
+                <span>Пароль</span>
+                <input type="password"
+                       autocomplete="current-password"
+                       maxlength="256"
+                       disabled="@_busy"
+                       @bind="_password"
+                       @bind:event="oninput" />
+            </label>
+
+            @if (!string.IsNullOrWhiteSpace(
+                    Authentication.LastError))
+            {
+                <div class="login-error"
+                     role="alert">
+                    @Authentication.LastError
+                </div>
+            }
+
+            <div class="login-actions">
+                <button class="login-button"
+                        type="submit"
+                        disabled="@(!CanSubmit)">
+                    @(_busy ? "Вход…" : "Войти")
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@code {
+    private string _userName =
+        string.Empty;
+    private string _password =
+        string.Empty;
+    private bool _busy;
+
+    private bool CanSubmit =>
+        !_busy
+        && !string.IsNullOrWhiteSpace(
+            _userName)
+        && !string.IsNullOrWhiteSpace(
+            _password);
+
+    private async Task SignInAsync()
+    {
+        if (!CanSubmit)
+        {
+            return;
+        }
+
+        _busy =
+            true;
+
+        try
+        {
+            var authenticated =
+                await Authentication.LoginAsync(
+                    _userName,
+                    _password);
+
+            if (authenticated)
+            {
+                _password =
+                    string.Empty;
+            }
+        }
+        finally
+        {
+            _busy =
+                false;
+        }
+    }
+}

@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. Phase 7 продолжена до V2-S07B — Server login/logout/current-user и cookie session foundation.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён: local users, Server cookie session и Web login/current-user/logout integration.
 
 ## Рабочая цепочка
 
@@ -48,6 +48,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 29. Проверять local password через platform `PasswordHasher<TUser>` без собственного credential format.
 30. Создавать и завершать authenticated cookie session через Server API.
 31. Различать anonymous и конкретного authenticated user через `GET /api/auth/current`.
+32. Проверять текущую authentication session при старте Blazor WebAssembly и показывать login screen для anonymous user.
+33. Показывать current user и logout action в компактном application header после входа.
+34. Сохранять текущий Web route при login/logout, не выдавая client-side visibility за server authorization.
 
 ## Базовый стек
 
@@ -135,7 +138,7 @@ password_hash
 
 ## Local authentication foundation
 
-V2-S07A вводит durable identity storage/bootstrap, а V2-S07B добавляет Server authentication session boundary.
+V2-S07A вводит durable identity storage/bootstrap, V2-S07B добавляет Server authentication session boundary, а V2-S07C интегрирует эту boundary в Web shell.
 
 Local user:
 
@@ -213,7 +216,40 @@ DisplayName?
 
 Unknown user, неверный password и disabled user не создают session и получают одинаковый `401`.
 
-V2-S07B намеренно не добавляет role/permission claims и не закрывает существующие runtime/configuration endpoints. Server authorization появляется в V2-S08; Web login/state — в V2-S07C.
+V2-S07B намеренно не добавляет role/permission claims и не закрывает существующие runtime/configuration endpoints. Server authorization появляется в V2-S08.
+
+### Web authentication
+
+V2-S07C добавляет scoped `AuthenticationClient` в Blazor WebAssembly. При старте Web читает:
+
+```text
+GET /api/auth/current
+```
+
+и использует Server response как источник текущего identity state. HttpOnly cookie напрямую из Web-кода не читается.
+
+Anonymous Web state:
+
+```text
+compact Dispatcher / Вход header
+login form
+no service drawer
+no service workspace
+```
+
+После успешного login текущий browser route сохраняется, поэтому вход с `/events`, `/history` или другого service URL возвращает пользователя в тот же контекст.
+
+Authenticated global header показывает:
+
+```text
+DisplayName
+UserName
+Выйти
+```
+
+Logout вызывает existing `POST /api/auth/logout`, после чего Web возвращается к anonymous login state без client-side token/localStorage.
+
+Скрытие рабочего shell/navigation для anonymous user является только UX boundary. На V2-S07C существующие Server endpoints ещё не получают permission enforcement; реальная server-side authorization начинается в V2-S08.
 
 ## Historian foundation
 
@@ -829,7 +865,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S07B не меняет schema version `5`.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S07C не меняет schema version `5`.
 
 ## Roadmap v2
 
@@ -842,13 +878,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S07B — Server authentication session, login/logout/current user
+V2-S07C — Web authentication integration
 ```
 
-Следующий шаг после локальной проверки и нового Git SHA:
+После его локальной проверки и нового Git SHA V2-S07 считается завершённым. Следующий шаг:
 
 ```text
-V2-S07C — Web authentication integration
+V2-S08 — Permissions и Roles
 ```
 
 ## Документы

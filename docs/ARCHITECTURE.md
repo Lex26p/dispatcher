@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S07B
+## 1. Состояние после V2-S07C
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -25,11 +25,15 @@ local user identity/password hash
 LocalAuthenticationService
       ↓
 ASP.NET Core cookie → HttpContext.User
+      ↓
+GET /api/auth/current
+      ↓
+Web AuthenticationClient → login shell / authenticated application shell
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, а V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary. Roles/permissions и Web login ещё не введены.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, а V2-S07C отображает этот identity state в Web. Roles/permissions и Server permission enforcement ещё не введены.
 
 ## 2. Главная граница binding
 
@@ -2156,4 +2160,106 @@ session revocation on user mutation
 
 ```text
 V2-S07C — Web authentication integration
+```
+
+## 71. Web authentication state boundary
+
+V2-S07C добавляет client-side state boundary поверх Server authentication API:
+
+```text
+browser-managed Dispatcher.Auth cookie
+        ↓ same-origin request
+GET /api/auth/current
+        ↓
+AuthenticationClient.CurrentUser
+        ↓
+App.razor
+   ├── anonymous      → Login
+   └── authenticated  → Router + MainLayout
+```
+
+`AuthenticationClient` является scoped Web service и хранит только Server-projected `CurrentUserDto`. Web не читает HttpOnly cookie и не создаёт отдельный bearer/localStorage token. После browser refresh identity восстанавливается повторным `GET /api/auth/current`.
+
+Login и logout также используют existing Server endpoints:
+
+```text
+POST /api/auth/login
+POST /api/auth/logout
+```
+
+После каждого successful action `AuthenticationClient` обновляет current identity и уведомляет application shell через `Changed`.
+
+## 72. Anonymous и authenticated shell
+
+Anonymous state не рендерит service content за login form:
+
+```text
+┌──────────────────────────────────────────────────────┐
+│ Dispatcher   Вход                                   │
+├──────────────────────────────────────────────────────┤
+│            local username / password                │
+│                         Войти                        │
+└──────────────────────────────────────────────────────┘
+```
+
+В anonymous header отсутствует `☰`, потому что service navigation до login не является полезным workflow. Login screen не является editor, поэтому искусственные left navigation/right properties panels не добавляются.
+
+Authenticated state сохраняет существующий engineering application shell. Справа в compact global header показываются:
+
+```text
+DisplayName
+UserName
+Выйти
+```
+
+Current browser route не заменяется специальным `/login` route. Если anonymous user открыл `/events`, `/history` или другой service URL, login form отображается поверх этого routing intent; после successful login Router открывает тот же URL. Logout также не меняет URL, поэтому повторный login возвращает пользователя в прежний service context.
+
+## 73. Web visibility не является authorization
+
+V2-S07C намеренно различает:
+
+```text
+Web authentication UX
+        ≠
+Server authorization
+```
+
+Скрытие service drawer/workspace для anonymous user уменьшает UI ambiguity, но не защищает REST/SignalR endpoints. Existing runtime/configuration/history/events/mimic endpoints на V2-S07C сохраняют semantics V2-S07B и не получают permission requirements.
+
+V2-S08 должен сначала добавить permission-based Server authorization, и только после этого Web visibility/enabled state сможет отражать effective permissions. Client-side checks никогда не заменяют Server enforcement.
+
+## 74. V2-S07 result и scope boundary
+
+После V2-S07A/B/C полный authentication foundation содержит:
+
+```text
+persistent local users
+platform password hash + verification
+explicit bootstrap
+disabled-user login rejection
+ASP.NET Core cookie session
+login / logout / current user Server API
+Web current-session initialization
+anonymous login screen
+authenticated current-user header
+logout action
+```
+
+Configuration schema остаётся version `5`, operational schema — version `2`.
+
+Ещё нет:
+
+```text
+roles
+permissions
+server authorization policies
+audit actor identity
+user/role management API/Web
+session revocation on user mutation
+```
+
+Следующий шаг:
+
+```text
+V2-S08 — Permissions и Roles
 ```
