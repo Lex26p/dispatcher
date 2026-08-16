@@ -98,6 +98,16 @@
                     </NavLink>
                 }
 
+                @if (CanEditTemplates)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="mimics/templates"
+                             @onclick="CloseGlobalNavigation">
+                        Шаблоны мнемосхем
+                    </NavLink>
+                }
+
                 @if (CanReadRuntime)
                 {
                     <NavLink class="global-nav-link"
@@ -157,6 +167,11 @@
             PermissionNames.RuntimeRead,
             PermissionNames.DevicesEdit);
 
+    private bool CanEditTemplates =>
+        Authentication.HasAllPermissions(
+            PermissionNames.RuntimeRead,
+            PermissionNames.TemplatesEdit);
+
     private bool CanEditAlarms =>
         Authentication.HasAllPermissions(
             PermissionNames.RuntimeRead,
@@ -180,6 +195,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "Редактор устройств";
+            }
+
+            if (path.StartsWith(
+                    "mimics/templates",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Шаблоны мнемосхем";
             }
 
             if (path.StartsWith(

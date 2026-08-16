@@ -1,0 +1,1360 @@
+@page "/mimics/templates"
+@inject MimicClient MimicApi
+@inject ConfigurationClient Configuration
+@inject AuthenticationClient Authentication
+@inject IJSRuntime JavaScript
+
+<PageTitle>Dispatcher — Шаблоны мнемосхем</PageTitle>
+
+<div class="mimic-editor-shell">
+    <aside class="mimic-editor-navigation">
+        <div class="mimic-editor-panel-heading">
+            <span>Шаблоны</span>
+            <span class="item-count">@_templates.Count</span>
+        </div>
+
+        <div class="mimic-editor-list">
+            @if (_loading)
+            {
+                <div class="compact-empty">Загрузка…</div>
+            }
+            else if (_templates.Count == 0)
+            {
+                <div class="compact-empty">Шаблонов пока нет.</div>
+            }
+            else
+            {
+                @foreach (var template in _templates)
+                {
+                    <button type="button"
+                            class="mimic-editor-list-item @TemplateSelectionClass(template)"
+                            @onclick="() => SelectTemplateAsync(template.TemplateId)">
+                        <span class="mimic-editor-list-name">@template.Name</span>
+                        <span class="mimic-editor-list-meta">
+                            @template.TemplateId · @template.Elements.Count элементов · @template.Parameters.Count параметров
+                        </span>
+                    </button>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="mimic-editor-workspace">
+        <div class="mimic-editor-toolbar">
+            <div class="mimic-editor-toolbar-left">
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_busy"
+                        @onclick="CreateTemplateAsync">
+                    + Шаблон
+                </button>
+
+                <span class="mimic-editor-toolbar-divider"></span>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="() => AddElement(MimicElementTypeDto.Text)">
+                    Text
+                </button>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="() => AddElement(MimicElementTypeDto.Rectangle)">
+                    Rectangle
+                </button>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="() => AddElement(MimicElementTypeDto.Value)">
+                    Value
+                </button>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="() => AddElement(MimicElementTypeDto.Indicator)">
+                    Indicator
+                </button>
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="() => AddElement(MimicElementTypeDto.Button)">
+                    Button
+                </button>
+
+                <span class="mimic-editor-toolbar-divider"></span>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="SaveAsync">
+                    @(_busy ? "Сохранение…" : "Сохранить")
+                </button>
+
+                <button type="button"
+                        class="toolbar-button danger"
+                        disabled="@(!HasDraft || _busy)"
+                        @onclick="DeleteAsync">
+                    @(_isNewTemplate ? "Отменить" : "Удалить шаблон")
+                </button>
+
+                <button type="button"
+                        class="toolbar-button danger"
+                        disabled="@(SelectedElement is null || _busy)"
+                        @onclick="DeleteSelectedElement">
+                    Удалить элемент
+                </button>
+            </div>
+
+            <div class="mimic-editor-toolbar-right">
+                @if (_dirty)
+                {
+                    <span class="unsaved-indicator">несохранено</span>
+                }
+
+                @if (Authentication.HasPermission(PermissionNames.MimicsEdit))
+                {
+                    <a class="toolbar-button mimic-editor-link"
+                       href="/mimics/editor">
+                        Редактор мнемосхем
+                    </a>
+                }
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@_busy"
+                        @onclick="RefreshAsync">
+                    Обновить
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="editor-error">@_error</div>
+        }
+
+        <div class="mimic-editor-work-content">
+            @if (_draft is null)
+            {
+                <div class="mimic-editor-empty">
+                    <div class="mimic-editor-empty-title">Выберите или создайте шаблон</div>
+                    <div class="mimic-editor-empty-text">
+                        Координаты элементов задаются относительно fragment bounds.
+                        Tag-bound элементы используют fixed TagId или параметр.
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="mimic-editor-canvas-wrap">
+                    <svg class="mimic-editor-canvas"
+                         viewBox="0 0 @_draft.Width @_draft.Height"
+                         preserveAspectRatio="xMidYMid meet"
+                         aria-label="@_draft.Name">
+                        <rect x="0"
+                              y="0"
+                              width="@_draft.Width"
+                              height="@_draft.Height"
+                              class="mimic-editor-canvas-background"
+                              @onclick="SelectTemplateProperties" />
+
+                        @foreach (var element in _draft.Elements)
+                        {
+                            <g class="mimic-editor-element @ElementSelectionClass(element)"
+                               @onclick="() => SelectElement(element)">
+                                @switch (element.Type)
+                                {
+                                    case MimicElementTypeDto.Text:
+                                        <rect x="@element.X" y="@element.Y"
+                                              width="@element.Width" height="@element.Height"
+                                              class="mimic-editor-text-hit-area" />
+                                        <foreignObject x="@element.X" y="@element.Y"
+                                                       width="@element.Width" height="@element.Height"
+                                                       class="mimic-editor-foreign">
+                                            <div class="mimic-editor-preview-text">@PreviewText(element)</div>
+                                        </foreignObject>
+                                        break;
+
+                                    case MimicElementTypeDto.Rectangle:
+                                        <rect x="@element.X" y="@element.Y"
+                                              width="@element.Width" height="@element.Height"
+                                              class="mimic-editor-preview-rectangle" />
+                                        break;
+
+                                    case MimicElementTypeDto.Value:
+                                    case MimicElementTypeDto.Indicator:
+                                        <rect x="@element.X" y="@element.Y"
+                                              width="@element.Width" height="@element.Height"
+                                              rx="3" class="mimic-editor-preview-box" />
+                                        <foreignObject x="@element.X" y="@element.Y"
+                                                       width="@element.Width" height="@element.Height"
+                                                       class="mimic-editor-foreign">
+                                            <div class="mimic-editor-preview-content">
+                                                <div class="mimic-editor-preview-label">@PreviewText(element)</div>
+                                                <div class="mimic-editor-preview-small">@PreviewBinding(element)</div>
+                                            </div>
+                                        </foreignObject>
+                                        break;
+
+                                    case MimicElementTypeDto.Button:
+                                        <rect x="@element.X" y="@element.Y"
+                                              width="@element.Width" height="@element.Height"
+                                              rx="4" class="mimic-editor-preview-button" />
+                                        <foreignObject x="@element.X" y="@element.Y"
+                                                       width="@element.Width" height="@element.Height"
+                                                       class="mimic-editor-foreign">
+                                            <div class="mimic-editor-preview-button-text">@PreviewText(element)</div>
+                                        </foreignObject>
+                                        break;
+                                }
+
+                                @if (IsSelected(element))
+                                {
+                                    <rect x="@element.X" y="@element.Y"
+                                          width="@element.Width" height="@element.Height"
+                                          class="mimic-editor-selection" />
+                                }
+                            </g>
+                        }
+                    </svg>
+                </div>
+            }
+        </div>
+    </main>
+
+    <aside class="mimic-editor-properties">
+        <div class="mimic-editor-panel-heading">@PropertiesHeading</div>
+
+        @if (_draft is null)
+        {
+            <div class="mimic-editor-properties-empty">Выберите шаблон.</div>
+        }
+        else if (SelectedElement is null)
+        {
+            <div class="property-form">
+                <label class="property-field">
+                    <span>Template ID</span>
+                    <input type="text"
+                           disabled="@(!_isNewTemplate)"
+                           @bind="_draft.TemplateId"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                @if (!_isNewTemplate)
+                {
+                    <div class="property-inline-note">ID существующего шаблона не переименовывается.</div>
+                }
+
+                <label class="property-field">
+                    <span>Имя</span>
+                    <input type="text"
+                           @bind="_draft.Name"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <div class="property-section-title">Fragment bounds</div>
+
+                <div class="property-grid-two">
+                    <label class="property-field">
+                        <span>Width</span>
+                        <input type="number" min="1" max="10000"
+                               @bind="_draft.Width" @bind:after="MarkDirty" />
+                    </label>
+                    <label class="property-field">
+                        <span>Height</span>
+                        <input type="number" min="1" max="10000"
+                               @bind="_draft.Height" @bind:after="MarkDirty" />
+                    </label>
+                </div>
+
+                <div class="property-section-title template-parameter-title">
+                    <span>TagId parameters</span>
+                    <button type="button"
+                            class="toolbar-button"
+                            disabled="@_busy"
+                            @onclick="AddParameter">
+                        + Параметр
+                    </button>
+                </div>
+
+                @if (_draft.Parameters.Count == 0)
+                {
+                    <div class="property-inline-note">Параметров нет. Можно использовать fixed TagId.</div>
+                }
+                else
+                {
+                    <div class="template-parameter-list">
+                        @foreach (var parameter in _draft.Parameters)
+                        {
+                            <div class="template-parameter-row" @key="parameter.ClientKey">
+                                <input type="text"
+                                       aria-label="Parameter ID"
+                                       title="Parameter ID"
+                                       @bind="parameter.ParameterId"
+                                       @bind:event="oninput"
+                                       @bind:after="MarkDirty" />
+                                <input type="text"
+                                       aria-label="Parameter name"
+                                       title="Parameter name"
+                                       @bind="parameter.Name"
+                                       @bind:event="oninput"
+                                       @bind:after="MarkDirty" />
+                                <button type="button"
+                                        class="toolbar-button danger"
+                                        disabled="@_busy"
+                                        @onclick="() => DeleteParameter(parameter)">
+                                    ×
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="property-help">
+                    После instantiate parameter заменяется обычным logical TagId. Связь с шаблоном не сохраняется.
+                </div>
+            </div>
+        }
+        else
+        {
+            var element = SelectedElement!;
+
+            <div class="property-form">
+                <label class="property-field">
+                    <span>Element ID</span>
+                    <input type="text"
+                           @bind="element.ElementId"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-field">
+                    <span>Type</span>
+                    <select @bind="element.Type" @bind:after="OnElementTypeChanged">
+                        <option value="Text">Text</option>
+                        <option value="Rectangle">Rectangle</option>
+                        <option value="Value">Value</option>
+                        <option value="Indicator">Indicator</option>
+                        <option value="Button">Button</option>
+                    </select>
+                </label>
+
+                <div class="property-section-title">Position / size</div>
+
+                <div class="property-grid-two">
+                    <label class="property-field">
+                        <span>X</span>
+                        <input type="number" min="0" @bind="element.X" @bind:after="MarkDirty" />
+                    </label>
+                    <label class="property-field">
+                        <span>Y</span>
+                        <input type="number" min="0" @bind="element.Y" @bind:after="MarkDirty" />
+                    </label>
+                    <label class="property-field">
+                        <span>Width</span>
+                        <input type="number" min="1" @bind="element.Width" @bind:after="MarkDirty" />
+                    </label>
+                    <label class="property-field">
+                        <span>Height</span>
+                        <input type="number" min="1" @bind="element.Height" @bind:after="MarkDirty" />
+                    </label>
+                </div>
+
+                @if (element.Type != MimicElementTypeDto.Rectangle)
+                {
+                    <div class="property-section-title">Content</div>
+                    <label class="property-field">
+                        <span>Text</span>
+                        <input type="text"
+                               @bind="element.Text"
+                               @bind:event="oninput"
+                               @bind:after="MarkDirty" />
+                    </label>
+                }
+
+                @if (RequiresTag(element.Type))
+                {
+                    <div class="property-section-title">Tag binding</div>
+
+                    <label class="property-field">
+                        <span>Mode</span>
+                        <select @bind="element.BindingMode" @bind:after="OnBindingModeChanged">
+                            <option value="Fixed">Fixed TagId</option>
+                            <option value="Parameter">Parameter</option>
+                        </select>
+                    </label>
+
+                    @if (element.BindingMode == TemplateBindingMode.Fixed)
+                    {
+                        <label class="property-field">
+                            <span>Tag ID</span>
+                            <select @bind="element.TagId" @bind:after="MarkDirty">
+                                <option value="">— выбрать TagId —</option>
+                                @foreach (var tagId in TagOptions(element.TagId))
+                                {
+                                    <option value="@tagId">@tagId</option>
+                                }
+                            </select>
+                        </label>
+
+                        @if (IsStaleTagId(element.TagId))
+                        {
+                            <div class="property-inline-note">
+                                Fixed TagId отсутствует в current configuration. Он сохранён в draft явно.
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <label class="property-field">
+                            <span>Parameter</span>
+                            <select @bind="element.TagParameterId" @bind:after="MarkDirty">
+                                <option value="">— выбрать parameter —</option>
+                                @foreach (var parameter in _draft.Parameters)
+                                {
+                                    <option value="@parameter.ParameterId">
+                                        @parameter.Name (@parameter.ParameterId)
+                                    </option>
+                                }
+                            </select>
+                        </label>
+                    }
+                }
+
+                @if (element.Type == MimicElementTypeDto.Button)
+                {
+                    <label class="property-field">
+                        <span>Command value</span>
+                        <input type="number" min="0" max="65535"
+                               @bind="element.CommandValue" @bind:after="MarkDirty" />
+                    </label>
+                }
+
+                <div class="property-help">
+                    Координаты являются relative position внутри fragment bounds.
+                </div>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private IReadOnlyList<MimicTemplateDto> _templates =
+        Array.Empty<MimicTemplateDto>();
+
+    private readonly List<string> _configuredTagIds = [];
+
+    private TemplateDraft? _draft;
+    private string? _selectedElementKey;
+    private bool _isNewTemplate;
+    private bool _dirty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+
+    private bool HasDraft =>
+        _draft is not null;
+
+    private TemplateElementDraft? SelectedElement =>
+        _draft?.Elements.FirstOrDefault(element =>
+            string.Equals(
+                element.ClientKey,
+                _selectedElementKey,
+                StringComparison.Ordinal));
+
+    private string PropertiesHeading =>
+        SelectedElement is null
+            ? "Свойства шаблона"
+            : "Свойства элемента";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTagOptionsAsync();
+        await ReloadListAsync();
+    }
+
+    private async Task LoadTagOptionsAsync()
+    {
+        try
+        {
+            var modbus =
+                await Configuration.GetDevicesAsync();
+            var snmp =
+                await Configuration.GetSnmpDevicesAsync();
+
+            _configuredTagIds.Clear();
+            _configuredTagIds.AddRange(
+                modbus.SelectMany(device => device.Tags).Select(tag => tag.TagId)
+                    .Concat(snmp.SelectMany(device => device.Tags).Select(tag => tag.TagId))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(tagId => tagId, StringComparer.Ordinal));
+        }
+        catch (Exception exception)
+        {
+            _error = $"Не удалось загрузить список тегов: {exception.Message}";
+        }
+    }
+
+    private async Task ReloadListAsync(
+        string? preferredTemplateId = null)
+    {
+        _loading = true;
+
+        try
+        {
+            _templates =
+                await MimicApi.GetTemplatesAsync();
+
+            if (preferredTemplateId is not null
+                && !_templates.Any(template =>
+                    string.Equals(
+                        template.TemplateId,
+                        preferredTemplateId,
+                        StringComparison.Ordinal)))
+            {
+                ClearDraft();
+            }
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CreateTemplateAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _draft =
+            new TemplateDraft
+            {
+                TemplateId = CreateUniqueTemplateId(),
+                Name = "Новый шаблон",
+                Width = 320,
+                Height = 180
+            };
+
+        _selectedElementKey = null;
+        _isNewTemplate = true;
+        _dirty = true;
+        _error = null;
+    }
+
+    private async Task SelectTemplateAsync(
+        string templateId)
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var template =
+                await MimicApi.GetTemplateAsync(
+                    templateId);
+
+            if (template is null)
+            {
+                _error = $"Шаблон '{templateId}' не найден.";
+                await ReloadListAsync();
+                return;
+            }
+
+            _draft =
+                TemplateDraft.From(
+                    template);
+            _selectedElementKey = null;
+            _isNewTemplate = false;
+            _dirty = false;
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        var selectedId =
+            _isNewTemplate
+                ? null
+                : _draft?.TemplateId;
+
+        _dirty = false;
+        ClearDraft();
+
+        await LoadTagOptionsAsync();
+        await ReloadListAsync(
+            selectedId);
+
+        if (selectedId is not null)
+        {
+            await SelectTemplateAsync(
+                selectedId);
+        }
+    }
+
+    private void AddParameter()
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        var index = 1;
+        string parameterId;
+
+        do
+        {
+            parameterId = $"tag{index:00}";
+            index++;
+        }
+        while (_draft.Parameters.Any(parameter =>
+            string.Equals(
+                parameter.ParameterId,
+                parameterId,
+                StringComparison.Ordinal)));
+
+        _draft.Parameters.Add(
+            new TemplateParameterDraft
+            {
+                ParameterId = parameterId,
+                Name = $"Tag {index - 1}"
+            });
+
+        MarkDirty();
+    }
+
+    private void DeleteParameter(
+        TemplateParameterDraft parameter)
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        if (_draft.Elements.Any(element =>
+                element.BindingMode == TemplateBindingMode.Parameter
+                && string.Equals(
+                    element.TagParameterId,
+                    parameter.ParameterId,
+                    StringComparison.Ordinal)))
+        {
+            _error =
+                $"Параметр '{parameter.ParameterId}' используется элементом. Сначала измените binding элемента.";
+            return;
+        }
+
+        _draft.Parameters.Remove(
+            parameter);
+        MarkDirty();
+    }
+
+    private void AddElement(
+        MimicElementTypeDto type)
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        var index =
+            _draft.Elements.Count;
+        var element =
+            TemplateElementDraft.Create(
+                CreateUniqueElementId(type),
+                type,
+                20 + (index * 12) % 140,
+                20 + (index * 12) % 90,
+                _configuredTagIds.FirstOrDefault());
+
+        _draft.Elements.Add(
+            element);
+        _selectedElementKey =
+            element.ClientKey;
+        MarkDirty();
+    }
+
+    private void SelectElement(
+        TemplateElementDraft element)
+    {
+        _selectedElementKey =
+            element.ClientKey;
+    }
+
+    private void SelectTemplateProperties()
+    {
+        _selectedElementKey = null;
+    }
+
+    private void DeleteSelectedElement()
+    {
+        if (_draft is null
+            || SelectedElement is null)
+        {
+            return;
+        }
+
+        _draft.Elements.Remove(
+            SelectedElement);
+        _selectedElementKey = null;
+        MarkDirty();
+    }
+
+    private void OnElementTypeChanged()
+    {
+        var element =
+            SelectedElement;
+
+        if (element is null)
+        {
+            return;
+        }
+
+        switch (element.Type)
+        {
+            case MimicElementTypeDto.Text:
+                element.Text = string.IsNullOrWhiteSpace(element.Text) ? "Text" : element.Text;
+                element.BindingMode = TemplateBindingMode.None;
+                element.TagId = null;
+                element.TagParameterId = null;
+                element.CommandValue = null;
+                break;
+
+            case MimicElementTypeDto.Rectangle:
+                element.Text = null;
+                element.BindingMode = TemplateBindingMode.None;
+                element.TagId = null;
+                element.TagParameterId = null;
+                element.CommandValue = null;
+                break;
+
+            case MimicElementTypeDto.Value:
+            case MimicElementTypeDto.Indicator:
+                element.BindingMode = TemplateBindingMode.Fixed;
+                element.TagId ??= _configuredTagIds.FirstOrDefault();
+                element.TagParameterId = null;
+                element.CommandValue = null;
+                break;
+
+            case MimicElementTypeDto.Button:
+                element.BindingMode = TemplateBindingMode.Fixed;
+                element.TagId ??= _configuredTagIds.FirstOrDefault();
+                element.TagParameterId = null;
+                element.CommandValue ??= 1;
+                element.Text = string.IsNullOrWhiteSpace(element.Text) ? "Команда" : element.Text;
+                break;
+        }
+
+        MarkDirty();
+    }
+
+    private void OnBindingModeChanged()
+    {
+        var element =
+            SelectedElement;
+
+        if (element is null)
+        {
+            return;
+        }
+
+        if (element.BindingMode == TemplateBindingMode.Fixed)
+        {
+            element.TagParameterId = null;
+            element.TagId ??=
+                _configuredTagIds.FirstOrDefault();
+        }
+        else if (element.BindingMode == TemplateBindingMode.Parameter)
+        {
+            element.TagId = null;
+            element.TagParameterId ??=
+                _draft?.Parameters.FirstOrDefault()?.ParameterId;
+        }
+
+        MarkDirty();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_draft is null
+            || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var template =
+                BuildTemplate(
+                    _draft);
+
+            if (_isNewTemplate
+                && _templates.Any(existing =>
+                    string.Equals(
+                        existing.TemplateId,
+                        template.TemplateId,
+                        StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    $"Template ID '{template.TemplateId}' уже существует.");
+            }
+
+            var saved =
+                await MimicApi.SaveTemplateAsync(
+                    template);
+
+            _draft =
+                TemplateDraft.From(
+                    saved);
+            _selectedElementKey = null;
+            _isNewTemplate = false;
+            _dirty = false;
+
+            await ReloadListAsync(
+                saved.TemplateId);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        if (_isNewTemplate)
+        {
+            ClearDraft();
+            return;
+        }
+
+        var confirmed =
+            await JavaScript.InvokeAsync<bool>(
+                "confirm",
+                $"Удалить шаблон '{_draft.Name}'? Уже созданные экземпляры не изменятся.");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            await MimicApi.DeleteTemplateAsync(
+                _draft.TemplateId);
+
+            ClearDraft();
+            await ReloadListAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private MimicTemplateDto BuildTemplate(
+        TemplateDraft draft)
+    {
+        var templateId =
+            RequireTrimmed(
+                draft.TemplateId,
+                "Template ID обязателен.");
+        var name =
+            RequireTrimmed(
+                draft.Name,
+                "Имя шаблона обязательно.");
+
+        var parameters =
+            draft.Parameters
+                .Select(parameter =>
+                    new MimicTemplateParameterDto(
+                        RequireTrimmed(
+                            parameter.ParameterId,
+                            "Parameter ID обязателен."),
+                        RequireTrimmed(
+                            parameter.Name,
+                            "Имя параметра обязательно.")))
+                .ToArray();
+
+        var duplicateParameter =
+            parameters
+                .GroupBy(parameter => parameter.ParameterId, StringComparer.Ordinal)
+                .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicateParameter is not null)
+        {
+            throw new InvalidOperationException(
+                $"Parameter ID '{duplicateParameter.Key}' должен быть уникален.");
+        }
+
+        var parameterIds =
+            parameters.Select(parameter => parameter.ParameterId)
+                .ToHashSet(StringComparer.Ordinal);
+
+        var elements =
+            draft.Elements
+                .Select(element => element.ToDto(parameterIds))
+                .ToArray();
+
+        var duplicateElement =
+            elements
+                .GroupBy(element => element.ElementId, StringComparer.Ordinal)
+                .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicateElement is not null)
+        {
+            throw new InvalidOperationException(
+                $"Element ID '{duplicateElement.Key}' должен быть уникален.");
+        }
+
+        return new MimicTemplateDto(
+            templateId,
+            name,
+            draft.Width,
+            draft.Height,
+            parameters,
+            elements);
+    }
+
+    private static string RequireTrimmed(
+        string value,
+        string error)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(error);
+        }
+
+        return value.Trim();
+    }
+
+    private bool IsStaleTagId(
+        string? tagId)
+    {
+        return !string.IsNullOrWhiteSpace(tagId)
+            && !_configuredTagIds.Contains(
+                tagId,
+                StringComparer.Ordinal);
+    }
+
+    private IEnumerable<string> TagOptions(
+        string? currentTagId)
+    {
+        if (!string.IsNullOrWhiteSpace(currentTagId)
+            && !_configuredTagIds.Contains(currentTagId, StringComparer.Ordinal))
+        {
+            yield return currentTagId;
+        }
+
+        foreach (var tagId in _configuredTagIds)
+        {
+            yield return tagId;
+        }
+    }
+
+    private string CreateUniqueTemplateId()
+    {
+        for (var index = 1; index < 10000; index++)
+        {
+            var candidate = $"template{index:00}";
+
+            if (!_templates.Any(template =>
+                    string.Equals(template.TemplateId, candidate, StringComparison.Ordinal)))
+            {
+                return candidate;
+            }
+        }
+
+        return $"template-{Guid.NewGuid():N}";
+    }
+
+    private string CreateUniqueElementId(
+        MimicElementTypeDto type)
+    {
+        var prefix =
+            type.ToString().ToLowerInvariant();
+
+        for (var index = 1; index < 10000; index++)
+        {
+            var candidate = $"{prefix}{index:00}";
+
+            if (_draft is null
+                || !_draft.Elements.Any(element =>
+                    string.Equals(element.ElementId, candidate, StringComparison.Ordinal)))
+            {
+                return candidate;
+            }
+        }
+
+        return $"{prefix}-{Guid.NewGuid():N}";
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!_dirty)
+        {
+            return true;
+        }
+
+        return await JavaScript.InvokeAsync<bool>(
+            "confirm",
+            "Есть несохранённые изменения шаблона. Отбросить их?");
+    }
+
+    private void MarkDirty()
+    {
+        _dirty = true;
+        _error = null;
+    }
+
+    private void ClearDraft()
+    {
+        _draft = null;
+        _selectedElementKey = null;
+        _isNewTemplate = false;
+        _dirty = false;
+        _error = null;
+    }
+
+    private bool IsSelected(
+        TemplateElementDraft element)
+    {
+        return string.Equals(
+            element.ClientKey,
+            _selectedElementKey,
+            StringComparison.Ordinal);
+    }
+
+    private string ElementSelectionClass(
+        TemplateElementDraft element)
+    {
+        return IsSelected(element)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private string TemplateSelectionClass(
+        MimicTemplateDto template)
+    {
+        return !_isNewTemplate
+               && string.Equals(
+                   template.TemplateId,
+                   _draft?.TemplateId,
+                   StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private static bool RequiresTag(
+        MimicElementTypeDto type)
+    {
+        return type is MimicElementTypeDto.Value
+            or MimicElementTypeDto.Indicator
+            or MimicElementTypeDto.Button;
+    }
+
+    private static string PreviewText(
+        TemplateElementDraft element)
+    {
+        if (!string.IsNullOrWhiteSpace(element.Text))
+        {
+            return element.Text;
+        }
+
+        return element.Type switch
+        {
+            MimicElementTypeDto.Text => "Text",
+            MimicElementTypeDto.Value => "Value",
+            MimicElementTypeDto.Indicator => "Indicator",
+            MimicElementTypeDto.Button => "Button",
+            _ => string.Empty
+        };
+    }
+
+    private static string PreviewBinding(
+        TemplateElementDraft element)
+    {
+        return element.BindingMode switch
+        {
+            TemplateBindingMode.Parameter when !string.IsNullOrWhiteSpace(element.TagParameterId) =>
+                $"{{{element.TagParameterId}}}",
+            TemplateBindingMode.Fixed when !string.IsNullOrWhiteSpace(element.TagId) =>
+                element.TagId,
+            _ => "binding не выбран"
+        };
+    }
+
+    private sealed class TemplateDraft
+    {
+        public string TemplateId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public int Width { get; set; } = 320;
+        public int Height { get; set; } = 180;
+        public List<TemplateParameterDraft> Parameters { get; } = [];
+        public List<TemplateElementDraft> Elements { get; } = [];
+
+        public static TemplateDraft From(
+            MimicTemplateDto template)
+        {
+            var draft =
+                new TemplateDraft
+                {
+                    TemplateId = template.TemplateId,
+                    Name = template.Name,
+                    Width = template.Width,
+                    Height = template.Height
+                };
+
+            draft.Parameters.AddRange(
+                template.Parameters.Select(parameter =>
+                    new TemplateParameterDraft
+                    {
+                        ParameterId = parameter.ParameterId,
+                        Name = parameter.Name
+                    }));
+
+            draft.Elements.AddRange(
+                template.Elements.Select(
+                    TemplateElementDraft.From));
+
+            return draft;
+        }
+    }
+
+    private sealed class TemplateParameterDraft
+    {
+        public string ClientKey { get; } = Guid.NewGuid().ToString("N");
+        public string ParameterId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private enum TemplateBindingMode
+    {
+        None,
+        Fixed,
+        Parameter
+    }
+
+    private sealed class TemplateElementDraft
+    {
+        public string ClientKey { get; } = Guid.NewGuid().ToString("N");
+        public string ElementId { get; set; } = string.Empty;
+        public MimicElementTypeDto Type { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public string? Text { get; set; }
+        public TemplateBindingMode BindingMode { get; set; }
+        public string? TagId { get; set; }
+        public string? TagParameterId { get; set; }
+        public int? CommandValue { get; set; }
+
+        public MimicTemplateElementDto ToDto(
+            IReadOnlySet<string> parameterIds)
+        {
+            var elementId =
+                RequireTrimmed(
+                    ElementId,
+                    "Element ID обязателен.");
+
+            string? tagId = null;
+            string? tagParameterId = null;
+            ushort? commandValue = null;
+
+            if (RequiresTag(Type))
+            {
+                if (BindingMode == TemplateBindingMode.Fixed)
+                {
+                    tagId =
+                        RequireTrimmed(
+                            TagId ?? string.Empty,
+                            $"Element '{elementId}' требует fixed TagId.");
+                }
+                else if (BindingMode == TemplateBindingMode.Parameter)
+                {
+                    tagParameterId =
+                        RequireTrimmed(
+                            TagParameterId ?? string.Empty,
+                            $"Element '{elementId}' требует TagId parameter.");
+
+                    if (!parameterIds.Contains(tagParameterId))
+                    {
+                        throw new InvalidOperationException(
+                            $"Element '{elementId}' ссылается на неизвестный parameter '{tagParameterId}'.");
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        $"Element '{elementId}' требует fixed TagId или parameter binding.");
+                }
+            }
+
+            if (Type == MimicElementTypeDto.Button)
+            {
+                if (CommandValue is null
+                    || CommandValue is < 0 or > ushort.MaxValue)
+                {
+                    throw new InvalidOperationException(
+                        $"Button '{elementId}' Command value должен быть от 0 до 65535.");
+                }
+
+                commandValue = (ushort)CommandValue.Value;
+            }
+
+            return new MimicTemplateElementDto(
+                elementId,
+                Type,
+                X,
+                Y,
+                Width,
+                Height,
+                Text,
+                tagId,
+                tagParameterId,
+                commandValue);
+        }
+
+        public static TemplateElementDraft From(
+            MimicTemplateElementDto element)
+        {
+            return new TemplateElementDraft
+            {
+                ElementId = element.ElementId,
+                Type = element.Type,
+                X = element.X,
+                Y = element.Y,
+                Width = element.Width,
+                Height = element.Height,
+                Text = element.Text,
+                BindingMode = !string.IsNullOrWhiteSpace(element.TagParameterId)
+                    ? TemplateBindingMode.Parameter
+                    : !string.IsNullOrWhiteSpace(element.TagId)
+                        ? TemplateBindingMode.Fixed
+                        : TemplateBindingMode.None,
+                TagId = element.TagId,
+                TagParameterId = element.TagParameterId,
+                CommandValue = element.CommandValue
+            };
+        }
+
+        public static TemplateElementDraft Create(
+            string elementId,
+            MimicElementTypeDto type,
+            int x,
+            int y,
+            string? defaultTagId)
+        {
+            return type switch
+            {
+                MimicElementTypeDto.Text => new TemplateElementDraft
+                {
+                    ElementId = elementId,
+                    Type = type,
+                    X = x,
+                    Y = y,
+                    Width = 180,
+                    Height = 34,
+                    Text = "Text"
+                },
+                MimicElementTypeDto.Rectangle => new TemplateElementDraft
+                {
+                    ElementId = elementId,
+                    Type = type,
+                    X = x,
+                    Y = y,
+                    Width = 220,
+                    Height = 120
+                },
+                MimicElementTypeDto.Value => new TemplateElementDraft
+                {
+                    ElementId = elementId,
+                    Type = type,
+                    X = x,
+                    Y = y,
+                    Width = 180,
+                    Height = 60,
+                    Text = "Value",
+                    BindingMode = TemplateBindingMode.Fixed,
+                    TagId = defaultTagId
+                },
+                MimicElementTypeDto.Indicator => new TemplateElementDraft
+                {
+                    ElementId = elementId,
+                    Type = type,
+                    X = x,
+                    Y = y,
+                    Width = 180,
+                    Height = 54,
+                    Text = "Indicator",
+                    BindingMode = TemplateBindingMode.Fixed,
+                    TagId = defaultTagId
+                },
+                MimicElementTypeDto.Button => new TemplateElementDraft
+                {
+                    ElementId = elementId,
+                    Type = type,
+                    X = x,
+                    Y = y,
+                    Width = 120,
+                    Height = 44,
+                    Text = "Команда",
+                    BindingMode = TemplateBindingMode.Fixed,
+                    TagId = defaultTagId,
+                    CommandValue = 1
+                },
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(type),
+                    type,
+                    null)
+            };
+        }
+    }
+}

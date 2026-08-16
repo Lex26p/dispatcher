@@ -3583,3 +3583,60 @@ POST /api/configuration/mimics/{MimicId}/templates/{TemplateId}/instantiate
 Instantiate изменяет target mimic, поэтому не требует `Templates.Edit`: инженер может использовать read-visible approved template без права редактировать сам catalog. Template mutations и instantiate создают existing actor-aware `ConfigurationChanged`; отдельный EventType/operational schema не вводится.
 
 Configuration schema после S13A — `8`, operational schema остаётся `3`. Web layout/navigation в S13A не меняются; picker/parameter placement workflow остаётся V2-S13B.
+
+## 116. V2-S13B Web permission split
+
+S13B не меняет S13A storage/API и сохраняет две независимые mutation capabilities:
+
+```text
+/mimics/templates
+    Runtime.Read + Templates.Edit
+    → Mimic template management
+
+/mimics/editor
+    Runtime.Read + Mimics.Edit
+    → target mimic editing + template placement
+```
+
+Template management не скрывается внутри route, который требует `Mimics.Edit`: custom role с `Templates.Edit` может управлять reusable fragments без права менять конкретные мнемосхемы. Обратно, engineer с `Mimics.Edit` и без `Templates.Edit` может читать approved templates через S13A `Runtime.Read` boundary и instantiate их, не получая template mutation controls. Web checks остаются UX projection; Server middleware авторизует каждый REST action отдельно.
+
+## 117. Mimic template Web editing model
+
+`/mimics/templates` повторяет существующий engineering spatial contract:
+
+```text
+слева  → dense template list
+центр  → compact toolbar + fragment SVG preview
+справа → template/parameter или selected element properties
+```
+
+Template editor использует client-side draft + explicit Save. Persisted `TemplateId` read-only. Fragment `Width/Height` и element `X/Y/Width/Height` редактируются численно; drag-and-drop слой не добавляется. Parameters редактируют `ParameterId + Name`; удаление parameter блокируется в Web, пока draft element ссылается на него.
+
+Tag-bound element имеет только один выбранный Web mode:
+
+```text
+Fixed TagId
+Parameter → TagParameterId
+```
+
+Selector использует current Modbus/SNMP logical TagId. Existing stale fixed TagId не исчезает из draft и остаётся видимым. Server S13A validator остаётся окончательной проверкой fragment bounds, duplicate IDs и binding semantics.
+
+## 118. Template placement и dirty-draft invariant
+
+S13A instantiate endpoint сразу сохраняет новые элементы в target mimic. Поэтому S13B не вызывает его поверх несохранённого client draft:
+
+```text
+new mimic OR dirty mimic draft
+    → placement disabled
+    → сначала explicit Save
+
+persisted clean mimic
+    → template + TagBindings + X/Y
+    → POST instantiate
+    → authoritative MimicDefinitionDto
+    → replace Web draft
+```
+
+Это исключает race, при котором последующий Save старого draft перезаписал бы только что вставленные Server-side элементы. После successful instantiate Web сравнивает прежние `ElementId` с Server response и выбирает первый newly generated element; сами IDs по-прежнему генерируются Server.
+
+Placement panel находится в existing Mimic Editor workspace между compact toolbar и canvas. Отдельный runtime state/realtime transport для templates не создаётся. Configuration schema остаётся `8`, operational schema — `3`; linked instances/version propagation отсутствуют.

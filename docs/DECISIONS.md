@@ -1715,3 +1715,24 @@ Successful mutations повторно используют actor-aware `Configur
 - target mimic после instantiate должен оставаться обычным existing definition, понятным текущему runtime/editor;
 - право редактировать reusable template и право изменять конкретную мнемосхему являются разными capabilities;
 - generic catalog/versioning следует извлекать только после появления второго реального use case V2-S14.
+
+---
+
+## D-076 — Mimic template management и placement разделены по Templates.Edit / Mimics.Edit; instantiate требует clean persisted draft
+
+**Status:** Accepted
+
+V2-S13B добавляет Web поверх S13A без изменения schema/API. Template management живёт на `/mimics/templates` и требует `Runtime.Read + Templates.Edit`; placement остаётся частью `/mimics/editor` и требует уже существующие `Runtime.Read + Mimics.Edit`. Таким образом custom permissions не сворачиваются обратно в одну роль или одну editor capability.
+
+S13A instantiate является durable mutation target mimic. Поэтому Web разрешает placement только когда выбранная mimic уже существует на Server и client draft не имеет несохранённых изменений. После instantiate editor принимает возвращённый Server `MimicDefinitionDto` как authoritative draft, вместо локального append.
+
+Template editor сохраняет client-side draft/explicit Save, fixed `TagId` или `TagParameterId`, relative numeric placement и существующий dense three-panel layout. Linked instances, template version propagation и generic catalog не добавляются.
+
+Причина:
+
+- `Templates.Edit` и `Mimics.Edit` защищают разные изменяемые сущности и не должны неявно требовать друг друга;
+- Server-side instantiate поверх dirty draft создал бы риск последующего overwrite вставленных элементов старым full-definition Save;
+- отдельный management route позволяет template-only custom role работать без `Mimics.Edit`;
+- placement должен использовать authoritative S13A response и Server-generated ElementId;
+- template UX должен повторять уже освоенную spatial model Mimic Editor, а не создавать крупный новый dashboard;
+- второй concrete use case V2-S14 всё ещё должен появиться раньше generic Template Catalog/Kind/Version.

@@ -551,3 +551,34 @@ History — отдельная dense table persisted `AlarmRaised / AlarmAcknowl
 Operator screen показывает состояние Alarm SignalR connection. `AlarmChanged` меняет current lifecycle list, а existing `TagChanged` обновляет current value visible alarms.
 
 Bulk ACK, shelving/suppression controls и alarm groups в V2-S12 отсутствуют.
+
+## 21. Mimic templates
+
+V2-S13B добавляет два связанных engineering workflow, но не объединяет их permissions:
+
+```text
+/mimics/editor     → Runtime.Read + Mimics.Edit
+/mimics/templates  → Runtime.Read + Templates.Edit
+```
+
+Global navigation показывает `Шаблоны мнемосхем` только при `Runtime.Read + Templates.Edit`. `Редактор мнемосхем` остаётся отдельным `Runtime.Read + Mimics.Edit` workflow. Role names не используются.
+
+Template management использует тот же spatial pattern, что Mimic Editor:
+
+```text
+слева  → templates
+центр  → compact toolbar + fragment SVG
+справа → template parameters / selected element properties
+```
+
+Не используются большие cards, отдельный hero/header или постоянный дополнительный navigation rail. Persisted TemplateId read-only; dirty draft показывается тем же compact `несохранено` state. Parameters редактируются справа компактными строками. Tag-bound element выбирает fixed TagId либо parameter placeholder.
+
+В `/mimics/editor` template placement не заменяет canvas и не создаёт четвёртую постоянную панель. Кнопка `Вставить шаблон` открывает compact contextual panel между toolbar и canvas:
+
+```text
+Template | X | Y | parameter TagId selectors | Вставить
+```
+
+Panel доступна только для persisted clean mimic. Для new/dirty draft button disabled с объяснением необходимости сначала сохранить, потому что instantiate является немедленной Server mutation. После successful instantiate обычные элементы сразу доступны существующему canvas/properties editor; template back-reference в UI не показывается, поскольку его нет в persisted mimic.
+
+Stale fixed TagId template не скрывается: placement показывает warning, а после copy обычный элемент можно исправить стандартным TagId selector. Permission-aware visibility остаётся UX only; Server S13A policies authoritative.

@@ -1041,7 +1041,7 @@ Dispatcher имеет полноценный минимальный alarm lifecy
 
 # Phase 9 — Templates
 
-## [ ] V2-S13 — Mimic templates
+## [x] V2-S13 — Mimic templates
 
 Первый concrete template use case разделён на два проверяемых подшага.
 
@@ -1072,19 +1072,24 @@ linked template instances
 automatic propagation
 ```
 
-### [ ] V2-S13B — Mimic Editor template integration
+### [x] V2-S13B — Mimic Editor template integration
 
-Web editor должен дать инженерный workflow:
+Реализовано:
 
-```text
-выбрать template
-→ заполнить TagId parameters
-→ задать insertion position
-→ instantiate
-→ получить обычные editable mimic elements
-```
+- отдельный engineering route `/mimics/templates` для template management;
+- route/navigation `/mimics/templates` требуют `Runtime.Read + Templates.Edit`;
+- templates слева, fragment SVG/canvas в центре, template/element properties справа;
+- create/save/delete/refresh, parameters и relative elements редактируются через client-side draft + explicit Save;
+- tag-bound template element переключается между fixed `TagId` и `TagParameterId`;
+- stale fixed TagId остаётся видимым в selector;
+- `/mimics/editor` получает compact placement panel поверх existing canvas, без нового глобального workspace;
+- placement доступен только для persisted clean mimic draft, потому что S13A instantiate сразу изменяет durable target mimic;
+- workflow: выбрать template → заполнить TagId parameters → X/Y → instantiate;
+- successful instantiate заменяет editor draft authoritative Server response и выделяет первый новый element;
+- template management controls не требуются для использования approved template: placement по-прежнему зависит от `Mimics.Edit`, а не `Templates.Edit`;
+- Web не хранит linked template instance и не реализует propagation/versioning.
 
-Template management/editing UI и placement должны соблюдать существующий dense Mimic Editor layout и permission projection `Templates.Edit` / `Mimics.Edit`.
+Template management/editing UI и placement соблюдают существующий dense Mimic Editor layout и независимую permission projection `Templates.Edit` / `Mimics.Edit`.
 
 ### Результат после V2-S13
 

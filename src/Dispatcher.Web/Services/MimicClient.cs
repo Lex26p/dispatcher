@@ -83,6 +83,99 @@ public sealed class MimicClient
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<MimicTemplateDto>> GetTemplatesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<MimicTemplateDto[]>(
+            "/api/configuration/mimic-templates",
+            cancellationToken)
+            ?? [];
+    }
+
+    public async Task<MimicTemplateDto?> GetTemplateAsync(
+        string templateId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.GetAsync(
+                $"/api/configuration/mimic-templates/{Escape(templateId)}",
+                cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+
+        return await response.Content.ReadFromJsonAsync<MimicTemplateDto>(
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task<MimicTemplateDto> SaveTemplateAsync(
+        MimicTemplateDto template,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(
+            template);
+
+        using var response =
+            await _httpClient.PutAsJsonAsync(
+                $"/api/configuration/mimic-templates/{Escape(template.TemplateId)}",
+                template,
+                cancellationToken);
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+
+        return await response.Content.ReadFromJsonAsync<MimicTemplateDto>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException(
+                "Server returned an empty mimic template response.");
+    }
+
+    public async Task DeleteTemplateAsync(
+        string templateId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response =
+            await _httpClient.DeleteAsync(
+                $"/api/configuration/mimic-templates/{Escape(templateId)}",
+                cancellationToken);
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+    }
+
+    public async Task<MimicDefinitionDto> InstantiateTemplateAsync(
+        string mimicId,
+        string templateId,
+        InstantiateMimicTemplateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(
+            request);
+
+        using var response =
+            await _httpClient.PostAsJsonAsync(
+                $"/api/configuration/mimics/{Escape(mimicId)}/templates/{Escape(templateId)}/instantiate",
+                request,
+                cancellationToken);
+
+        await EnsureSuccessAsync(
+            response,
+            cancellationToken);
+
+        return await response.Content.ReadFromJsonAsync<MimicDefinitionDto>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException(
+                "Server returned an empty mimic response after template instantiation.");
+    }
+
     private static string Escape(
         string value)
     {

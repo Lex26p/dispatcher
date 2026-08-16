@@ -1,0 +1,337 @@
+@inject MimicClient MimicApi
+
+<div class="mimic-template-placement">
+    <div class="mimic-template-placement-header">
+        <div>
+            <strong>Вставка шаблона</strong>
+            <span class="mimic-template-placement-meta">
+                copy → обычные элементы мнемосхемы
+            </span>
+        </div>
+
+        <button type="button"
+                class="toolbar-button"
+                disabled="@_busy"
+                @onclick="ReloadTemplatesAsync">
+            Обновить шаблоны
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="editor-error mimic-template-placement-message">
+            @_error
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_notice))
+    {
+        <div class="mimic-template-placement-notice">
+            @_notice
+        </div>
+    }
+
+    @if (_templates.Count == 0)
+    {
+        <div class="compact-empty mimic-template-placement-empty">
+            Нет доступных Mimic templates.
+        </div>
+    }
+    else
+    {
+        <div class="mimic-template-placement-grid">
+            <label class="property-field">
+                <span>Template</span>
+                <select value="@_selectedTemplateId"
+                        disabled="@_busy"
+                        @onchange="SelectTemplate">
+                    @foreach (var template in _templates)
+                    {
+                        <option value="@template.TemplateId">
+                            @template.Name (@template.TemplateId)
+                        </option>
+                    }
+                </select>
+            </label>
+
+            <label class="property-field">
+                <span>X</span>
+                <input type="number"
+                       min="0"
+                       disabled="@_busy"
+                       @bind="_x" />
+            </label>
+
+            <label class="property-field">
+                <span>Y</span>
+                <input type="number"
+                       min="0"
+                       disabled="@_busy"
+                       @bind="_y" />
+            </label>
+
+            <div class="mimic-template-placement-action">
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@(!CanInstantiate || _busy)"
+                        @onclick="InstantiateAsync">
+                    @(_busy ? "Вставка…" : "Вставить")
+                </button>
+            </div>
+        </div>
+
+        @if (SelectedTemplate is not null)
+        {
+            <div class="mimic-template-placement-summary">
+                <span>@SelectedTemplate.Width × @SelectedTemplate.Height</span>
+                <span>@SelectedTemplate.Elements.Count элементов</span>
+                <span>@SelectedTemplate.Parameters.Count параметров</span>
+            </div>
+
+            @if (SelectedTemplate.Parameters.Count > 0)
+            {
+                <div class="mimic-template-binding-grid">
+                    @foreach (var parameter in SelectedTemplate.Parameters)
+                    {
+                        <label class="property-field">
+                            <span>@parameter.Name <code>@parameter.ParameterId</code></span>
+                            <select value="@GetBinding(parameter.ParameterId)"
+                                    disabled="@_busy"
+                                    @onchange="args => OnBindingChanged(parameter.ParameterId, args)">
+                                <option value="">— выбрать TagId —</option>
+
+                                @foreach (var tagId in ConfiguredTagIds)
+                                {
+                                    <option value="@tagId">@tagId</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                </div>
+            }
+
+            @if (SelectedTemplateStaleFixedTags.Count > 0)
+            {
+                <div class="mimic-template-placement-warning">
+                    Fixed TagId отсутствуют в current configuration:
+                    @string.Join(", ", SelectedTemplateStaleFixedTags).
+                    Server сохранит их как обычные logical bindings; после вставки проверьте элементы справа.
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string MimicId { get; set; } = string.Empty;
+
+    [Parameter]
+    public IReadOnlyList<string> ConfiguredTagIds { get; set; } =
+        Array.Empty<string>();
+
+    [Parameter]
+    public EventCallback<MimicDefinitionDto> Instantiated { get; set; }
+
+    private IReadOnlyList<MimicTemplateDto> _templates =
+        Array.Empty<MimicTemplateDto>();
+
+    private readonly Dictionary<string, string> _tagBindings =
+        new(StringComparer.Ordinal);
+
+    private string? _selectedTemplateId;
+    private int _x;
+    private int _y;
+    private bool _busy;
+    private string? _error;
+    private string? _notice;
+
+    private MimicTemplateDto? SelectedTemplate =>
+        _templates.FirstOrDefault(template =>
+            string.Equals(
+                template.TemplateId,
+                _selectedTemplateId,
+                StringComparison.Ordinal));
+
+    private IReadOnlyList<string> SelectedTemplateStaleFixedTags =>
+        SelectedTemplate is null
+            ? Array.Empty<string>()
+            : FixedStaleTags(SelectedTemplate).ToArray();
+
+    private bool CanInstantiate =>
+        SelectedTemplate is not null
+        && _x >= 0
+        && _y >= 0
+        && SelectedTemplate.Parameters.All(parameter =>
+            _tagBindings.TryGetValue(
+                parameter.ParameterId,
+                out var tagId)
+            && !string.IsNullOrWhiteSpace(tagId));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadTemplatesAsync();
+    }
+
+    private async Task ReloadTemplatesAsync()
+    {
+        _busy = true;
+        _error = null;
+        _notice = null;
+
+        try
+        {
+            var preferred =
+                _selectedTemplateId;
+
+            _templates =
+                await MimicApi.GetTemplatesAsync();
+
+            var selected =
+                preferred is null
+                    ? _templates.FirstOrDefault()
+                    : _templates.FirstOrDefault(template =>
+                        string.Equals(
+                            template.TemplateId,
+                            preferred,
+                            StringComparison.Ordinal))
+                      ?? _templates.FirstOrDefault();
+
+            SetSelectedTemplate(
+                selected);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SelectTemplate(
+        ChangeEventArgs eventArgs)
+    {
+        var templateId =
+            eventArgs.Value?.ToString();
+
+        var selected =
+            _templates.FirstOrDefault(template =>
+                string.Equals(
+                    template.TemplateId,
+                    templateId,
+                    StringComparison.Ordinal));
+
+        SetSelectedTemplate(
+            selected);
+
+        _error = null;
+        _notice = null;
+    }
+
+    private void SetSelectedTemplate(
+        MimicTemplateDto? template)
+    {
+        _selectedTemplateId =
+            template?.TemplateId;
+        _tagBindings.Clear();
+
+        if (template is null)
+        {
+            return;
+        }
+
+        foreach (var parameter in template.Parameters)
+        {
+            _tagBindings[parameter.ParameterId] =
+                string.Empty;
+        }
+    }
+
+    private string GetBinding(
+        string parameterId)
+    {
+        return _tagBindings.TryGetValue(
+                parameterId,
+                out var tagId)
+            ? tagId
+            : string.Empty;
+    }
+
+    private void OnBindingChanged(
+        string parameterId,
+        ChangeEventArgs eventArgs)
+    {
+        _tagBindings[parameterId] =
+            eventArgs.Value?.ToString()
+            ?? string.Empty;
+
+        _error = null;
+        _notice = null;
+    }
+
+    private async Task InstantiateAsync()
+    {
+        var template =
+            SelectedTemplate;
+
+        if (template is null
+            || !CanInstantiate
+            || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _notice = null;
+
+        try
+        {
+            var request =
+                new InstantiateMimicTemplateRequest(
+                    _x,
+                    _y,
+                    new Dictionary<string, string>(
+                        _tagBindings,
+                        StringComparer.Ordinal));
+
+            var updated =
+                await MimicApi.InstantiateTemplateAsync(
+                    MimicId,
+                    template.TemplateId,
+                    request);
+
+            _notice =
+                $"Шаблон '{template.Name}' вставлен как независимая копия.";
+
+            await Instantiated.InvokeAsync(
+                updated);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private IEnumerable<string> FixedStaleTags(
+        MimicTemplateDto template)
+    {
+        return template.Elements
+            .Select(element => element.TagId)
+            .Where(tagId =>
+                !string.IsNullOrWhiteSpace(tagId)
+                && !ConfiguredTagIds.Contains(
+                    tagId!,
+                    StringComparer.Ordinal))
+            .Select(tagId => tagId!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(
+                tagId => tagId,
+                StringComparer.Ordinal);
+    }
+}

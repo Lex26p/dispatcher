@@ -1,6 +1,7 @@
 @page "/mimics/editor"
 @inject MimicClient MimicApi
 @inject ConfigurationClient Configuration
+@inject AuthenticationClient Authentication
 @inject IJSRuntime JavaScript
 
 <PageTitle>Dispatcher — Редактор мнемосхем</PageTitle>
@@ -90,6 +91,16 @@
                 <span class="mimic-editor-toolbar-divider"></span>
 
                 <button type="button"
+                        class="toolbar-button"
+                        title="@TemplatePlacementTitle"
+                        disabled="@(!CanOpenTemplatePlacement || _busy)"
+                        @onclick="ToggleTemplatePlacement">
+                    @(_templatePlacementOpen ? "Закрыть шаблоны" : "Вставить шаблон")
+                </button>
+
+                <span class="mimic-editor-toolbar-divider"></span>
+
+                <button type="button"
                         class="toolbar-button primary"
                         disabled="@(!HasDraft || _busy)"
                         @onclick="SaveAsync">
@@ -119,6 +130,14 @@
                     </span>
                 }
 
+                @if (Authentication.HasPermission(PermissionNames.TemplatesEdit))
+                {
+                    <a class="toolbar-button mimic-editor-link"
+                       href="/mimics/templates">
+                        Шаблоны
+                    </a>
+                }
+
                 <a class="toolbar-button mimic-editor-link"
                    href="/mimics">
                     Runtime
@@ -138,6 +157,13 @@
             <div class="editor-error">
                 @_error
             </div>
+        }
+
+        @if (_templatePlacementOpen && _draft is not null)
+        {
+            <MimicTemplatePlacement MimicId="@_draft.MimicId"
+                                    ConfiguredTagIds="@_configuredTagIds"
+                                    Instantiated="HandleTemplateInstantiatedAsync" />
         }
 
         <div class="mimic-editor-work-content">
@@ -495,10 +521,25 @@
     private bool _dirty;
     private bool _loading;
     private bool _busy;
+    private bool _templatePlacementOpen;
     private string? _error;
 
     private bool HasDraft =>
         _draft is not null;
+
+    private bool CanOpenTemplatePlacement =>
+        _draft is not null
+        && !_isNewMimic
+        && !_dirty;
+
+    private string TemplatePlacementTitle =>
+        _draft is null
+            ? "Сначала выберите мнемосхему."
+            : _isNewMimic
+                ? "Сначала сохраните новую мнемосхему."
+                : _dirty
+                    ? "Сначала сохраните изменения мнемосхемы."
+                    : "Вставить independent copy из Mimic template.";
 
     private MimicElementDraft? SelectedElement =>
         _draft?.Elements.FirstOrDefault(element =>
@@ -517,7 +558,6 @@
         await LoadTagOptionsAsync();
         await ReloadListAsync();
     }
-
     private async Task LoadTagOptionsAsync()
     {
         try
@@ -604,6 +644,7 @@
             };
 
         _selectedElementId = null;
+        _templatePlacementOpen = false;
         _isNewMimic = true;
         _dirty = true;
         _error = null;
@@ -640,6 +681,7 @@
                     definition);
 
             _selectedElementId = null;
+            _templatePlacementOpen = false;
             _isNewMimic = false;
             _dirty = false;
         }
@@ -684,6 +726,45 @@
             await SelectMimicAsync(
                 selectedId);
         }
+    }
+
+    private void ToggleTemplatePlacement()
+    {
+        if (!CanOpenTemplatePlacement)
+        {
+            return;
+        }
+
+        _templatePlacementOpen =
+            !_templatePlacementOpen;
+        _error = null;
+    }
+
+    private async Task HandleTemplateInstantiatedAsync(
+        MimicDefinitionDto definition)
+    {
+        var previousIds =
+            _draft?.Elements
+                .Select(element => element.ElementId)
+                .ToHashSet(StringComparer.Ordinal)
+            ?? [];
+
+        _draft =
+            MimicDraft.From(
+                definition);
+
+        _selectedElementId =
+            definition.Elements
+                .Select(element => element.ElementId)
+                .FirstOrDefault(elementId =>
+                    !previousIds.Contains(elementId));
+
+        _isNewMimic = false;
+        _dirty = false;
+        _error = null;
+
+        await ReloadListAsync(
+            definition.MimicId);
     }
 
     private void AddElement(
@@ -1011,6 +1092,7 @@
     private void MarkDirty()
     {
         _dirty = true;
+        _templatePlacementOpen = false;
         _error = null;
     }
 
@@ -1018,6 +1100,7 @@
     {
         _draft = null;
         _selectedElementId = null;
+        _templatePlacementOpen = false;
         _isNewMimic = false;
         _dirty = false;
         _error = null;

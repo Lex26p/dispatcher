@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 завершена V2-S10A/B, V2-S11 и V2-S12: Alarm definitions имеют durable Server CRUD и engineering editor, Server runtime вычисляет four-state lifecycle, а операторский Web показывает current/history alarms и выполняет actor-aware ACK через permission-protected API и SignalR. Phase 9 начата V2-S13A: Server хранит конкретные Mimic templates и умеет независимо копировать их элементы в Mimic definition.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 завершена V2-S10A/B, V2-S11 и V2-S12: Alarm definitions имеют durable Server CRUD и engineering editor, Server runtime вычисляет four-state lifecycle, а операторский Web показывает current/history alarms и выполняет actor-aware ACK через permission-protected API и SignalR. Phase 9 завершила первый concrete template use case V2-S13: Server хранит Mimic templates, Web управляет ими и вставляет независимые copies в Mimic Editor; второй Device/Tag template use case остаётся V2-S14.
 
 ## Рабочая цепочка
 
@@ -87,6 +87,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 68. Хранить concrete Mimic templates с relative elements и TagId parameters в configuration SQLite.
 69. Создавать независимую копию template elements в существующей мнемосхеме через Server instantiate API.
 70. Разделять чтение template (`Runtime.Read`), изменение template (`Templates.Edit`) и изменение target mimic при instantiate (`Mimics.Edit`).
+71. Управлять concrete Mimic templates через Web `/mimics/templates` с dense list/canvas/properties layout.
+72. Вставлять template из `/mimics/editor`: выбрать template, заполнить TagId parameters, задать X/Y и получить уже сохранённые обычные mimic elements.
+73. Не разрешать Server-side instantiate поверх new/dirty client draft: сначала существующая мнемосхема должна быть сохранена.
 
 ## Базовый стек
 
@@ -1152,7 +1155,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 Минимальный S12 не использует drag-and-drop. Position/size редактируются численно в правой properties panel; выбор элемента выполняется кликом по canvas.
 
-## Mimic templates — V2-S13A Server foundation
+## Mimic templates — V2-S13
 
 Concrete Mimic template хранит reusable fragment отдельно от работающей мнемосхемы:
 
@@ -1176,11 +1179,20 @@ POST   /api/configuration/mimics/{mimicId}/templates/{templateId}/instantiate
 
 Template read требует `Runtime.Read`, template mutation — `Templates.Edit`, instantiate изменяет target mimic и требует `Mimics.Edit`. Instantiate разрешает Tag parameters, добавляет insertion offset, генерирует новые `ElementId` и сохраняет обычные mimic elements. Back-reference на template в instance не сохраняется, поэтому последующее изменение template не меняет уже созданную мнемосхему.
 
-Web picker/placement и template editing workflow остаются V2-S13B. Generic Template Catalog намеренно не вводится до второго concrete use case V2-S14.
+V2-S13B добавляет Web workflow поверх этой Server boundary:
+
+```text
+/mimics/templates  → template management → Runtime.Read + Templates.Edit
+/mimics/editor     → placement/instantiate → Runtime.Read + Mimics.Edit
+```
+
+Template editor сохраняет существующий dense layout: templates слева, fragment SVG в центре, properties/parameters справа. Mimic Editor показывает compact placement panel только для уже сохранённой мнемосхемы без dirty draft; после successful instantiate заменяет draft Server response и выделяет первый новый элемент.
+
+Generic Template Catalog намеренно не вводится до второго concrete use case V2-S14.
 
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics/alarms/templates. Local user также не создаётся без явно заданного bootstrap password. После V2-S13A schema version — `8`; built-in security roles по-прежнему idempotently поддерживаются при startup, а Alarm definitions и Mimic templates появляются только через явные configuration mutations.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics/alarms/templates. Local user также не создаётся без явно заданного bootstrap password. После V2-S13 schema version — `8`; built-in security roles по-прежнему idempotently поддерживаются при startup, а Alarm definitions и Mimic templates появляются только через явные configuration mutations.
 
 ## Roadmap v2
 
@@ -1190,12 +1202,12 @@ Web picker/placement и template editing workflow остаются V2-S13B. Gene
 docs/ROADMAP_V2.md
 ```
 
-Phase 8 завершена: V2-S10A/B дали Alarm configuration/editor, V2-S11 — runtime state machine, V2-S12 — actor-aware ACK, SignalR и operator Web. Phase 9 начата V2-S13A: durable Mimic templates + Server instantiate-by-copy API.
+Phase 8 завершена: V2-S10A/B дали Alarm configuration/editor, V2-S11 — runtime state machine, V2-S12 — actor-aware ACK, SignalR и operator Web. Phase 9 имеет первый завершённый concrete use case V2-S13: durable Mimic templates + Server instantiate-by-copy + Web management/placement.
 
-Следующий подшаг после принятия V2-S13A:
+Следующий шаг после принятия V2-S13B:
 
 ```text
-V2-S13B — Mimic Editor template integration
+V2-S14 — Device/Tag templates и общий Template Catalog
 ```
 
 ## Документы

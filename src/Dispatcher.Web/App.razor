@@ -108,6 +108,15 @@ else
             ];
         }
 
+        if (pageType == typeof(MimicTemplateEditor))
+        {
+            return
+            [
+                PermissionNames.RuntimeRead,
+                PermissionNames.TemplatesEdit
+            ];
+        }
+
         if (pageType == typeof(AlarmEditor))
         {
             return
