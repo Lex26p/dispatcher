@@ -30,6 +30,7 @@ builder.Services.AddLocalAuthentication();
 
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddSingleton<HistorianPolicyCatalog>();
+builder.Services.AddSingleton<SecurityCatalog>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
 
 builder.Services.AddSingleton(

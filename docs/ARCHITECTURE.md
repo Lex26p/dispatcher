@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S07C
+## 1. Состояние после V2-S08A
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -29,11 +29,17 @@ ASP.NET Core cookie → HttpContext.User
 GET /api/auth/current
       ↓
 Web AuthenticationClient → login shell / authenticated application shell
+
+Configuration SQLite v6
+      ↓
+roles + role permissions + user-role assignments
+      ↓
+SecurityCatalog → effective permissions
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, а V2-S07C отображает этот identity state в Web. Roles/permissions и Server permission enforcement ещё не введены.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, а V2-S08A добавляет durable roles/permissions и effective-permission catalog. Server permission enforcement ещё не включён и относится к V2-S08B.
 
 ## 2. Главная граница binding
 
@@ -95,7 +101,7 @@ Public boundary находится в `Dispatcher.Contracts.Mimics`.
 Configuration SQLite schema version:
 
 ```text
-5
+6
 ```
 
 Tables, добавленные после базовой protocol configuration:
@@ -104,6 +110,9 @@ Tables, добавленные после базовой protocol configuration:
 mimics
 historian_policies
 local_users
+security_roles
+security_role_permissions
+security_user_roles
 ```
 
 Schema migration:
@@ -118,6 +127,8 @@ v3  mimics
 v4  historian_policies
  ↓
 v5  local_users
+ ↓
+v6  security roles / permissions / assignments
 ```
 
 При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются.
@@ -638,12 +649,13 @@ SnmpRuntimeHostedService
 RuntimeHubPublisher
 ```
 
-Configuration initialization начиная с V2-S07A:
+Configuration initialization начиная с V2-S08A:
 
 1. создаёт/мигрирует configuration schema;
-2. при пустом `local_users` пытается выполнить explicit bootstrap пользователя;
-3. загружает protocol configuration и historian policies;
-4. публикует active configuration catalogs.
+2. при пустом `local_users` пытается выполнить explicit bootstrap пользователя; если user создаётся, его `Administrator` assignment сохраняется в той же SQLite transaction;
+3. idempotently приводит built-in role definitions к canonical mapping и выполняет one-time legacy owner transition при необходимости;
+4. загружает protocol configuration, historian policies и security configuration;
+5. публикует active configuration catalogs, включая `SecurityCatalog`.
 
 Historian:
 
@@ -2263,3 +2275,150 @@ session revocation on user mutation
 ```text
 V2-S08 — Permissions и Roles
 ```
+
+## 75. Durable permission/role configuration boundary
+
+V2-S08A повышает configuration SQLite schema:
+
+```text
+v5 → v6
+```
+
+и добавляет только security configuration tables:
+
+```text
+security_roles
+├── role_id
+├── name
+├── normalized_name UNIQUE
+└── built_in
+
+security_role_permissions
+├── role_id FK → security_roles
+└── permission
+   PK(role_id, permission)
+
+security_user_roles
+├── user_id FK → local_users
+└── role_id FK → security_roles
+   PK(user_id, role_id)
+```
+
+Operational SQLite не меняется и остаётся schema `2`. Role definitions и assignments являются низкочастотной security configuration, а не operational/audit records.
+
+Permission identifiers централизованы в `Dispatcher.Contracts.Authorization.PermissionNames`. Storage принимает только известные permission identifiers; business authorization в следующем подшаге будет ссылаться на permissions, а не role names.
+
+## 76. Built-in roles и initial ownership transition
+
+Server поддерживает четыре built-in role definitions:
+
+```text
+Viewer
+Operator
+Engineer
+Administrator
+```
+
+Baseline mapping:
+
+```text
+Viewer
+  Runtime.Read
+
+Operator
+  Runtime.Read
+  Tags.Write
+  Alarms.Acknowledge
+
+Engineer
+  Runtime.Read
+  Tags.Write
+  Devices.Edit
+  Mimics.Edit
+  Historian.Configure
+  Alarms.Configure
+  Alarms.Acknowledge
+  Templates.Edit
+  Scripts.Edit
+  Scripts.Execute
+
+Administrator
+  all declared permissions
+```
+
+Built-in definitions system-managed: startup idempotently восстанавливает их canonical metadata/permission mapping. Future user-created roles могут храниться рядом, но не заменяют built-in identifiers.
+
+Initial ownership transition нужен, чтобы introduction authorization не блокировал существующую installation:
+
+```text
+new bootstrap user
+    → local user + Administrator assignment in one transaction
+
+first v6 security initialization
++ exactly one existing local user
++ no assignments
+    → that user gets Administrator once
+```
+
+Если existing users несколько, Server не выбирает администратора по имени/порядку и пишет warning. Если первый startup создал built-in roles без user, а bootstrap user появился позже после задания secret, факт нового bootstrap используется для назначения `Administrator`.
+
+One-time legacy bridge не повторяется на каждом startup: наличие уже инициализированных built-in roles означает, что последующее явное снятие role не должно автоматически возвращаться.
+
+## 77. Effective permission catalog
+
+`SecurityCatalog` является singleton in-memory projection security configuration:
+
+```text
+local_users
+security_roles + permissions
+security_user_roles
+        ↓
+SecurityCatalog
+        ↓
+UserId → Enabled + RoleIds + EffectivePermissions
+```
+
+Effective permissions вычисляются как set union permissions всех assigned roles.
+
+Disabled user:
+
+```text
+Enabled = false
+    ↓
+HasPermission = false
+EffectivePermissions = []
+```
+
+Cookie principal V2-S07 остаётся identity-only. Roles/permissions не копируются в long-lived cookie claims, поэтому Server authority для authorization может опираться на current security configuration/catalog, а не на potentially stale permission snapshot в ticket.
+
+## 78. V2-S08A scope boundary
+
+После V2-S08A есть:
+
+```text
+durable roles
+durable role permissions
+durable user-role assignments
+built-in role definitions
+bootstrap/legacy initial Administrator transition
+effective-permission SecurityCatalog
+```
+
+Ещё нет:
+
+```text
+permission authorization requirement/handler
+RequireAuthorization on REST endpoints
+SignalR permission enforcement
+401/403 permission integration tests
+Web permission visibility/enabled state
+Users/Roles management API/Web
+audit actor records
+```
+
+Следующий шаг:
+
+```text
+V2-S08B — Server permission enforcement
+```
+

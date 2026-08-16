@@ -1266,3 +1266,53 @@ Client-side hiding navigation/content не считается authorization. V2-
 - direct route refresh должен восстанавливать session через Server, а не зависеть от transient WASM memory;
 - сохранение current route уменьшает лишнюю navigation state machine и возвращает инженера в исходный service context;
 - UI visibility не должна создавать ложное ощущение защиты до появления Server authorization.
+
+---
+
+## D-064 — Roles, permissions и user-role assignments хранятся в configuration SQLite schema v6
+
+**Status:** Accepted
+
+V2-S08A повышает configuration schema `v5 → v6` и добавляет:
+
+```text
+security_roles
+security_role_permissions
+security_user_roles
+```
+
+`Dispatcher.Contracts.Authorization.PermissionNames` задаёт stable application permission identifiers. Role является набором permissions, а user получает effective permission set через one-or-more role assignments. Operational database не меняется.
+
+Built-in roles `Viewer`, `Operator`, `Engineer`, `Administrator` имеют stable IDs и system-managed canonical mappings. Custom roles могут быть добавлены позднее через management boundary V2-S09, не меняя authorization model.
+
+Причина:
+
+- roles/assignments являются durable low-frequency security configuration;
+- permission IDs позволяют Server endpoints проверять capability, а не hard-coded role name;
+- many-to-many tables поддерживают несколько roles на user без permission duplication в user record;
+- security configuration не относится к high-frequency operational/audit storage.
+
+---
+
+## D-065 — Effective permissions вычисляются Server catalog; cookie остаётся identity-only
+
+**Status:** Accepted
+
+V2-S08A вводит singleton `SecurityCatalog`, который строится из current users/roles/assignments и вычисляет union permissions per `UserId`. Disabled user не имеет effective permissions независимо от assignments.
+
+V2-S07 cookie не расширяется role/permission claims. Principal продолжает содержать только identity (`UserId`, `UserName`, `DisplayName`).
+
+Initial transition:
+
+- новый bootstrap user и его built-in `Administrator` assignment сохраняются одной SQLite transaction;
+- при первой v6 security initialization единственный existing local user без assignments получает `Administrator` как one-time compatibility bridge;
+- при нескольких existing users Server не угадывает administrator;
+- автоматическое назначение не повторяется после завершённой first role initialization, чтобы future explicit role removal не отменялся startup-ом.
+
+Причина:
+
+- permission snapshot в 8-hour cookie мог бы устареть после role/user disable changes;
+- current Server catalog является подходящей authority для следующего permission handler;
+- one-time bridge сохраняет управляемость single-user installations при первом включении authorization;
+- ambiguous multi-user migration должна fail-safe не выдавать privilege случайному user.
+

@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён: local users, Server cookie session и Web login/current-user/logout integration.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation завершён. Phase 7 продолжена V2-S08A: durable roles/permissions, built-in role definitions и effective-permission catalog подготовлены до Server enforcement.
 
 ## Рабочая цепочка
 
@@ -51,6 +51,8 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 32. Проверять текущую authentication session при старте Blazor WebAssembly и показывать login screen для anonymous user.
 33. Показывать current user и logout action в компактном application header после входа.
 34. Сохранять текущий Web route при login/logout, не выдавая client-side visibility за server authorization.
+35. Хранить roles, role permissions и user-role assignments в configuration SQLite.
+36. Вычислять effective permissions пользователя через Server `SecurityCatalog`, не проверяя role names в business endpoints.
 
 ## Базовый стек
 
@@ -91,10 +93,10 @@ TagId
 
 ## SQLite schema
 
-Configuration SQLite schema version после V2-S07A:
+Configuration SQLite schema version после V2-S08A:
 
 ```text
-5
+6
 ```
 
 Таблицы:
@@ -107,9 +109,12 @@ snmp_tags
 mimics
 historian_policies
 local_users
+security_roles
+security_role_permissions
+security_user_roles
 ```
 
-Существующая schema `1/2/3/4` автоматически мигрируется в `5` без удаления protocol/mimic/historian configuration.
+Существующая schema `1/2/3/4/5` автоматически мигрируется в `6` без удаления protocol/mimic/historian/user configuration.
 
 Таблица `mimics` хранит:
 
@@ -250,6 +255,50 @@ UserName
 Logout вызывает existing `POST /api/auth/logout`, после чего Web возвращается к anonymous login state без client-side token/localStorage.
 
 Скрытие рабочего shell/navigation для anonymous user является только UX boundary. На V2-S07C существующие Server endpoints ещё не получают permission enforcement; реальная server-side authorization начинается в V2-S08.
+
+## Roles / permissions foundation
+
+V2-S08A добавляет durable authorization configuration, но ещё не включает enforcement на REST/SignalR endpoints.
+
+Configuration SQLite schema `v5 → v6` добавляет:
+
+```text
+security_roles
+security_role_permissions
+security_user_roles
+```
+
+Начальный permission catalog:
+
+```text
+Runtime.Read
+Tags.Write
+Devices.Edit
+Mimics.Edit
+Historian.Configure
+Alarms.Configure
+Alarms.Acknowledge
+Users.Manage
+Roles.Manage
+Templates.Edit
+Scripts.Edit
+Scripts.Execute
+```
+
+Built-in roles являются system-managed definitions:
+
+```text
+Viewer        → Runtime.Read
+Operator      → Runtime.Read, Tags.Write, Alarms.Acknowledge
+Engineer      → operational/configuration engineering permissions, без Users.Manage/Roles.Manage
+Administrator → all declared permissions
+```
+
+Первый bootstrap user получает built-in `Administrator`. При migration существующей V2-S07 installation с ровно одним local user и ещё без role assignments этот единственный user также получает `Administrator` как one-time compatibility bridge. Если существующих users несколько, Server не угадывает администратора автоматически.
+
+`SecurityCatalog` строит effective permissions как union permissions всех назначенных roles. Disabled user имеет пустой effective permission set. Cookie по-прежнему содержит только identity claims; role/permission claims в V2-S08A не добавляются.
+
+V2-S08A **не защищает endpoints**. Permission-based Server enforcement вводится в V2-S08B, после него Web visibility/enabled state — в V2-S08C.
 
 ## Historian foundation
 
@@ -865,7 +914,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S07C не меняет schema version `5`.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S08A создаёт schema version `6` и idempotently seeds built-in security roles при startup; user assignment создаётся только по bootstrap/one-time legacy transition rules.
 
 ## Roadmap v2
 
@@ -878,13 +927,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S07C — Web authentication integration
+V2-S08A — Permission/role configuration foundation
 ```
 
-После его локальной проверки и нового Git SHA V2-S07 считается завершённым. Следующий шаг:
+Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S08 — Permissions и Roles
+V2-S08B — Server permission enforcement
 ```
 
 ## Документы

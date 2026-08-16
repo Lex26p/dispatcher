@@ -113,12 +113,19 @@ public sealed class LocalUserBootstrapper
         LocalUserConfigurationValidator.Validate(
             user);
 
-        await _store.InsertLocalUserAsync(
+        var administratorRole =
+            BuiltInSecurityRoles.All.Single(
+                role =>
+                    role.RoleId
+                    == BuiltInSecurityRoles.AdministratorRoleId);
+
+        await _store.InsertLocalUserWithRoleAsync(
             user,
+            administratorRole,
             cancellationToken);
 
         _logger.LogInformation(
-            "Created initial local bootstrap administrator {UserName} ({UserId}). Remove the bootstrap password from configuration after confirming the account exists.",
+            "Created initial local bootstrap administrator {UserName} ({UserId}) with built-in Administrator role. Remove the bootstrap password from configuration after confirming the account exists.",
             user.UserName,
             user.UserId);
 

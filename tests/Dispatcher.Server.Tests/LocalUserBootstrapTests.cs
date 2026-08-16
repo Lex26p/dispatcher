@@ -45,8 +45,23 @@ public sealed class LocalUserBootstrapTests
                 database.DatabasePath);
         var users =
             await store.LoadLocalUsersAsync();
+        var roles =
+            await store.LoadSecurityRolesAsync();
+        var assignments =
+            await store.LoadUserRoleAssignmentsAsync();
 
         Assert.AreEqual(1, users.Count);
+        Assert.AreEqual(1, roles.Count);
+        Assert.AreEqual(
+            BuiltInSecurityRoles.AdministratorRoleId,
+            roles[0].RoleId);
+        Assert.AreEqual(1, assignments.Count);
+        Assert.AreEqual(
+            users[0].UserId,
+            assignments[0].UserId);
+        Assert.AreEqual(
+            BuiltInSecurityRoles.AdministratorRoleId,
+            assignments[0].RoleId);
 
         var user =
             users[0];
@@ -96,8 +111,14 @@ public sealed class LocalUserBootstrapTests
                 database.DatabasePath);
         var users =
             await store.LoadLocalUsersAsync();
+        var roles =
+            await store.LoadSecurityRolesAsync();
+        var assignments =
+            await store.LoadUserRoleAssignmentsAsync();
 
         Assert.AreEqual(0, users.Count);
+        Assert.AreEqual(0, roles.Count);
+        Assert.AreEqual(0, assignments.Count);
     }
 
     [TestMethod]
@@ -148,7 +169,7 @@ public sealed class LocalUserBootstrapTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion4Database_ToVersion5WithoutLosingConfigurationTable()
+    public async Task InitializeAsync_MigratesVersion4Database_ToVersion6WithoutLosingConfigurationTable()
     {
         var directory =
             Path.Combine(
@@ -245,7 +266,7 @@ public sealed class LocalUserBootstrapTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(5, version);
+            Assert.AreEqual(6, version);
         }
         finally
         {

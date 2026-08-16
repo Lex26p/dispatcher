@@ -6,9 +6,9 @@ using Microsoft.Data.Sqlite;
 
 namespace Dispatcher.Server.Configuration;
 
-public sealed class SqliteConfigurationStore
+public sealed partial class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 5;
+    private const int CurrentSchemaVersion = 6;
 
     private readonly string _connectionString;
 
@@ -62,6 +62,10 @@ public sealed class SqliteConfigurationStore
                 await CreateSchemaV5Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 1:
@@ -80,6 +84,10 @@ public sealed class SqliteConfigurationStore
                 await MigrateV4ToV5Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
@@ -94,6 +102,10 @@ public sealed class SqliteConfigurationStore
                 await MigrateV4ToV5Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 3:
@@ -104,10 +116,24 @@ public sealed class SqliteConfigurationStore
                 await MigrateV4ToV5Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 4:
                 await MigrateV4ToV5Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV5ToV6Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 5:
+                await MigrateV5ToV6Async(
                     connection,
                     cancellationToken);
                 return;
@@ -1224,6 +1250,60 @@ public sealed class SqliteConfigurationStore
             );
 
             PRAGMA user_version = 5;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV5ToV6Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS security_roles (
+                role_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL UNIQUE,
+                built_in INTEGER NOT NULL CHECK (built_in IN (0, 1))
+            );
+
+            CREATE TABLE IF NOT EXISTS security_role_permissions (
+                role_id TEXT NOT NULL,
+                permission TEXT NOT NULL,
+                PRIMARY KEY (role_id, permission),
+                FOREIGN KEY (role_id)
+                    REFERENCES security_roles(role_id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS security_user_roles (
+                user_id TEXT NOT NULL,
+                role_id TEXT NOT NULL,
+                PRIMARY KEY (user_id, role_id),
+                FOREIGN KEY (user_id)
+                    REFERENCES local_users(user_id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY (role_id)
+                    REFERENCES security_roles(role_id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_security_user_roles_role_id
+                ON security_user_roles(role_id);
+
+            PRAGMA user_version = 6;
             """;
 
         await command.ExecuteNonQueryAsync(

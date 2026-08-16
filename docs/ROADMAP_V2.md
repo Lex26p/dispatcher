@@ -618,7 +618,7 @@ Scripts.Edit
 Scripts.Execute
 ```
 
-Начальные built-in roles могут быть:
+Начальные built-in roles:
 
 ```text
 Viewer
@@ -627,7 +627,7 @@ Engineer
 Administrator
 ```
 
-Но Server проверяет permission.
+Server проверяет effective permission, а не role name.
 
 Обязательный порядок:
 
@@ -639,9 +639,56 @@ Web visibility/enabled state
 
 Скрытая Web-кнопка не считается защитой.
 
-### Результат
+### [x] V2-S08A — Permission/role configuration foundation
 
-Операторские и инженерные действия имеют server-side permission boundary.
+Реализовано:
+
+- configuration SQLite schema `v5 → v6`;
+- durable tables:
+  - `security_roles`;
+  - `security_role_permissions`;
+  - `security_user_roles`;
+- permission identifiers определены централизованно в `Dispatcher.Contracts.Authorization.PermissionNames`;
+- built-in role definitions idempotently поддерживаются Server startup:
+  - `Viewer` → `Runtime.Read`;
+  - `Operator` → `Runtime.Read`, `Tags.Write`, `Alarms.Acknowledge`;
+  - `Engineer` → runtime/write/device/mimic/historian/alarm/template/script engineering permissions, без user/role administration;
+  - `Administrator` → все declared permissions;
+- built-in role mappings являются system-managed;
+- bootstrap user получает `Administrator`;
+- при first migration existing V2-S07 database с одним local user и без assignments этот user получает `Administrator` как one-time compatibility bridge;
+- если existing users несколько, Server не угадывает initial administrator;
+- delayed bootstrap после startup без password также получает `Administrator`;
+- singleton `SecurityCatalog` вычисляет effective permissions как union assigned role permissions;
+- disabled user получает empty effective permissions;
+- cookie остаётся identity-only, roles/permissions в claims не копируются;
+- REST/SignalR endpoint enforcement в этом подшаге ещё не включается.
+
+### [ ] V2-S08B — Server permission enforcement
+
+Следующий scope:
+
+- ASP.NET Core permission policies/requirements поверх `SecurityCatalog`;
+- runtime/history/events/mimic reads → `Runtime.Read`;
+- tag writes → `Tags.Write`;
+- device configuration mutations → `Devices.Edit`;
+- mimic mutations → `Mimics.Edit`;
+- historian policy mutations → `Historian.Configure`;
+- Server возвращает корректные `401/403`;
+- SignalR connection/read boundary также защищается Server-side;
+- никаких role-name checks в endpoints.
+
+### [ ] V2-S08C — Web permission visibility/enabled state
+
+После Server enforcement:
+
+- Web получает effective permissions из Server-projected identity/access state;
+- service visibility и mutation controls отражают permissions;
+- client checks остаются UX и не заменяют Server authorization.
+
+### Результат V2-S08
+
+Операторские и инженерные действия имеют server-side permission boundary, а Web только отражает уже существующую Server authority.
 
 ---
 
