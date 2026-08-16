@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 начата V2-S10A: Alarm definitions получили durable configuration и Server CRUD foundation; Alarm Editor остаётся V2-S10B.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 продолжена V2-S10A/B: Alarm definitions имеют durable Server CRUD foundation и permission-aware Web Alarm Editor; runtime alarm state machine остаётся V2-S11.
 
 ## Рабочая цепочка
 
@@ -71,6 +71,10 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 52. Описывать `DigitalTrue`, `DigitalFalse`, `High`, `Low` alarm conditions без expression language.
 53. Управлять Alarm definitions через Server CRUD с `Runtime.Read` для чтения и `Alarms.Configure` для mutations.
 54. Аудировать successful Alarm definition mutations через actor-aware `ConfigurationChanged`.
+55. Редактировать Alarm definitions через Web `/alarms` с плотным engineering layout: список слева, rules table в центре, properties справа.
+56. Показывать Alarm Editor только при `Runtime.Read + Alarms.Configure`, не подменяя client visibility Server authorization.
+57. Выбирать logical `TagId` из общей Modbus/SNMP configuration и явно показывать stale binding.
+58. Использовать client-side draft + explicit Save/Delete без запуска alarm runtime evaluation.
 
 ## Базовый стек
 
@@ -1029,6 +1033,22 @@ DELETE /api/configuration/alarms/definitions/{alarmId}
 
 Чтение требует `Runtime.Read`, mutations — `Alarms.Configure`. Create/update проверяют существование current logical `TagId`; позднейшее удаление tag не каскадно удаляет definition. Successful mutation пишет actor-aware `ConfigurationChanged`. Alarm state/raise/return/ACK в S10A не вычисляются.
 
+V2-S10B добавляет Web Alarm Editor:
+
+```text
+/alarms
+```
+
+Layout:
+
+```text
+слева  → alarm definitions
+центр  → compact toolbar + dense rules table
+справа → properties выбранного definition
+```
+
+Route/navigation доступны только при `Runtime.Read + Alarms.Configure`. Editor использует S10A API, client-side draft и explicit Save/Delete. Persisted `AlarmId` read-only; stale `TagId` остаётся видимым, но Save требует выбора существующего configured logical tag. Digital conditions не показывают Threshold/Hysteresis; High/Low редактируют decimal Threshold/Hysteresis. Runtime evaluation/raise/return/ACK в S10B не выполняются.
+
 
 ## Web
 
@@ -1040,6 +1060,7 @@ DELETE /api/configuration/alarms/definitions/{alarmId}
 Мнемосхемы
 История / Тренды
 События
+Тревоги
 ```
 
 URL runtime:
@@ -1089,10 +1110,10 @@ Editor использует client-side draft и explicit `Сохранить`. 
 docs/ROADMAP_V2.md
 ```
 
-Текущий подготовленный подшаг:
+V2-S10 завершён подшагами S10A/S10B. Следующий шаг после принятия S10B:
 
 ```text
-V2-S10A — Alarm definitions + Server configuration foundation
+V2-S11 — Alarm runtime state machine
 ```
 
 Следующий подшаг после локальной проверки и нового Git SHA:

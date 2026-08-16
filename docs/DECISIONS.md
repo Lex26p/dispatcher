@@ -1558,3 +1558,31 @@ Successful mutations используют existing actor-aware `ConfigurationCha
 - Server permission enforcement должен появиться раньше Web editor visibility;
 - separating definition persistence from runtime state machine делает первый Alarm шаг отдельно проверяемым.
 
+---
+
+## D-072 — Alarm Editor использует S10A CRUD, client-side draft и `Runtime.Read + Alarms.Configure`
+
+**Status:** Accepted
+
+V2-S10B добавляет `/alarms` как engineering editor без нового Server/storage boundary. Web читает и изменяет definitions только через S10A `/api/configuration/alarms/definitions`.
+
+Route/navigation доступны при:
+
+```text
+Runtime.Read + Alarms.Configure
+```
+
+`Runtime.Read` нужен для чтения definitions и current configured tags, а `Alarms.Configure` — для mutation workflow. Это client-side UX projection; Server S10A остаётся authoritative и проверяет read/mutation permissions отдельно.
+
+Editor использует client-side draft + explicit Save/Delete. Persisted `AlarmId` read-only. Tag picker объединяет logical `TagId` из Modbus/SNMP configuration; stale persisted binding показывается, но не скрывается. Сохранение stale definition без current tag не имитируется Web-обходом — пользователь должен выбрать существующий TagId, после чего Server повторно валидирует mutation.
+
+Condition-aware form не дублирует runtime evaluator: digital condition убирает Threshold/Hysteresis из request, High/Low редактируют decimal values, но delay/hysteresis/active-state semantics остаются V2-S11.
+
+Причина:
+
+- S10B должен завершить configuration vertical slice, а не преждевременно смешивать editor с runtime AlarmService;
+- reuse S10A API сохраняет один durable source of truth;
+- explicit draft/Save согласован с Device/Mimic editor interaction model;
+- stale logical binding должен быть наблюдаемым, а не молча удаляться;
+- permission-aware navigation не должна превращаться в альтернативную authorization систему;
+- runtime condition semantics должны иметь одно место реализации в будущем Alarm state machine.

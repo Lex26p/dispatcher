@@ -352,6 +352,7 @@ Server authorization
 События           → Runtime.Read
 Редактор устройств → Runtime.Read + Devices.Edit
 Редактор мнемосхем → Runtime.Read + Mimics.Edit
+Тревоги            → Runtime.Read + Alarms.Configure
 ```
 
 Dedicated editor service без edit permission не должен показываться как доступный workflow. Если пользователь вручную открывает такой URL, обычный global header сохраняется, но editor workspace не рендерится; вместо него показывается компактное состояние «Недостаточно прав» с требуемыми permission identifiers.
@@ -431,3 +432,50 @@ Roles.Manage only → no GET /api/security/users
 
 После successful mutation current authentication projection refresh-ится с Server, поэтому изменение current actor metadata/permissions сразу меняет global header/navigation. Role names не используются для visibility/enabled state.
 
+## 19. Alarm Editor
+
+V2-S10B добавляет service:
+
+```text
+/alarms
+Тревоги
+```
+
+Global navigation показывает его только при:
+
+```text
+Runtime.Read + Alarms.Configure
+```
+
+Spatial model строго следует общему editor contract:
+
+```text
+слева  → alarm definitions
+центр  → compact toolbar + dense rules table
+справа → selected definition properties
+сверху → Add / Save / Delete / Refresh
+```
+
+Left panel показывает `Name`, `AlarmId`, Enabled state и severity компактно; крупные карточки не используются. Center table позволяет сравнивать `AlarmId`, `Name`, `TagId`, condition, severity и delay без перехода между отдельными страницами.
+
+Right properties содержит:
+
+```text
+AlarmId
+Name
+Enabled
+TagId
+Condition
+Threshold / Hysteresis when applicable
+Severity
+Delay
+Message
+```
+
+Persisted `AlarmId` read-only. Новый definition редактирует ID до первого Save. `TagId` выбирается из current Modbus/SNMP logical tags. Stale persisted binding не скрывается: selector показывает старый ID и explicit warning; Save остаётся недоступным, пока не выбран current tag.
+
+`DigitalTrue/DigitalFalse` не показывают numeric fields. `High/Low` показывают Threshold и Hysteresis. Это только configuration UX: экран не отображает Active/Acknowledged state и не пытается применять delay/hysteresis самостоятельно до V2-S11/V2-S12.
+
+Dirty draft обозначается compact `несохранено`. Selection change и Refresh при dirty state требуют подтверждения discard. Server validation/error (`ProblemDetails.detail`) показывается в рабочей области рядом с toolbar.
+
+Client route visibility не является security mechanism; S10A Server authorization остаётся окончательной authority.

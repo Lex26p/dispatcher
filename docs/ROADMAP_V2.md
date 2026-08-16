@@ -830,7 +830,7 @@ Dispatcher имеет базовую локальную модель безоп�
 
 # Phase 8 — Alarms
 
-## [ ] V2-S10 — Alarm definitions и Alarm Editor
+## [x] V2-S10 — Alarm definitions и Alarm Editor
 
 Alarm binding:
 
@@ -894,9 +894,26 @@ Editor использует стандартную схему:
 - successful create/update/delete пишут actor-aware `ConfigurationChanged`;
 - Alarm runtime state, transitions, ACK и realtime в S10A не добавляются.
 
-### [ ] V2-S10B — Alarm Editor Web
+### [x] V2-S10B — Alarm Editor Web
 
-Добавить engineering Web editor поверх S10A API: список definitions, плотная таблица/rules workspace, properties справа, add/save/delete и permission-aware `Alarms.Configure` UX. Server остаётся authoritative boundary.
+Реализовано поверх S10A API без изменения Server/storage schema:
+
+- Web route `/alarms`;
+- global navigation `Тревоги`;
+- route/navigation требуют `Runtime.Read + Alarms.Configure`;
+- слева — плотный список definitions с Enabled и severity state;
+- центр — compact add/save/delete/refresh toolbar и dense rules table;
+- справа — properties выбранного definition;
+- client-side draft + explicit Save;
+- persisted `AlarmId` immutable/read-only;
+- logical `TagId` picker объединяет Modbus/SNMP configuration;
+- stale persisted TagId остаётся видимым и помечается как отсутствующий; Save требует current configured TagId;
+- `DigitalTrue/DigitalFalse` скрывают Threshold/Hysteresis;
+- `High/Low` редактируют decimal Threshold и non-negative Hysteresis;
+- Server `ProblemDetails.detail` показывается как operation error;
+- unsaved selection/refresh требует явного подтверждения discard;
+- Web не вычисляет alarm active state, delay/hysteresis transitions или ACK;
+- client visibility/enabled state остаётся UX only, Server S10A permission boundary authoritative.
 
 ### Результат
 

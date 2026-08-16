@@ -135,13 +135,15 @@ V2-S10 разбит на проверяемые подшаги:
 
 ```text
 [x] V2-S10A — Alarm definitions + Server configuration foundation
-[ ] V2-S10B — Alarm Editor Web
+[x] V2-S10B — Alarm Editor Web
 ```
 
-Следующий подшаг после принятия V2-S10A:
+V2-S10 завершён: durable alarm definitions, permission-protected CRUD и permission-aware Web editor собраны в один configuration vertical slice.
+
+Следующий шаг после принятия V2-S10B:
 
 ```text
-V2-S10B — Alarm Editor Web
+V2-S11 — Alarm runtime state machine
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

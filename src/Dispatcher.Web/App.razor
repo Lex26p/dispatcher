@@ -108,6 +108,15 @@ else
             ];
         }
 
+        if (pageType == typeof(AlarmEditor))
+        {
+            return
+            [
+                PermissionNames.RuntimeRead,
+                PermissionNames.AlarmsConfigure
+            ];
+        }
+
         return
         [
             PermissionNames.RuntimeRead

@@ -1,0 +1,776 @@
+@page "/alarms"
+@inject AlarmClient Alarms
+@inject ConfigurationClient Configuration
+@inject IJSRuntime JavaScript
+
+<PageTitle>Dispatcher — Тревоги</PageTitle>
+
+<div class="alarm-editor-shell">
+    <aside class="editor-local-navigation">
+        <div class="editor-panel-heading">
+            <span>Тревоги</span>
+            <span class="item-count">@_definitions.Count</span>
+        </div>
+
+        <div class="alarm-definition-list">
+            @if (_loading)
+            {
+                <div class="compact-empty">Загрузка…</div>
+            }
+            else if (_definitions.Count == 0)
+            {
+                <div class="compact-empty">
+                    Alarm definitions пока нет.
+                </div>
+            }
+            else
+            {
+                @foreach (var definition in _definitions)
+                {
+                    <button type="button"
+                            class="alarm-definition-item @SelectionClass(definition)"
+                            @onclick="() => SelectAsync(definition)">
+                        <span class="config-enabled-dot @(definition.Enabled ? "enabled" : "disabled")"
+                              title="@(definition.Enabled ? "Enabled" : "Disabled")"
+                              aria-hidden="true"></span>
+                        <span class="alarm-definition-main">
+                            <span class="alarm-definition-name">@definition.Name</span>
+                            <span class="alarm-definition-id">@definition.AlarmId</span>
+                        </span>
+                        <span class="alarm-severity-badge @SeverityClass(definition.Severity)">
+                            @SeverityLabel(definition.Severity)
+                        </span>
+                    </button>
+                }
+            }
+        </div>
+    </aside>
+
+    <main class="editor-workspace">
+        <div class="editor-toolbar">
+            <div class="editor-toolbar-left">
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(_busy || _loading)"
+                        @onclick="CreateAsync">
+                    + Тревога
+                </button>
+
+                <span class="editor-toolbar-divider"></span>
+
+                <button type="button"
+                        class="toolbar-button primary"
+                        disabled="@(!CanSave || _busy)"
+                        @onclick="SaveAsync">
+                    @(_busy ? "Сохранение…" : "Сохранить")
+                </button>
+
+                <button type="button"
+                        class="toolbar-button danger"
+                        disabled="@(!HasSelection || _busy)"
+                        @onclick="DeleteAsync">
+                    @(_isNew ? "Отменить" : "Удалить")
+                </button>
+            </div>
+
+            <div class="editor-toolbar-right">
+                @if (_dirty)
+                {
+                    <span class="unsaved-indicator">несохранено</span>
+                }
+
+                <button type="button"
+                        class="toolbar-button"
+                        disabled="@(_busy || _loading)"
+                        @onclick="RefreshAsync">
+                    Обновить
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="editor-error">
+                @_error
+            </div>
+        }
+
+        <div class="alarm-work-content">
+            <div class="alarm-scope-note">
+                Редактор сохраняет только definitions. Runtime evaluation, transitions и ACK появятся в следующих шагах.
+            </div>
+
+            <div class="editor-table-area">
+                <table class="editor-data-table alarm-data-table">
+                    <thead>
+                        <tr>
+                            <th>Alarm ID</th>
+                            <th>Имя</th>
+                            <th>Tag ID</th>
+                            <th>Условие</th>
+                            <th>Severity</th>
+                            <th>Delay</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_definitions.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6"
+                                    class="table-empty">
+                                    Создайте первое alarm rule через toolbar.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var definition in _definitions)
+                            {
+                                <tr class="@RowClass(definition)"
+                                    @onclick="() => SelectAsync(definition)">
+                                    <td class="alarm-id-cell">@definition.AlarmId</td>
+                                    <td>
+                                        <span class="alarm-enabled-cell">
+                                            <span class="config-enabled-dot @(definition.Enabled ? "enabled" : "disabled")"
+                                                  aria-hidden="true"></span>
+                                            @definition.Name
+                                        </span>
+                                    </td>
+                                    <td class="alarm-tag-cell">@definition.TagId</td>
+                                    <td>@ConditionSummary(definition)</td>
+                                    <td>
+                                        <span class="alarm-severity-badge @SeverityClass(definition.Severity)">
+                                            @SeverityLabel(definition.Severity)
+                                        </span>
+                                    </td>
+                                    <td class="numeric-cell">@FormatDelay(definition.DelayMilliseconds)</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <aside class="editor-properties">
+        <div class="editor-panel-heading">
+            @(_isNew ? "Новая тревога" : "Свойства тревоги")
+        </div>
+
+        @if (!HasSelection)
+        {
+            <div class="editor-properties-empty">
+                Выберите alarm definition или создайте новую.
+            </div>
+        }
+        else
+        {
+            <div class="property-form alarm-property-form">
+                <label class="property-field">
+                    <span>Alarm ID</span>
+                    <input type="text"
+                           maxlength="200"
+                           disabled="@(!_isNew)"
+                           @bind="_draft.AlarmId"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                @if (!_isNew)
+                {
+                    <div class="property-inline-note">
+                        Alarm ID является immutable после создания.
+                    </div>
+                }
+
+                <label class="property-field">
+                    <span>Имя</span>
+                    <input type="text"
+                           maxlength="200"
+                           @bind="_draft.Name"
+                           @bind:event="oninput"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-checkbox">
+                    <input type="checkbox"
+                           @bind="_draft.Enabled"
+                           @bind:after="MarkDirty" />
+                    <span>Definition включён</span>
+                </label>
+
+                <div class="property-section-title">Binding</div>
+
+                <label class="property-field">
+                    <span>Tag ID</span>
+                    <select @bind="_draft.TagId"
+                            @bind:after="MarkDirty">
+                        @if (string.IsNullOrWhiteSpace(_draft.TagId))
+                        {
+                            <option value="">Выберите logical tag</option>
+                        }
+                        else if (!DraftTagExists)
+                        {
+                            <option value="@_draft.TagId">
+                                @_draft.TagId — отсутствует
+                            </option>
+                        }
+
+                        @foreach (var tagId in _tagIds)
+                        {
+                            <option value="@tagId">@tagId</option>
+                        }
+                    </select>
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(_draft.TagId)
+                     && !DraftTagExists)
+                {
+                    <div class="alarm-stale-binding">
+                        Текущий TagId отсутствует в device configuration. Выберите существующий tag перед сохранением.
+                    </div>
+                }
+                else if (_tagIds.Count == 0)
+                {
+                    <div class="property-help">
+                        Нет настроенных logical tags. Сначала создайте tag в редакторе устройств.
+                    </div>
+                }
+
+                <div class="property-section-title">Rule</div>
+
+                <label class="property-field">
+                    <span>Condition</span>
+                    <select @bind="_draft.Condition"
+                            @bind:after="OnConditionChanged">
+                        @foreach (var condition in Enum.GetValues<AlarmConditionDto>())
+                        {
+                            <option value="@condition">@ConditionLabel(condition)</option>
+                        }
+                    </select>
+                </label>
+
+                @if (UsesNumericRule)
+                {
+                    <div class="property-grid-two">
+                        <label class="property-field">
+                            <span>Threshold</span>
+                            <input type="number"
+                                   step="any"
+                                   @bind="_draft.Threshold"
+                                   @bind:after="MarkDirty" />
+                        </label>
+
+                        <label class="property-field">
+                            <span>Hysteresis</span>
+                            <input type="number"
+                                   step="any"
+                                   min="0"
+                                   @bind="_draft.Hysteresis"
+                                   @bind:after="MarkDirty" />
+                        </label>
+                    </div>
+                }
+                else
+                {
+                    <div class="property-help">
+                        Digital condition не использует Threshold/Hysteresis.
+                    </div>
+                }
+
+                <label class="property-field">
+                    <span>Severity</span>
+                    <select @bind="_draft.Severity"
+                            @bind:after="MarkDirty">
+                        @foreach (var severity in Enum.GetValues<AlarmSeverityDto>())
+                        {
+                            <option value="@severity">@SeverityLabel(severity)</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="property-field">
+                    <span>Delay, мс</span>
+                    <input type="number"
+                           min="0"
+                           @bind="_draft.DelayMilliseconds"
+                           @bind:after="MarkDirty" />
+                </label>
+
+                <label class="property-field">
+                    <span>Сообщение</span>
+                    <textarea maxlength="1000"
+                              rows="5"
+                              @bind="_draft.Message"
+                              @bind:event="oninput"
+                              @bind:after="MarkDirty"></textarea>
+                </label>
+
+                <div class="property-help">
+                    Delay и hysteresis сохраняются как rule configuration. Их runtime semantics не вычисляются этим экраном.
+                </div>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private IReadOnlyList<AlarmDefinitionDto> _definitions =
+        Array.Empty<AlarmDefinitionDto>();
+    private IReadOnlyList<string> _tagIds =
+        Array.Empty<string>();
+
+    private string? _selectedAlarmId;
+    private AlarmDraft _draft = new();
+    private bool _isNew;
+    private bool _dirty;
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+
+    private bool HasSelection =>
+        _isNew
+        || _selectedAlarmId is not null;
+
+    private bool UsesNumericRule =>
+        _draft.Condition is AlarmConditionDto.High or AlarmConditionDto.Low;
+
+    private bool DraftTagExists =>
+        !string.IsNullOrWhiteSpace(_draft.TagId)
+        && _tagIds.Contains(
+            _draft.TagId,
+            StringComparer.Ordinal);
+
+    private bool CanSave =>
+        HasSelection
+        && !_loading
+        && !string.IsNullOrWhiteSpace(_draft.AlarmId)
+        && _draft.AlarmId.Length <= 200
+        && !string.IsNullOrWhiteSpace(_draft.Name)
+        && _draft.Name.Length <= 200
+        && DraftTagExists
+        && !string.IsNullOrWhiteSpace(_draft.Message)
+        && _draft.Message.Length <= 1000
+        && _draft.DelayMilliseconds >= 0
+        && (!UsesNumericRule
+            || (_draft.Threshold is not null
+                && _draft.Hysteresis is >= 0));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _selectedAlarmId = null;
+        _isNew = true;
+        _draft = AlarmDraft.CreateDefault(
+            _tagIds.FirstOrDefault());
+        _dirty = true;
+        _error = null;
+    }
+
+    private async Task SelectAsync(
+        AlarmDefinitionDto definition)
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        ApplySelection(
+            definition);
+    }
+
+    private void ApplySelection(
+        AlarmDefinitionDto definition)
+    {
+        _selectedAlarmId = definition.AlarmId;
+        _isNew = false;
+        _draft = AlarmDraft.From(
+            definition);
+        _dirty = false;
+        _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            AlarmDefinitionDto saved;
+
+            if (_isNew)
+            {
+                saved =
+                    await Alarms.CreateDefinitionAsync(
+                        _draft.ToCreateRequest());
+            }
+            else
+            {
+                saved =
+                    await Alarms.UpdateDefinitionAsync(
+                        _selectedAlarmId!,
+                        _draft.ToUpdateRequest());
+            }
+
+            _dirty = false;
+            _isNew = false;
+
+            await ReloadAsync(
+                saved.AlarmId);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!HasSelection || _busy)
+        {
+            return;
+        }
+
+        if (_isNew)
+        {
+            ClearSelection();
+            return;
+        }
+
+        var confirmed =
+            await JavaScript.InvokeAsync<bool>(
+                "confirm",
+                $"Удалить alarm definition '{_selectedAlarmId}'?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            await Alarms.DeleteDefinitionAsync(
+                _selectedAlarmId!);
+
+            ClearSelection();
+            await ReloadAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        await ReloadAsync(
+            _selectedAlarmId);
+    }
+
+    private async Task ReloadAsync(
+        string? alarmId = null)
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var definitions =
+                await Alarms.GetDefinitionsAsync();
+            var modbusDevices =
+                await Configuration.GetDevicesAsync();
+            var snmpDevices =
+                await Configuration.GetSnmpDevicesAsync();
+
+            _definitions =
+                definitions
+                    .OrderBy(
+                        definition => definition.Name,
+                        StringComparer.Ordinal)
+                    .ThenBy(
+                        definition => definition.AlarmId,
+                        StringComparer.Ordinal)
+                    .ToArray();
+
+            _tagIds =
+                modbusDevices
+                    .SelectMany(device => device.Tags)
+                    .Select(tag => tag.TagId)
+                    .Concat(
+                        snmpDevices
+                            .SelectMany(device => device.Tags)
+                            .Select(tag => tag.TagId))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(
+                        tagId => tagId,
+                        StringComparer.Ordinal)
+                    .ToArray();
+
+            if (alarmId is null)
+            {
+                ClearSelection();
+                return;
+            }
+
+            var definition =
+                _definitions.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate.AlarmId,
+                        alarmId,
+                        StringComparison.Ordinal));
+
+            if (definition is null)
+            {
+                ClearSelection();
+                return;
+            }
+
+            ApplySelection(
+                definition);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!_dirty)
+        {
+            return true;
+        }
+
+        return await JavaScript.InvokeAsync<bool>(
+            "confirm",
+            "Есть несохранённые изменения. Отбросить их?");
+    }
+
+    private void OnConditionChanged()
+    {
+        if (UsesNumericRule)
+        {
+            _draft.Threshold ??= 0m;
+            _draft.Hysteresis ??= 0m;
+        }
+        else
+        {
+            _draft.Threshold = null;
+            _draft.Hysteresis = null;
+        }
+
+        MarkDirty();
+    }
+
+    private void MarkDirty()
+    {
+        _dirty = true;
+        _error = null;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedAlarmId = null;
+        _isNew = false;
+        _dirty = false;
+        _draft = new AlarmDraft();
+    }
+
+    private string SelectionClass(
+        AlarmDefinitionDto definition)
+    {
+        return !_isNew
+               && string.Equals(
+                   definition.AlarmId,
+                   _selectedAlarmId,
+                   StringComparison.Ordinal)
+            ? "selected"
+            : string.Empty;
+    }
+
+    private string RowClass(
+        AlarmDefinitionDto definition)
+    {
+        return SelectionClass(
+            definition);
+    }
+
+    private static string ConditionLabel(
+        AlarmConditionDto condition)
+    {
+        return condition switch
+        {
+            AlarmConditionDto.DigitalTrue => "Digital = true",
+            AlarmConditionDto.DigitalFalse => "Digital = false",
+            AlarmConditionDto.High => "High",
+            AlarmConditionDto.Low => "Low",
+            _ => condition.ToString()
+        };
+    }
+
+    private static string ConditionSummary(
+        AlarmDefinitionDto definition)
+    {
+        return definition.Condition switch
+        {
+            AlarmConditionDto.High =>
+                $"High · {definition.Threshold}",
+            AlarmConditionDto.Low =>
+                $"Low · {definition.Threshold}",
+            _ => ConditionLabel(
+                definition.Condition)
+        };
+    }
+
+    private static string SeverityLabel(
+        AlarmSeverityDto severity)
+    {
+        return severity switch
+        {
+            AlarmSeverityDto.Information => "Info",
+            AlarmSeverityDto.Warning => "Warning",
+            AlarmSeverityDto.Error => "Error",
+            _ => severity.ToString()
+        };
+    }
+
+    private static string SeverityClass(
+        AlarmSeverityDto severity)
+    {
+        return severity switch
+        {
+            AlarmSeverityDto.Information => "information",
+            AlarmSeverityDto.Warning => "warning",
+            AlarmSeverityDto.Error => "error",
+            _ => string.Empty
+        };
+    }
+
+    private static string FormatDelay(
+        int delayMilliseconds)
+    {
+        return delayMilliseconds == 0
+            ? "0 ms"
+            : $"{delayMilliseconds} ms";
+    }
+
+    private sealed class AlarmDraft
+    {
+        public string AlarmId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool Enabled { get; set; } = true;
+        public string TagId { get; set; } = string.Empty;
+        public AlarmConditionDto Condition { get; set; } = AlarmConditionDto.High;
+        public decimal? Threshold { get; set; } = 0m;
+        public AlarmSeverityDto Severity { get; set; } = AlarmSeverityDto.Warning;
+        public string Message { get; set; } = string.Empty;
+        public int DelayMilliseconds { get; set; }
+        public decimal? Hysteresis { get; set; } = 0m;
+
+        public static AlarmDraft CreateDefault(
+            string? tagId)
+        {
+            return new AlarmDraft
+            {
+                TagId = tagId ?? string.Empty
+            };
+        }
+
+        public static AlarmDraft From(
+            AlarmDefinitionDto definition)
+        {
+            return new AlarmDraft
+            {
+                AlarmId = definition.AlarmId,
+                Name = definition.Name,
+                Enabled = definition.Enabled,
+                TagId = definition.TagId,
+                Condition = definition.Condition,
+                Threshold = definition.Threshold,
+                Severity = definition.Severity,
+                Message = definition.Message,
+                DelayMilliseconds = definition.DelayMilliseconds,
+                Hysteresis = definition.Hysteresis
+            };
+        }
+
+        public CreateAlarmDefinitionRequest ToCreateRequest()
+        {
+            return new CreateAlarmDefinitionRequest(
+                AlarmId,
+                Name,
+                Enabled,
+                TagId,
+                Condition,
+                UsesNumericCondition(Condition)
+                    ? Threshold
+                    : null,
+                Severity,
+                Message,
+                DelayMilliseconds,
+                UsesNumericCondition(Condition)
+                    ? Hysteresis
+                    : null);
+        }
+
+        public UpdateAlarmDefinitionRequest ToUpdateRequest()
+        {
+            return new UpdateAlarmDefinitionRequest(
+                Name,
+                Enabled,
+                TagId,
+                Condition,
+                UsesNumericCondition(Condition)
+                    ? Threshold
+                    : null,
+                Severity,
+                Message,
+                DelayMilliseconds,
+                UsesNumericCondition(Condition)
+                    ? Hysteresis
+                    : null);
+        }
+
+        private static bool UsesNumericCondition(
+            AlarmConditionDto condition)
+        {
+            return condition is AlarmConditionDto.High or AlarmConditionDto.Low;
+        }
+    }
+}

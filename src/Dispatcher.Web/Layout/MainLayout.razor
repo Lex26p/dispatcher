@@ -98,6 +98,16 @@
                     </NavLink>
                 }
 
+                @if (CanEditAlarms)
+                {
+                    <NavLink class="global-nav-link"
+                             ActiveClass="active"
+                             href="alarms"
+                             @onclick="CloseGlobalNavigation">
+                        Тревоги
+                    </NavLink>
+                }
+
                 @if (CanManageSecurity)
                 {
                     <NavLink class="global-nav-link"
@@ -135,6 +145,11 @@
         Authentication.HasAllPermissions(
             PermissionNames.RuntimeRead,
             PermissionNames.DevicesEdit);
+
+    private bool CanEditAlarms =>
+        Authentication.HasAllPermissions(
+            PermissionNames.RuntimeRead,
+            PermissionNames.AlarmsConfigure);
 
     private bool CanManageSecurity =>
         Authentication.HasPermission(
@@ -175,6 +190,13 @@
                     StringComparison.OrdinalIgnoreCase))
             {
                 return "События";
+            }
+
+            if (path.StartsWith(
+                    "alarms",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return "Тревоги";
             }
 
             if (path.StartsWith(

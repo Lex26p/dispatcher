@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S09A
+## 1. Состояние после V2-S10B
 
-Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
+Application layer содержит operational services, permission-based administration и Alarm configuration editor:
 
 ```text
 Protocol workers
@@ -15,8 +15,10 @@ REST + SignalR
 │ Monitoring │ History / Trends │ Events   │ Mimic runtime │
 └────────────┴──────────────────┴──────────┴───────────────┘
 
-Device Editor → device configuration
-Mimic Editor  → mimic definition
+Device Editor  → device configuration
+Mimic Editor   → mimic definition
+Security Admin → users / roles
+Alarm Editor   → alarm definitions
 
 Configuration SQLite
       ↓
@@ -34,7 +36,7 @@ Web AuthenticationClient
       ├── login / current-user shell
       └── permission-aware routes/navigation/actions
 
-Configuration SQLite v6
+Configuration SQLite v7
       ↓
 roles + role permissions + user-role assignments
       ↓
@@ -48,12 +50,12 @@ REST + RuntimeHub permission enforcement
       ↓ Users.Manage / Roles.Manage
 SecurityManagementService
       ↓ durable mutation + reload
-Configuration SQLite v6 → SecurityCatalog.ReplaceAll
+Configuration SQLite v7 → SecurityCatalog.ReplaceAll
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A добавляет durable roles/permissions и effective-permission catalog, V2-S08B применяет effective permissions к REST/RuntimeHub, V2-S08C проецирует current effective permissions в Web visibility/enabled state, а V2-S09A добавляет permission-protected Users/Roles management API и durable mutation → catalog refresh. Server остаётся единственной authoritative authorization boundary.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, а V2-S10B завершает configuration slice Web Alarm Editor. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -3093,3 +3095,68 @@ realtime alarms
 V2-S10B — Alarm Editor Web
 ```
 
+## 101. Alarm Editor Web boundary
+
+V2-S10B добавляет engineering Web service поверх уже authoritative S10A configuration API:
+
+```text
+CurrentUser.EffectivePermissions[]
+        ↓
+App / MainLayout
+        ↓ Runtime.Read + Alarms.Configure
+/alarms
+        ↓
+AlarmClient
+        ↓
+/api/configuration/alarms/definitions
+        ↓
+S10A AlarmDefinitionService / SQLite v7
+```
+
+Web не получает отдельный alarm configuration cache. После create/update/delete editor перечитывает durable definitions через existing REST boundary. `AlarmClient` только сериализует public contracts и сохраняет `ProblemDetails.detail` как наблюдаемую operation error.
+
+`Runtime.Read` требуется вместе с `Alarms.Configure`, потому что editor одновременно читает alarm definitions и current Modbus/SNMP tag configuration для logical `TagId` picker. Client gating является UX projection; Server middleware по-прежнему отдельно авторизует каждый request.
+
+## 102. Alarm Editor spatial/draft model и S10 boundary
+
+Spatial model повторяет общий engineering editor contract:
+
+```text
+┌──────────────┬──────────────────────────────────────┬─────────────────┐
+│ Alarms       │ add / save / delete / refresh       │ Properties      │
+│ local list   ├──────────────────────────────────────┤                 │
+│              │ dense alarm rules table              │ selected rule   │
+└──────────────┴──────────────────────────────────────┴─────────────────┘
+```
+
+Редактирование выполняется через client-side draft:
+
+```text
+GET definitions
+      ↓
+select definition
+      ↓
+AlarmDraft
+      ↓ local edits
+explicit Save
+      ↓
+POST create / PUT update
+      ↓
+reload definitions
+```
+
+Persisted `AlarmId` не редактируется. Picker строится из current Modbus/SNMP `TagId`; если definition стал stale после удаления source tag, его старый `TagId` остаётся видимым с explicit warning, но Save требует выбрать current configured tag, что соответствует S10A create/update validation.
+
+Condition-aware properties отображают только definition semantics: `DigitalTrue/DigitalFalse` не показывают Threshold/Hysteresis, `High/Low` показывают оба decimal поля. Web не интерпретирует delay/hysteresis и не вычисляет active state.
+
+После V2-S10A/B завершён alarm configuration vertical slice:
+
+```text
+durable definition
+      ↓
+Server CRUD + permissions + audit
+      ↓
+Web Alarm Editor
+```
+
+Alarm evaluation, transitions и operational state начинаются только в V2-S11.
