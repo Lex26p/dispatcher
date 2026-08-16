@@ -10,6 +10,7 @@ using Dispatcher.Server.Historian;
 using Dispatcher.Server.Mimics;
 using Dispatcher.Server.Realtime;
 using Dispatcher.Server.Runtime;
+using Dispatcher.Server.Security;
 using Dispatcher.Snmp;
 
 var builder =
@@ -24,6 +25,8 @@ builder.Services.AddSingleton(
             ResolveConfigurationDatabasePath(
                 services.GetRequiredService<IConfiguration>(),
                 services.GetRequiredService<IHostEnvironment>())));
+
+builder.Services.AddLocalAuthentication();
 
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddSingleton<HistorianPolicyCatalog>();
@@ -100,6 +103,8 @@ var app =
     builder.Build();
 
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet(
     "/health",
@@ -157,6 +162,7 @@ app.MapHistorianPolicyEndpoints();
 app.MapHistoryEndpoints();
 app.MapEventEndpoints();
 app.MapMimicEndpoints();
+app.MapAuthenticationEndpoints();
 
 app.MapHub<Dispatcher.Server.Realtime.RuntimeHub>(
     RuntimeHubContract.Path);

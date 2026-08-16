@@ -543,19 +543,31 @@ Authentication:BootstrapAdministrator:Password
 
 `Password` по умолчанию пуст. Для первого запуска его следует передавать через secret/environment configuration, например `Authentication__BootstrapAdministrator__Password`.
 
-### [ ] V2-S07B — Server authentication session
+### [x] V2-S07B — Server authentication session
 
-Следующий scope:
+Реализовано:
 
-- login endpoint;
-- logout endpoint;
-- current-user endpoint;
-- authenticated cookie/session;
-- password verification через тот же platform hasher;
+- `POST /api/auth/login`;
+- `POST /api/auth/logout`;
+- `GET /api/auth/current`;
+- password verification через тот же ASP.NET Core Identity `PasswordHasher<TUser>`;
+- case-insensitive username lookup через existing `NormalizedUserName`;
+- generic `401` для unknown user / неверного password / disabled user;
 - disabled user не может создать новую authenticated session;
-- server различает anonymous и конкретного authenticated user.
+- ASP.NET Core cookie authentication без собственного session token format;
+- non-persistent HttpOnly cookie `Dispatcher.Auth`;
+- `SameSite=Strict`;
+- session ticket lifetime `8 hours` со sliding expiration;
+- claims содержат только identity:
+  - `UserId`;
+  - `UserName`;
+  - `DisplayName`;
+- `GET /api/auth/current` явно различает anonymous/authenticated state;
+- `POST /api/auth/logout` завершает cookie session;
+- configuration/operational SQLite schema не меняются;
+- существующие runtime/configuration endpoints пока не получают authorization requirements.
 
-Permissions/roles по-прежнему не входят в этот подшаг.
+Roles, permissions, audit login events и Web login по-прежнему не входят в этот подшаг.
 
 ### [ ] V2-S07C — Web authentication integration
 

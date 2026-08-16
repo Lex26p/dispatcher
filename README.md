@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. Phase 7 начата с V2-S07A — local users storage/password hashing/bootstrap foundation.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. Phase 7 продолжена до V2-S07B — Server login/logout/current-user и cookie session foundation.
 
 ## Рабочая цепочка
 
@@ -44,7 +44,10 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 25. Просматривать Events в Web `/events` и получать новые persisted events через SignalR.
 26. Хранить локальные user identities в configuration SQLite без plaintext passwords.
 27. Создавать первого local user через явный bootstrap password, используя platform password hashing.
-28. Сохранять persistent `Enabled/Disabled` state local user для следующего authentication шага.
+28. Сохранять persistent `Enabled/Disabled` state local user.
+29. Проверять local password через platform `PasswordHasher<TUser>` без собственного credential format.
+30. Создавать и завершать authenticated cookie session через Server API.
+31. Различать anonymous и конкретного authenticated user через `GET /api/auth/current`.
 
 ## Базовый стек
 
@@ -130,9 +133,9 @@ password_hash
 
 `normalized_user_name` уникален и используется как case-insensitive logical lookup key. Plaintext password в SQLite не сохраняется.
 
-## Local user foundation
+## Local authentication foundation
 
-V2-S07A вводит только durable identity storage и bootstrap foundation. Login/logout/current-user/session появятся в V2-S07B.
+V2-S07A вводит durable identity storage/bootstrap, а V2-S07B добавляет Server authentication session boundary.
 
 Local user:
 
@@ -145,7 +148,7 @@ Enabled
 PasswordHash
 ```
 
-Password hash создаётся штатным ASP.NET Core Identity `PasswordHasher<TUser>`; собственная криптографическая схема не реализуется.
+Password hash создаётся и проверяется штатным ASP.NET Core Identity `PasswordHasher<TUser>`; собственная криптографическая схема не реализуется.
 
 Bootstrap первого пользователя выполняется только когда:
 
@@ -173,7 +176,44 @@ Default password отсутствует. Для первого bootstrap startup
 Authentication__BootstrapAdministrator__Password
 ```
 
-После появления хотя бы одного local user bootstrap больше не создаёт пользователя. Поле роли/`IsAdministrator` в V2-S07A намеренно отсутствует: permissions и roles относятся к V2-S08.
+После появления хотя бы одного local user bootstrap больше не создаёт пользователя.
+
+Server authentication API:
+
+```text
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/current
+```
+
+`login` принимает:
+
+```text
+UserName
+Password
+```
+
+и при успешной проверке создаёт non-persistent ASP.NET Core cookie session. Cookie:
+
+```text
+name       Dispatcher.Auth
+HttpOnly   true
+SameSite   Strict
+lifetime   8 hours, sliding
+```
+
+`GET /api/auth/current` возвращает explicit anonymous/authenticated state:
+
+```text
+Authenticated
+UserId?
+UserName?
+DisplayName?
+```
+
+Unknown user, неверный password и disabled user не создают session и получают одинаковый `401`.
+
+V2-S07B намеренно не добавляет role/permission claims и не закрывает существующие runtime/configuration endpoints. Server authorization появляется в V2-S08; Web login/state — в V2-S07C.
 
 ## Historian foundation
 
@@ -789,7 +829,7 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. V2-S07A также не создаёт пользователя без явно заданного bootstrap password.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics. Local user также не создаётся без явно заданного bootstrap password. V2-S07B не меняет schema version `5`.
 
 ## Roadmap v2
 
@@ -802,13 +842,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S07A — Local users storage, password hashing и bootstrap
+V2-S07B — Server authentication session, login/logout/current user
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S07B — Server authentication session, login/logout/current user
+V2-S07C — Web authentication integration
 ```
 
 ## Документы

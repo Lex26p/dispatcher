@@ -1183,3 +1183,54 @@ Default bootstrap password отсутствует.
 - скрытый/default password неприемлем для bootstrap;
 - bootstrap должен быть повторяемым только до появления первого local user и не должен создавать дополнительные accounts на каждом startup;
 - authentication и authorization остаются разными границами.
+
+
+---
+
+## D-062 — Local authentication session использует ASP.NET Core cookie authentication и identity-only claims
+
+**Status:** Accepted
+
+V2-S07B не вводит собственный session/bearer token format.
+
+Server использует:
+
+```text
+ASP.NET Core authentication
+        ↓
+Dispatcher.Local cookie scheme
+        ↓
+Dispatcher.Auth HttpOnly cookie
+```
+
+Cookie session:
+
+```text
+SameSite = Strict
+SecurePolicy = SameAsRequest
+IsPersistent = false
+Ticket lifetime = 8 hours
+SlidingExpiration = true
+```
+
+Login проверяет existing `local_users` через normalized username и тот же `PasswordHasher<LocalUserConfiguration>`, который используется для bootstrap hash.
+
+Authenticated principal содержит только:
+
+```text
+UserId
+UserName
+DisplayName
+```
+
+Role и permission claims не создаются.
+
+Existing runtime/configuration endpoints на V2-S07B не закрываются authentication-only check. Authorization policies и permission enforcement вводятся отдельно в V2-S08.
+
+Причина:
+
+- ASP.NET Core cookie authentication даёт platform session/ticket protection без собственного token format;
+- Dispatcher Web, REST и SignalR размещены на одном origin, поэтому cookie является минимальной подходящей session boundary;
+- authentication identity не должна преждевременно кодировать roles/permissions;
+- разделение V2-S07/V2-S08 позволяет сначала стабилизировать identity/session semantics, а затем добавить server-side permission enforcement;
+- generic `401` для invalid/disabled credentials не раскрывает через response причину отказа.

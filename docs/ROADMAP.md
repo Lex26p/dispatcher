@@ -100,16 +100,17 @@ V2-S01…V2-S04 завершают первый полный Historian vertical 
 
 V2-S05 и V2-S06 завершают Phase 6: immutable Event Journal, Events REST/paging, realtime новых events и Web Events.
 
-Phase 7 начата:
+Phase 7 продолжена:
 
 ```text
 V2-S07A — Local users storage, password hashing и bootstrap foundation
+V2-S07B — Server authentication session, login/logout/current user
 ```
 
-Следующий шаг новой дорожной карты после принятия V2-S07A:
+Следующий шаг после принятия V2-S07B:
 
 ```text
-V2-S07B — Server authentication session, login/logout/current user
+V2-S07C — Web authentication integration
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

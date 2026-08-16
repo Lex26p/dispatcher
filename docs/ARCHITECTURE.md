@@ -1,6 +1,6 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S07A
+## 1. Состояние после V2-S07B
 
 Application layer содержит несколько пользовательских operational services и начало security configuration boundary:
 
@@ -20,12 +20,16 @@ Mimic Editor  → mimic definition
 
 Configuration SQLite
       ↓
-local user identity storage
+local user identity/password hash
+      ↓
+LocalAuthenticationService
+      ↓
+ASP.NET Core cookie → HttpContext.User
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities и password hashes, но ещё не вводит login/session HTTP boundary.
+V2-S07A сохраняет local user identities/password hashes, а V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary. Roles/permissions и Web login ещё не введены.
 
 ## 2. Главная граница binding
 
@@ -1932,7 +1936,7 @@ SQLite local_users.password_hash
 
 В persistent user record отсутствует plaintext password.
 
-Password verification в следующем V2-S07B будет использовать тот же platform hasher и его encoded hash metadata вместо собственного salt/iteration format.
+Password verification в V2-S07B использует тот же platform hasher и его encoded hash metadata вместо собственного salt/iteration format.
 
 ## 64. Bootstrap первого local user
 
@@ -1961,7 +1965,7 @@ Bootstrap password ожидается через configuration provider/secret/e
 
 После появления хотя бы одного local user bootstrap больше не создаёт пользователей, даже если bootstrap password остался в process configuration.
 
-Если users пусты и password не задан, Server продолжает запускаться и пишет warning. Это позволяет существующим development/test hosts работать до V2-S07B, но до включения authentication оператор должен явно выполнить bootstrap.
+Если users пусты и password не задан, Server продолжает запускаться и пишет warning. После V2-S07B такой host остаётся anonymous-only: `current` работает, но login не может завершиться успешно до явного bootstrap первого local user.
 
 ## 65. Disabled user semantics на V2-S07A
 
@@ -1973,7 +1977,7 @@ Bootstrap password ожидается через configuration provider/secret/e
 Enabled = true / false
 ```
 
-Проверка запрета login для disabled user появляется вместе с login/session boundary в V2-S07B.
+V2-S07B использует этот flag при login: disabled user не может создать новую authenticated session.
 
 V2-S07A намеренно не добавляет:
 
@@ -2016,4 +2020,140 @@ authentication Web UI
 
 ```text
 V2-S07B — Server authentication session, login/logout/current user
+```
+
+
+## 67. Local authentication request boundary
+
+V2-S07B добавляет HTTP authentication boundary поверх existing `local_users` без изменения configuration schema:
+
+```text
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/current
+```
+
+Login path:
+
+```text
+UserName + Password
+        ↓
+NormalizeUserName
+        ↓
+SqliteConfigurationStore.FindLocalUserByNormalizedUserNameAsync
+        ↓
+PasswordHasher<LocalUserConfiguration>.VerifyHashedPassword
+        ↓
+Enabled == true
+        ↓
+ASP.NET Core SignInAsync
+        ↓
+Dispatcher.Auth cookie
+```
+
+Unknown user, неверный password и disabled user дают одинаковый `401` и не создают authenticated session.
+
+Для unknown user выполняется dummy platform password verification, чтобы failure path не превращался в очевидный fast-path только по факту отсутствия username.
+
+Audit login success/failure в V2-S07B не записывается: actor-aware security audit относится к V2-S09.
+
+## 68. Cookie session и identity claims
+
+Dispatcher не создаёт собственный bearer/session token format.
+
+Используется standard ASP.NET Core cookie authentication scheme:
+
+```text
+Scheme = Dispatcher.Local
+Cookie = Dispatcher.Auth
+```
+
+Cookie policy:
+
+```text
+HttpOnly = true
+SameSite = Strict
+SecurePolicy = SameAsRequest
+IsPersistent = false
+Ticket lifetime = 8 hours
+SlidingExpiration = true
+```
+
+`IsPersistent=false` означает browser-session cookie; authentication ticket при этом имеет bounded lifetime и может обновляться sliding expiration механизмом.
+
+Principal содержит только identity claims:
+
+```text
+NameIdentifier → UserId
+Name           → UserName
+dispatcher:display_name → DisplayName
+```
+
+Role/permission claims отсутствуют. Это сохраняет границу:
+
+```text
+V2-S07 authentication
+        ≠
+V2-S08 authorization
+```
+
+## 69. Current user и logout semantics
+
+`GET /api/auth/current` является public state endpoint.
+
+Anonymous response:
+
+```text
+Authenticated = false
+UserId        = null
+UserName      = null
+DisplayName   = null
+```
+
+Authenticated response:
+
+```text
+Authenticated = true
+UserId
+UserName
+DisplayName
+```
+
+Login и current-user responses имеют `Cache-Control: no-store`.
+
+`POST /api/auth/logout` вызывает platform `SignOutAsync` и возвращает `204 No Content`. Logout остаётся idempotent для anonymous client.
+
+На V2-S07B existing runtime/configuration/history/events/mimic endpoints не получают `.RequireAuthorization()`. Middleware уже умеет заполнить `HttpContext.User`, но enforcement по permissions добавляется только в V2-S08.
+
+## 70. V2-S07B scope boundary
+
+После V2-S07B есть:
+
+```text
+persistent local users
+platform password hashing + verification
+explicit bootstrap
+login
+logout
+current user
+authenticated cookie session
+disabled user login rejection
+```
+
+Ещё нет:
+
+```text
+Web login/current-user shell
+roles
+permissions
+server authorization policies
+audit actor identity
+user management API/Web
+session revocation on user mutation
+```
+
+Следующий шаг:
+
+```text
+V2-S07C — Web authentication integration
 ```
