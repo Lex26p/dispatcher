@@ -147,7 +147,7 @@ v6  security roles / permissions / assignments
 
 При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются.
 
-Operational SQLite schema независимо остаётся version `2`.
+Operational SQLite schema развивается независимо: V2-S05 поднял её до `2`, а V2-S09C — до `3` для nullable audit actor columns.
 
 ## 5. Почему elements_json
 
@@ -536,10 +536,10 @@ Index:
 
 `sample_id` обеспечивает однозначный порядок records даже при одинаковом timestamp.
 
-Начиная с V2-S05 current operational schema:
+V2-S05 поднял operational schema до `2`, а V2-S09C добавляет actor identity и делает current version `3`:
 
 ```text
-PRAGMA user_version = 2
+PRAGMA user_version = 3
 ```
 
 Migration:
@@ -548,6 +548,8 @@ Migration:
 v1 history_samples
  ↓ preserve history
 v2 history_samples + events
+ ↓ preserve history/events
+v3 events + nullable actor identity
 ```
 
 Неизвестная future schema version вызывает startup error вместо неявной попытки использовать несовместимую DB.
@@ -2840,3 +2842,112 @@ S09B не добавляет actor-aware Event Journal records. Следующи
 V2-S09C — Actor-aware security audit wiring
 ```
 
+
+## 93. Actor-aware Event Journal record
+
+V2-S09C расширяет существующий immutable `EventRecord` nullable actor identity:
+
+```text
+ActorUserId?
+ActorUserName?
+```
+
+Operational SQLite schema повышается:
+
+```text
+v2 → v3
+```
+
+Migration добавляет nullable columns:
+
+```text
+actor_user_id
+actor_user_name
+```
+
+Existing `history_samples` и `events` не перестраиваются и не удаляются; старые records после migration имеют `NULL` actor. System/device events также могут быть actor-less, потому что у них нет authenticated user action.
+
+Actor является отдельной частью record, а не только `DataJson`: это сохраняет machine-readable identity независимо от producer-specific payload. Cookie/session format не меняется.
+
+## 94. Audit actor semantics
+
+Для already-authorized HTTP mutations actor извлекается до business mutation из authenticated principal:
+
+```text
+ClaimTypes.NameIdentifier → ActorUserId
+ClaimTypes.Name           → ActorUserName
+```
+
+Если `Name` отсутствует, stable `UserId` используется как fallback name; отсутствие authenticated `UserId` считается invalid audit boundary до выполнения mutation. Permission granting по-прежнему выполняет S08/S09 authorization и не зависит от actor event fields.
+
+Authentication имеет отдельную семантику:
+
+```text
+login success
+    → verified LocalUser → ActorUserId + ActorUserName
+
+login failure
+    → actor = null
+    → bounded attempted username только в DataJson
+```
+
+Неподтверждённый login identifier не записывается как actor. Password/plaintext hash никогда не входит в audit payload.
+
+## 95. S09C audit producers
+
+Минимальный actor-aware набор:
+
+```text
+Authentication
+  LoginSucceeded
+  LoginFailed
+
+Security configuration
+  SecurityUserCreated
+  SecurityUserUpdated
+  SecurityUserPasswordReset
+  SecurityUserRolesChanged
+  SecurityRoleCreated
+  SecurityRoleUpdated
+  SecurityRoleDeleted
+
+Commands
+  TagWriteSucceeded
+  TagWriteFailed
+
+Configuration
+  ConfigurationChanged
+    Modbus / SNMP
+    Mimic
+    Historian policy
+```
+
+`RuntimeConfigurationApplied` остаётся отдельным operational event без обязательного actor. Это различает:
+
+```text
+user changed configuration
+        ≠
+runtime applied current configuration
+```
+
+Security/configuration audit event создаётся только после successful durable/business mutation. Authorization-denied request не доходит до producer и отдельным S09C event не журналируется.
+
+## 96. Audit persistence boundary
+
+Actor-aware audit не создаёт mutable audit subsystem. Он повторно использует существующую цепочку:
+
+```text
+producer
+  ↓ EventJournalService.Publish
+bounded channel
+  ↓
+operational SQLite v3 events
+  ↓
+Events REST / EventAdded SignalR
+```
+
+Journal остаётся append-only и не получает update/delete API. Actor fields входят в REST/realtime `EventRecordDto`, поэтому machine consumers могут читать audit identity без разбора `DataJson`.
+
+S09C намеренно сохраняет существующий bounded asynchronous ingestion contract (`DroppedEventCount` / retry persistence). Это базовая operational traceability Dispatcher, а не отдельный compliance-grade synchronous audit ledger.
+
+После V2-S09C Phase 7 завершена. Следующий шаг — V2-S10 Alarm definitions / Alarm Editor.

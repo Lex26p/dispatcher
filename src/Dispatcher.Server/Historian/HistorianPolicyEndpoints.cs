@@ -1,5 +1,6 @@
 using Dispatcher.Contracts.Historian;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Events;
 
 namespace Dispatcher.Server.Historian;
 
@@ -40,17 +41,29 @@ public static class HistorianPolicyEndpoints
     private static async Task<IResult> UpsertPolicyAsync(
         string tagId,
         HistorianPolicyUpsertRequest request,
+        HttpContext httpContext,
         HistorianPolicyService service,
         ConfigurationCatalog configuration,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var policy =
                 await service.UpsertAsync(
                     tagId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                operation:
+                    "Upsert",
+                tagId);
 
             return Results.Ok(
                 HistorianContractMapper.ToDto(
@@ -71,14 +84,27 @@ public static class HistorianPolicyEndpoints
 
     private static async Task<IResult> DeletePolicyAsync(
         string tagId,
+        HttpContext httpContext,
         HistorianPolicyService service,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
+
             await service.DeleteAsync(
                 tagId,
                 cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                operation:
+                    "Delete",
+                tagId);
 
             return Results.NoContent();
         }
@@ -92,6 +118,36 @@ public static class HistorianPolicyEndpoints
             return ToProblem(
                 exception);
         }
+    }
+
+    private static void PublishConfigurationAudit(
+        EventJournalService eventJournal,
+        EventActor actor,
+        string operation,
+        string tagId)
+    {
+        eventJournal.Publish(
+            EventCategory.Configuration,
+            EventTypes.ConfigurationChanged,
+            EventSeverity.Information,
+            source:
+                "configuration",
+            message:
+                $"Historian policy '{tagId}': {operation}.",
+            data:
+                new
+                {
+                    Area =
+                        "Historian",
+                    Operation =
+                        operation,
+                    EntityType =
+                        "Policy",
+                    EntityId =
+                        tagId
+                },
+            actor:
+                actor);
     }
 
     private static IResult ToProblem(

@@ -1,4 +1,5 @@
 using Dispatcher.Contracts.Mimics;
+using Dispatcher.Server.Events;
 
 namespace Dispatcher.Server.Mimics;
 
@@ -62,17 +63,29 @@ public static class MimicEndpoints
     private static async Task<IResult> UpsertMimicAsync(
         string mimicId,
         MimicDefinitionDto request,
+        HttpContext httpContext,
         MimicConfigurationService service,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var saved =
                 await service.UpsertAsync(
                     mimicId,
                     MimicContractMapper.ToConfiguration(
                         request),
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                operation:
+                    "Upsert",
+                mimicId);
 
             return Results.Ok(
                 MimicContractMapper.ToDto(
@@ -92,15 +105,30 @@ public static class MimicEndpoints
 
     private static async Task<IResult> DeleteMimicAsync(
         string mimicId,
+        HttpContext httpContext,
         MimicConfigurationService service,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var deleted =
                 await service.DeleteAsync(
                     mimicId,
                     cancellationToken);
+
+            if (deleted)
+            {
+                PublishConfigurationAudit(
+                    eventJournal,
+                    actor,
+                    operation:
+                        "Delete",
+                    mimicId);
+            }
 
             return deleted
                 ? Results.NoContent()
@@ -116,6 +144,36 @@ public static class MimicEndpoints
             return ToProblem(
                 exception);
         }
+    }
+
+    private static void PublishConfigurationAudit(
+        EventJournalService eventJournal,
+        EventActor actor,
+        string operation,
+        string mimicId)
+    {
+        eventJournal.Publish(
+            EventCategory.Configuration,
+            EventTypes.ConfigurationChanged,
+            EventSeverity.Information,
+            source:
+                "configuration",
+            message:
+                $"Mimic '{mimicId}': {operation}.",
+            data:
+                new
+                {
+                    Area =
+                        "Mimic",
+                    Operation =
+                        operation,
+                    EntityType =
+                        "Mimic",
+                    EntityId =
+                        mimicId
+                },
+            actor:
+                actor);
     }
 
     private static IResult ToProblem(

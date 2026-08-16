@@ -1,4 +1,5 @@
 using Dispatcher.Contracts.Configuration;
+using Dispatcher.Server.Events;
 
 namespace Dispatcher.Server.Configuration;
 
@@ -101,11 +102,16 @@ public static class ConfigurationEndpoints
 
     private static async Task<IResult> CreateModbusDeviceAsync(
         ModbusDeviceUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var created =
                 await editor.CreateDeviceAsync(
                     request,
@@ -114,6 +120,14 @@ public static class ConfigurationEndpoints
             var dto =
                 ConfigurationContractMapper.ToDto(
                     created);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Create",
+                entityType: "Device",
+                entityId: dto.DeviceId);
 
             return Results.Created(
                 $"/api/configuration/modbus/devices/{Uri.EscapeDataString(dto.DeviceId)}",
@@ -134,16 +148,29 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> UpdateModbusDeviceAsync(
         string deviceId,
         ModbusDeviceUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var updated =
                 await editor.UpdateDeviceAsync(
                     deviceId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Update",
+                entityType: "Device",
+                entityId: updated.DeviceId);
 
             return Results.Ok(
                 ConfigurationContractMapper.ToDto(
@@ -163,14 +190,28 @@ public static class ConfigurationEndpoints
 
     private static async Task<IResult> DeleteModbusDeviceAsync(
         string deviceId,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
+
             await editor.DeleteDeviceAsync(
                 deviceId,
                 cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Delete",
+                entityType: "Device",
+                entityId: deviceId);
 
             return Results.NoContent();
         }
@@ -189,16 +230,30 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> CreateModbusTagAsync(
         string deviceId,
         ModbusTagUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var created =
                 await editor.CreateTagAsync(
                     deviceId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Create",
+                entityType: "Tag",
+                entityId: created.TagId,
+                parentId: deviceId);
 
             return Results.Created(
                 $"/api/configuration/modbus/devices/{Uri.EscapeDataString(deviceId)}/tags/{Uri.EscapeDataString(created.TagId)}",
@@ -221,17 +276,31 @@ public static class ConfigurationEndpoints
         string deviceId,
         string tagId,
         ModbusTagUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var updated =
                 await editor.UpdateTagAsync(
                     deviceId,
                     tagId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Update",
+                entityType: "Tag",
+                entityId: updated.TagId,
+                parentId: deviceId);
 
             return Results.Ok(
                 ConfigurationContractMapper.ToDto(
@@ -252,15 +321,30 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> DeleteModbusTagAsync(
         string deviceId,
         string tagId,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
+
             await editor.DeleteTagAsync(
                 deviceId,
                 tagId,
                 cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "Modbus",
+                operation: "Delete",
+                entityType: "Tag",
+                entityId: tagId,
+                parentId: deviceId);
 
             return Results.NoContent();
         }
@@ -278,11 +362,16 @@ public static class ConfigurationEndpoints
 
     private static async Task<IResult> CreateSnmpDeviceAsync(
         SnmpDeviceUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var created =
                 await editor.CreateSnmpDeviceAsync(
                     request,
@@ -291,6 +380,14 @@ public static class ConfigurationEndpoints
             var dto =
                 ConfigurationContractMapper.ToDto(
                     created);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Create",
+                entityType: "Device",
+                entityId: dto.DeviceId);
 
             return Results.Created(
                 $"/api/configuration/snmp/devices/{Uri.EscapeDataString(dto.DeviceId)}",
@@ -311,16 +408,29 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> UpdateSnmpDeviceAsync(
         string deviceId,
         SnmpDeviceUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var updated =
                 await editor.UpdateSnmpDeviceAsync(
                     deviceId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Update",
+                entityType: "Device",
+                entityId: updated.DeviceId);
 
             return Results.Ok(
                 ConfigurationContractMapper.ToDto(
@@ -340,14 +450,28 @@ public static class ConfigurationEndpoints
 
     private static async Task<IResult> DeleteSnmpDeviceAsync(
         string deviceId,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
+
             await editor.DeleteSnmpDeviceAsync(
                 deviceId,
                 cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Delete",
+                entityType: "Device",
+                entityId: deviceId);
 
             return Results.NoContent();
         }
@@ -366,16 +490,30 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> CreateSnmpTagAsync(
         string deviceId,
         SnmpTagUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var created =
                 await editor.CreateSnmpTagAsync(
                     deviceId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Create",
+                entityType: "Tag",
+                entityId: created.TagId,
+                parentId: deviceId);
 
             return Results.Created(
                 $"/api/configuration/snmp/devices/{Uri.EscapeDataString(deviceId)}/tags/{Uri.EscapeDataString(created.TagId)}",
@@ -398,17 +536,31 @@ public static class ConfigurationEndpoints
         string deviceId,
         string tagId,
         SnmpTagUpsertRequest request,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
             var updated =
                 await editor.UpdateSnmpTagAsync(
                     deviceId,
                     tagId,
                     request,
                     cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Update",
+                entityType: "Tag",
+                entityId: updated.TagId,
+                parentId: deviceId);
 
             return Results.Ok(
                 ConfigurationContractMapper.ToDto(
@@ -429,15 +581,30 @@ public static class ConfigurationEndpoints
     private static async Task<IResult> DeleteSnmpTagAsync(
         string deviceId,
         string tagId,
+        HttpContext httpContext,
         ConfigurationEditorService editor,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         try
         {
+            var actor =
+                EventActor.FromAuthenticatedPrincipal(
+                    httpContext.User);
+
             await editor.DeleteSnmpTagAsync(
                 deviceId,
                 tagId,
                 cancellationToken);
+
+            PublishConfigurationAudit(
+                eventJournal,
+                actor,
+                area: "SNMP",
+                operation: "Delete",
+                entityType: "Tag",
+                entityId: tagId,
+                parentId: deviceId);
 
             return Results.NoContent();
         }
@@ -451,6 +618,41 @@ public static class ConfigurationEndpoints
             return ToProblem(
                 exception);
         }
+    }
+
+    private static void PublishConfigurationAudit(
+        EventJournalService eventJournal,
+        EventActor actor,
+        string area,
+        string operation,
+        string entityType,
+        string entityId,
+        string? parentId = null)
+    {
+        eventJournal.Publish(
+            EventCategory.Configuration,
+            EventTypes.ConfigurationChanged,
+            EventSeverity.Information,
+            source:
+                "configuration",
+            message:
+                $"{area} {entityType} '{entityId}': {operation}.",
+            data:
+                new
+                {
+                    Area =
+                        area,
+                    Operation =
+                        operation,
+                    EntityType =
+                        entityType,
+                    EntityId =
+                        entityId,
+                    ParentId =
+                        parentId
+                },
+            actor:
+                actor);
     }
 
     private static IResult ToProblem(

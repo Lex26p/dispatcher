@@ -153,7 +153,8 @@ public sealed class EventJournalService : IHostedService
         string source,
         string message,
         object? data = null,
-        DateTimeOffset? timestamp = null)
+        DateTimeOffset? timestamp = null,
+        EventActor? actor = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(
             type);
@@ -161,6 +162,14 @@ public sealed class EventJournalService : IHostedService
             source);
         ArgumentException.ThrowIfNullOrWhiteSpace(
             message);
+
+        if (actor is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                actor.UserId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                actor.UserName);
+        }
 
         string? dataJson;
 
@@ -207,7 +216,11 @@ public sealed class EventJournalService : IHostedService
                 Message:
                     message,
                 DataJson:
-                    dataJson);
+                    dataJson,
+                ActorUserId:
+                    actor?.UserId,
+                ActorUserName:
+                    actor?.UserName);
 
         if (_channel.Writer.TryWrite(
                 record))

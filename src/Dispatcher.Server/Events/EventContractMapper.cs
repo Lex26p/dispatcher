@@ -20,7 +20,9 @@ internal static class EventContractMapper
                 record.Severity),
             record.Source,
             record.Message,
-            record.DataJson);
+            record.DataJson,
+            record.ActorUserId,
+            record.ActorUserName);
     }
 
     public static EventCategory ToInternal(

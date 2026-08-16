@@ -1478,3 +1478,37 @@ Layout сохраняет engineering spatial model: local Users/Roles navigatio
 - current actor projection после self-mutation не должна оставаться stale до browser refresh;
 - client-side visibility/disabled state по-прежнему не заменяет Server policies и administrative survivability invariant.
 
+
+---
+
+## D-070 — Audit actor хранится как nullable поля immutable EventRecord в operational schema v3
+
+**Status:** Accepted
+
+V2-S09C повышает operational SQLite schema:
+
+```text
+v2 → v3
+```
+
+и добавляет в `events`:
+
+```text
+actor_user_id TEXT NULL
+actor_user_name TEXT NULL
+```
+
+Actor identity не прячется исключительно в producer-specific `DataJson`. Existing records и system/device events могут иметь `NULL` actor. Verified authenticated actions получают actor из identity principal; login success использует verified `LocalUser`, а login failure остаётся actor-less и может хранить только bounded attempted username в payload.
+
+Первый audit set включает login, security-management mutations, tag writes и current configuration mutations (Modbus/SNMP, Mimic, Historian policy). Password/plaintext hash в events не записывается. Existing `RuntimeConfigurationApplied` сохраняется как отдельный operational event; actor-aware `ConfigurationChanged` описывает user action.
+
+Event Journal остаётся append-only/read-only и продолжает использовать bounded asynchronous ingestion. Отдельный mutable audit database/API или compliance-grade synchronous ledger в S09C не создаётся.
+
+Причина:
+
+- actor должен быть machine-readable независимо от `DataJson` конкретного producer;
+- nullable columns позволяют мигрировать existing operational events без синтетической identity;
+- неподтверждённый login identifier нельзя выдавать за authenticated actor;
+- audit должен повторно использовать уже существующий immutable Event Journal/REST/SignalR boundary, а не создавать параллельную историю;
+- separating `ConfigurationChanged` от `RuntimeConfigurationApplied` различает user intent и runtime consequence;
+- credential secrets не являются audit metadata.

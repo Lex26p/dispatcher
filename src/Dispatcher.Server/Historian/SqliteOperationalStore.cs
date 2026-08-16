@@ -6,7 +6,7 @@ namespace Dispatcher.Server.Historian;
 
 public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalStore
 {
-    private const int CurrentSchemaVersion = 2;
+    private const int CurrentSchemaVersion = 3;
 
     private readonly string _connectionString;
 
@@ -57,13 +57,22 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
         switch (schemaVersion)
         {
             case 0:
-                await CreateSchemaV2Async(
+                await CreateSchemaV3Async(
                     connection,
                     cancellationToken);
                 return;
 
             case 1:
                 await MigrateV1ToV2Async(
+                    connection,
+                    cancellationToken);
+                await MigrateV2ToV3Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 2:
+                await MigrateV2ToV3Async(
                     connection,
                     cancellationToken);
                 return;
@@ -199,7 +208,9 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 severity,
                 source,
                 message,
-                data_json)
+                data_json,
+                actor_user_id,
+                actor_user_name)
             VALUES (
                 $timestampUtcTicks,
                 $category,
@@ -207,7 +218,9 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 $severity,
                 $source,
                 $message,
-                $dataJson);
+                $dataJson,
+                $actorUserId,
+                $actorUserName);
             """;
 
         var timestampParameter =
@@ -243,6 +256,16 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
         var dataJsonParameter =
             command.Parameters.Add(
                 "$dataJson",
+                SqliteType.Text);
+
+        var actorUserIdParameter =
+            command.Parameters.Add(
+                "$actorUserId",
+                SqliteType.Text);
+
+        var actorUserNameParameter =
+            command.Parameters.Add(
+                "$actorUserName",
                 SqliteType.Text);
 
         await using var idCommand =
@@ -292,6 +315,16 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 record.DataJson is null
                     ? DBNull.Value
                     : record.DataJson;
+
+            actorUserIdParameter.Value =
+                record.ActorUserId is null
+                    ? DBNull.Value
+                    : record.ActorUserId;
+
+            actorUserNameParameter.Value =
+                record.ActorUserName is null
+                    ? DBNull.Value
+                    : record.ActorUserName;
 
             await command.ExecuteNonQueryAsync(
                 cancellationToken);
@@ -365,7 +398,9 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                     severity,
                     source,
                     message,
-                    data_json
+                    data_json,
+                    actor_user_id,
+                    actor_user_name
                 FROM events
                 WHERE timestamp_utc_ticks >= $fromUtcTicks
                   AND timestamp_utc_ticks <= $toUtcTicks
@@ -492,7 +527,9 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 severity,
                 source,
                 message,
-                data_json
+                data_json,
+                actor_user_id,
+                actor_user_name
             FROM events
             ORDER BY event_id;
             """;
@@ -719,7 +756,15 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
             DataJson:
                 reader.IsDBNull(7)
                     ? null
-                    : reader.GetString(7));
+                    : reader.GetString(7),
+            ActorUserId:
+                reader.IsDBNull(8)
+                    ? null
+                    : reader.GetString(8),
+            ActorUserName:
+                reader.IsDBNull(9)
+                    ? null
+                    : reader.GetString(9));
     }
 
     private static HistorySample ReadSample(
@@ -843,7 +888,36 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
         transaction.Commit();
     }
 
-    private static async Task CreateSchemaV2Async(
+    private static async Task MigrateV2ToV3Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            ALTER TABLE events
+                ADD COLUMN actor_user_id TEXT NULL;
+
+            ALTER TABLE events
+                ADD COLUMN actor_user_name TEXT NULL;
+
+            PRAGMA user_version = 3;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task CreateSchemaV3Async(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -874,7 +948,9 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                 severity INTEGER NOT NULL CHECK (severity BETWEEN 0 AND 2),
                 source TEXT NOT NULL,
                 message TEXT NOT NULL,
-                data_json TEXT NULL
+                data_json TEXT NULL,
+                actor_user_id TEXT NULL,
+                actor_user_name TEXT NULL
             );
 
             CREATE INDEX IF NOT EXISTS ix_events_time
@@ -900,7 +976,7 @@ public sealed class SqliteOperationalStore : IHistorySampleStore, IEventJournalS
                     timestamp_utc_ticks,
                     event_id);
 
-            PRAGMA user_version = 2;
+            PRAGMA user_version = 3;
             """;
 
         await command.ExecuteNonQueryAsync(

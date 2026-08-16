@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 продолжена V2-S09A/B: Server имеет permission-protected Users/Roles management API, а Web — permission-aware admin service `/security`; actor-aware audit остаётся V2-S09C.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity.
 
 ## Рабочая цепочка
 
@@ -65,6 +65,8 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 46. Управлять users и roles через плотный Web service `/security`, доступный по `Users.Manage` или `Roles.Manage`.
 47. Редактировать user profile/Enabled, role assignments, password reset и custom roles с permission-aware enabled state без role-name checks.
 48. Показывать effective permissions выбранного пользователя и обновлять current Web identity/access projection после security mutation.
+49. Хранить nullable `ActorUserId` / `ActorUserName` в immutable operational events.
+50. Аудировать login success/failure, security management, tag writes и configuration mutations без сохранения plaintext credentials.
 
 ## Базовый стек
 
@@ -400,7 +402,18 @@ Users.Manage + Roles.Manage → role assignments + password reset
 
 Built-in roles отображаются read-only по public `BuiltIn` flag. Effective permissions пользователя показываются как Server projection. После successful security mutation Web вызывает existing `AuthenticationClient.RefreshAsync()`, поэтому изменение собственного `DisplayName` или permissions сразу отражается в global header/navigation. Client visibility остаётся UX only; S09A Server authorization и lockout guard являются authoritative boundary.
 
-Actor-aware audit events пока не добавлены и остаются V2-S09C.
+V2-S09C добавляет actor-aware audit в существующий immutable Event Journal. Verified actions сохраняют `ActorUserId`/`ActorUserName`; login failure не приписывается неподтверждённой identity и хранит только bounded attempted username в `DataJson`. Security-management events не содержат password/hash.
+
+Покрытые producers:
+
+```text
+login success / failure
+user / role management mutations
+tag write success / failure after authorization
+Modbus / SNMP configuration mutations
+Mimic configuration mutations
+Historian policy mutations
+```
 
 ## Historian foundation
 
@@ -427,7 +440,7 @@ dispatcher-operational.db
 Operational database имеет собственную schema version:
 
 ```text
-2
+3
 ```
 
 Tables:
@@ -448,10 +461,12 @@ events
 ├── severity
 ├── source
 ├── message
-└── data_json
+├── data_json
+├── actor_user_id NULL
+└── actor_user_name NULL
 ```
 
-Operational schema `v1 → v2` добавляет только `events` и сохраняет существующий `history_samples`.
+Operational schema `v1 → v2` добавляет `events`; V2-S09C мигрирует `v2 → v3`, добавляя nullable actor columns без потери history/events.
 
 `HistoryValueType`:
 
@@ -581,7 +596,7 @@ ValueType + ValueText
 
 вместо преобразования в общий JSON `number`, которое могло бы потерять точность `UInt64`/`Decimal`.
 
-V2-S03 query API не менял schema; текущая operational schema после V2-S05 — version `2`.
+V2-S03 query API не менял schema; после V2-S05 operational schema была version `2`, а V2-S09C повышает её до `3` только ради nullable audit actor columns.
 
 ## History / Trends Web
 
@@ -659,7 +674,7 @@ Default operational database:
 
 ## Event Journal
 
-V2-S05 добавляет единый immutable operational journal до AlarmService/Audit.
+V2-S05 добавил единый immutable operational journal; V2-S09C расширяет record nullable actor identity для базового audit.
 
 Record:
 
@@ -672,6 +687,8 @@ Severity
 Source
 Message
 DataJson
+ActorUserId?
+ActorUserName?
 ```
 
 Initial categories:
@@ -701,6 +718,10 @@ DeviceOffline
 TagWriteSucceeded
 TagWriteFailed
 RuntimeConfigurationApplied
+ConfigurationChanged
+LoginSucceeded / LoginFailed
+SecurityUserCreated / SecurityUserUpdated / SecurityUserPasswordReset / SecurityUserRolesChanged
+SecurityRoleCreated / SecurityRoleUpdated / SecurityRoleDeleted
 ```
 
 Event ingestion:
@@ -735,9 +756,9 @@ invalid UInt16
 protocol write error
 ```
 
-Configuration event создаётся после успешного runtime apply Modbus/SNMP configuration.
+Configuration operational event создаётся после successful runtime apply Modbus/SNMP configuration. Отдельный actor-aware `ConfigurationChanged` фиксирует user-driven Modbus/SNMP, Mimic и Historian policy mutations.
 
-Event Journal не имеет update/delete API.
+Event Journal не имеет update/delete API. Audit использует тот же bounded asynchronous persistence contract; это базовая трассируемость, а не отдельный compliance-grade synchronous audit store.
 
 ## Events query API
 
@@ -1029,13 +1050,13 @@ docs/ROADMAP_V2.md
 Текущий подготовленный подшаг:
 
 ```text
-V2-S09B — Users/Roles Web admin service
+V2-S09C — Actor-aware security audit wiring
 ```
 
 Следующий шаг после локальной проверки и нового Git SHA:
 
 ```text
-V2-S09C — Actor-aware security audit wiring
+V2-S10 — Alarm definitions и Alarm Editor
 ```
 
 ## Документы

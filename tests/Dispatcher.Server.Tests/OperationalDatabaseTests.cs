@@ -9,7 +9,7 @@ namespace Dispatcher.Server.Tests;
 public sealed class OperationalDatabaseTests
 {
     [TestMethod]
-    public async Task InitializeAsync_CreatesIndependentSchemaVersion2()
+    public async Task InitializeAsync_CreatesIndependentSchemaVersion3()
     {
         using var database =
             TemporaryOperationalDatabase.Create();
@@ -26,7 +26,7 @@ public sealed class OperationalDatabaseTests
                 database.DatabasePath);
 
         Assert.AreEqual(
-            2,
+            3,
             version);
 
         var samples =
@@ -190,7 +190,7 @@ public sealed class OperationalDatabaseTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion1ToVersion2_WithoutLosingHistory()
+    public async Task InitializeAsync_MigratesVersion1ToVersion3_WithoutLosingHistory()
     {
         using var database =
             TemporaryOperationalDatabase.Create();
@@ -245,7 +245,7 @@ public sealed class OperationalDatabaseTests
         await store.InitializeAsync();
 
         Assert.AreEqual(
-            2,
+            3,
             await ReadSchemaVersionAsync(
                 database.DatabasePath));
 
@@ -266,6 +266,110 @@ public sealed class OperationalDatabaseTests
         Assert.AreEqual(
             0,
             events.Count);
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_MigratesVersion2ToVersion3_WithoutLosingEvents()
+    {
+        using var database =
+            TemporaryOperationalDatabase.Create();
+
+        await using (var connection =
+            new SqliteConnection(
+                CreateConnectionString(
+                    database.DatabasePath)))
+        {
+            await connection.OpenAsync();
+
+            await using var command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+                CREATE TABLE history_samples (
+                    sample_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    tag_id TEXT NOT NULL,
+                    timestamp_utc_ticks INTEGER NOT NULL,
+                    value_type INTEGER NOT NULL CHECK (value_type BETWEEN 0 AND 7),
+                    value_text TEXT NULL
+                );
+
+                CREATE INDEX ix_history_samples_tag_time
+                    ON history_samples(
+                        tag_id,
+                        timestamp_utc_ticks,
+                        sample_id);
+
+                CREATE TABLE events (
+                    event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    timestamp_utc_ticks INTEGER NOT NULL,
+                    category INTEGER NOT NULL CHECK (category BETWEEN 0 AND 3),
+                    type TEXT NOT NULL,
+                    severity INTEGER NOT NULL CHECK (severity BETWEEN 0 AND 2),
+                    source TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    data_json TEXT NULL
+                );
+
+                CREATE INDEX ix_events_time
+                    ON events(timestamp_utc_ticks, event_id);
+                CREATE INDEX ix_events_category_time
+                    ON events(category, timestamp_utc_ticks, event_id);
+                CREATE INDEX ix_events_severity_time
+                    ON events(severity, timestamp_utc_ticks, event_id);
+                CREATE INDEX ix_events_source_time
+                    ON events(source, timestamp_utc_ticks, event_id);
+
+                INSERT INTO events (
+                    timestamp_utc_ticks,
+                    category,
+                    type,
+                    severity,
+                    source,
+                    message,
+                    data_json)
+                VALUES (
+                    638908128000000000,
+                    2,
+                    'LegacyEvent',
+                    0,
+                    'legacy',
+                    'Legacy event.',
+                    '{"legacy":true}');
+
+                PRAGMA user_version = 2;
+                """;
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store =
+            new SqliteOperationalStore(
+                database.DatabasePath);
+
+        await store.InitializeAsync();
+
+        Assert.AreEqual(
+            3,
+            await ReadSchemaVersionAsync(
+                database.DatabasePath));
+
+        var events =
+            await store.LoadAllEventsAsync();
+
+        Assert.AreEqual(
+            1,
+            events.Count);
+        Assert.AreEqual(
+            "LegacyEvent",
+            events[0].Type);
+        Assert.AreEqual(
+            """{"legacy":true}""",
+            events[0].DataJson);
+        Assert.IsNull(
+            events[0].ActorUserId);
+        Assert.IsNull(
+            events[0].ActorUserName);
     }
 
     [TestMethod]
@@ -308,7 +412,11 @@ public sealed class OperationalDatabaseTests
                     Message:
                         "Команда выполнена.",
                     DataJson:
-                        """{"value":1}""")
+                        """{"value":1}""",
+                    ActorUserId:
+                        "user-01",
+                    ActorUserName:
+                        "operator.one")
             ]);
 
         var events =
@@ -347,6 +455,12 @@ public sealed class OperationalDatabaseTests
         Assert.AreEqual(
             """{"value":1}""",
             record.DataJson);
+        Assert.AreEqual(
+            "user-01",
+            record.ActorUserId);
+        Assert.AreEqual(
+            "operator.one",
+            record.ActorUserName);
     }
 
     private static async Task<int> ReadSchemaVersionAsync(

@@ -714,7 +714,7 @@ Web visibility/enabled state
 
 ---
 
-## [ ] V2-S09 — Users/Roles Web + Audit
+## [x] V2-S09 — Users/Roles Web + Audit
 
 Web admin service:
 
@@ -803,13 +803,28 @@ Audit record должен содержать actor identity.
 - client visibility/enabled state остаётся UX only и не заменяет S09A Server permission policies/lockout guard;
 - actor-aware audit events ещё не добавлены.
 
-### [ ] V2-S09C — Actor-aware security audit wiring
+### [x] V2-S09C — Actor-aware security audit wiring
 
-После стабилизации management boundary добавить actor identity в security-sensitive Event Journal records и покрыть минимум login/security-management/configuration/tag-write producers, не превращая audit в mutable configuration.
+Реализовано:
+
+- operational SQLite schema `v2 → v3`; existing history/events сохраняются;
+- `EventRecord` / `EventRecordDto` получили nullable `ActorUserId` / `ActorUserName`;
+- старые/system/device events остаются actor-less;
+- login success сохраняет verified actor identity;
+- login failure сохраняет `ActorUserId/ActorUserName = null` и только bounded attempted username в `DataJson`; password не журналируется;
+- user create/update, role assignment, password reset и role create/update/delete создают actor-aware security events;
+- password reset audit не содержит plaintext password или hash;
+- существующие `TagWriteSucceeded` / `TagWriteFailed` получают actor identity после Server authorization;
+- user-driven Modbus/SNMP, Mimic и Historian policy mutations создают actor-aware `ConfigurationChanged`;
+- existing `RuntimeConfigurationApplied` остаётся отдельным operational event и не подменяется audit record;
+- Event Journal сохраняет append-only/read-only модель и существующий bounded asynchronous ingestion contract;
+- audit actor fields доступны через Events REST/SignalR contract без отдельной mutable audit configuration.
+
+Не добавляются отдельный compliance audit store, IP/device fingerprinting, session-token storage или audit update/delete API.
 
 ### Результат Phase 7
 
-Dispatcher имеет базовую локальную модель безопасности и трассируемость действий пользователя.
+Dispatcher имеет базовую локальную модель безопасности, permission-based Users/Roles administration и actor-aware immutable trace security-sensitive действий пользователя.
 
 ---
 

@@ -8,4 +8,6 @@ public sealed record EventRecord(
     EventSeverity Severity,
     string Source,
     string Message,
-    string? DataJson);
+    string? DataJson,
+    string? ActorUserId = null,
+    string? ActorUserName = null);

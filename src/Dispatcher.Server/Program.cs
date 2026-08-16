@@ -146,6 +146,7 @@ app.MapPost(
     (
         string tagId,
         TagWriteRequest request,
+        HttpContext httpContext,
         ConfigurationCatalog configuration,
         ModbusWriteService writeService,
         EventJournalService eventJournal,
@@ -154,6 +155,8 @@ app.MapPost(
         WriteTagAsync(
             tagId,
             request,
+            EventActor.FromAuthenticatedPrincipal(
+                httpContext.User),
             configuration,
             writeService,
             eventJournal,
@@ -180,6 +183,7 @@ app.Run();
 static async Task<IResult> WriteTagAsync(
     string tagId,
     TagWriteRequest request,
+    EventActor actor,
     ConfigurationCatalog configuration,
     ModbusWriteService writeService,
     EventJournalService eventJournal,
@@ -205,7 +209,9 @@ static async Task<IResult> WriteTagAsync(
                 {
                     Reason =
                         "ProtocolReadOnly"
-                });
+                },
+                actor:
+                    actor);
 
             return Results.Problem(
                 statusCode:
@@ -226,7 +232,9 @@ static async Task<IResult> WriteTagAsync(
             {
                 Reason =
                     "TagNotFound"
-            });
+            },
+            actor:
+                actor);
 
         return Results.Problem(
             statusCode:
@@ -250,7 +258,9 @@ static async Task<IResult> WriteTagAsync(
                 Reason =
                     "DeviceDisabled",
                 binding.Device.DeviceId
-            });
+            },
+            actor:
+                actor);
 
         return Results.Problem(
             statusCode:
@@ -274,7 +284,9 @@ static async Task<IResult> WriteTagAsync(
                 Reason =
                     "TagReadOnly",
                 binding.Device.DeviceId
-            });
+            },
+            actor:
+                actor);
 
         return Results.Problem(
             statusCode:
@@ -301,7 +313,9 @@ static async Task<IResult> WriteTagAsync(
                     "InvalidUInt16Value",
                 binding.Device.DeviceId,
                 request.Value
-            });
+            },
+            actor:
+                actor);
 
         return Results.Problem(
             statusCode:
@@ -338,7 +352,10 @@ static async Task<IResult> WriteTagAsync(
                 Value =
                     value
             },
-            tagValue.Timestamp);
+            timestamp:
+                tagValue.Timestamp,
+            actor:
+                actor);
 
         return Results.Ok(
             RuntimeContractMapper.ToDto(
@@ -368,7 +385,9 @@ static async Task<IResult> WriteTagAsync(
                 binding.Device.DeviceId,
                 Error =
                     exception.Message
-            });
+            },
+            actor:
+                actor);
 
         return Results.Problem(
             statusCode:

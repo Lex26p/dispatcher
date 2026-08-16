@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Dispatcher.Contracts.Authentication;
 using Dispatcher.Server.Configuration;
+using Dispatcher.Server.Events;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -37,6 +38,7 @@ public static class AuthenticationEndpoints
         HttpContext httpContext,
         LocalAuthenticationService authenticationService,
         SecurityCatalog securityCatalog,
+        EventJournalService eventJournal,
         CancellationToken cancellationToken)
     {
         SetNoStore(
@@ -50,6 +52,22 @@ public static class AuthenticationEndpoints
 
         if (user is null)
         {
+            eventJournal.Publish(
+                EventCategory.System,
+                EventTypes.LoginFailed,
+                EventSeverity.Warning,
+                source:
+                    "authentication",
+                message:
+                    "Неудачная попытка входа.",
+                data:
+                    new
+                    {
+                        AttemptedUserName =
+                            NormalizeAttemptedUserName(
+                                request.UserName)
+                    });
+
             return Results.Unauthorized();
         }
 
@@ -83,6 +101,25 @@ public static class AuthenticationEndpoints
                 AllowRefresh =
                     true
             });
+
+        eventJournal.Publish(
+            EventCategory.System,
+            EventTypes.LoginSucceeded,
+            EventSeverity.Information,
+            source:
+                "authentication",
+            message:
+                $"Пользователь '{user.UserName}' выполнил вход.",
+            data:
+                new
+                {
+                    user.UserId,
+                    user.UserName
+                },
+            actor:
+                new EventActor(
+                    user.UserId,
+                    user.UserName));
 
         return Results.Ok(
             ToDto(
@@ -181,6 +218,24 @@ public static class AuthenticationEndpoints
                 null,
             EffectivePermissions:
                 Array.Empty<string>());
+    }
+
+    private static string? NormalizeAttemptedUserName(
+        string? userName)
+    {
+        var trimmed =
+            userName?.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                trimmed))
+        {
+            return null;
+        }
+
+        return trimmed.Length
+            <= LocalUserConfigurationValidator.MaxUserNameLength
+            ? trimmed
+            : trimmed[..LocalUserConfigurationValidator.MaxUserNameLength];
     }
 
     private static void SetNoStore(
