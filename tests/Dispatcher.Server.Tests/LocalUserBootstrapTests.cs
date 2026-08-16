@@ -169,7 +169,7 @@ public sealed class LocalUserBootstrapTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion4Database_ToVersion7WithoutLosingConfigurationTable()
+    public async Task InitializeAsync_MigratesVersion4Database_ToVersion8WithoutLosingConfigurationTable()
     {
         var directory =
             Path.Combine(
@@ -266,7 +266,7 @@ public sealed class LocalUserBootstrapTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(7, version);
+            Assert.AreEqual(8, version);
         }
         finally
         {

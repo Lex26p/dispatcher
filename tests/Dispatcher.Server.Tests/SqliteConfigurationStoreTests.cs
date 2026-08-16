@@ -128,7 +128,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion1Database_ToVersion7WithoutLosingModbusData()
+    public async Task InitializeAsync_MigratesVersion1Database_ToVersion8WithoutLosingModbusData()
     {
         var directory =
             Path.Combine(
@@ -261,7 +261,7 @@ public sealed class SqliteConfigurationStoreTests
                 Convert.ToInt32(
                     await versionCommand.ExecuteScalarAsync());
 
-            Assert.AreEqual(7, version);
+            Assert.AreEqual(8, version);
         }
         finally
         {
@@ -276,7 +276,7 @@ public sealed class SqliteConfigurationStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAsync_MigratesVersion3Database_ToVersion7WithoutLosingMimics()
+    public async Task InitializeAsync_MigratesVersion3Database_ToVersion8WithoutLosingMimics()
     {
         var directory =
             Path.Combine(
@@ -383,7 +383,7 @@ public sealed class SqliteConfigurationStoreTests
                     await versionCommand.ExecuteScalarAsync());
 
             Assert.AreEqual(
-                7,
+                8,
                 version);
         }
         finally

@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 завершена V2-S10A/B, V2-S11 и V2-S12: Alarm definitions имеют durable Server CRUD и engineering editor, Server runtime вычисляет four-state lifecycle, а операторский Web показывает current/history alarms и выполняет actor-aware ACK через permission-protected API и SignalR.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 завершена V2-S10A/B, V2-S11 и V2-S12: Alarm definitions имеют durable Server CRUD и engineering editor, Server runtime вычисляет four-state lifecycle, а операторский Web показывает current/history alarms и выполняет actor-aware ACK через permission-protected API и SignalR. Phase 9 начата V2-S13A: Server хранит конкретные Mimic templates и умеет независимо копировать их элементы в Mimic definition.
 
 ## Рабочая цепочка
 
@@ -84,6 +84,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 65. Запрашивать только alarm transition history через `GET /api/alarms/history` без новой operational schema.
 66. Получать Alarm runtime changes через существующий RuntimeHub / SignalR.
 67. Использовать операторский `/alarms` для current/history и отдельный `/alarms/editor` для engineering configuration.
+68. Хранить concrete Mimic templates с relative elements и TagId parameters в configuration SQLite.
+69. Создавать независимую копию template elements в существующей мнемосхеме через Server instantiate API.
+70. Разделять чтение template (`Runtime.Read`), изменение template (`Templates.Edit`) и изменение target mimic при instantiate (`Mimics.Edit`).
 
 ## Базовый стек
 
@@ -124,10 +127,10 @@ TagId
 
 ## SQLite schema
 
-Configuration SQLite schema version после V2-S10A:
+Configuration SQLite schema version после V2-S13A:
 
 ```text
-7
+8
 ```
 
 Таблицы:
@@ -144,9 +147,10 @@ security_roles
 security_role_permissions
 security_user_roles
 alarm_definitions
+mimic_templates
 ```
 
-Существующая schema `1/2/3/4/5/6` автоматически мигрируется в `7` без удаления protocol/mimic/historian/user/security configuration.
+Существующая schema `1/2/3/4/5/6/7` автоматически мигрируется в `8` без удаления protocol/mimic/historian/user/security/alarm configuration.
 
 Таблица `mimics` хранит:
 
@@ -1148,9 +1152,35 @@ Editor использует client-side draft и explicit `Сохранить`. 
 
 Минимальный S12 не использует drag-and-drop. Position/size редактируются численно в правой properties panel; выбор элемента выполняется кликом по canvas.
 
+## Mimic templates — V2-S13A Server foundation
+
+Concrete Mimic template хранит reusable fragment отдельно от работающей мнемосхемы:
+
+```text
+TemplateId
+Name
+Width / Height
+Parameters[]       → logical TagId placeholders
+Elements[]         → relative positions + visual properties
+```
+
+Server API:
+
+```text
+GET    /api/configuration/mimic-templates
+GET    /api/configuration/mimic-templates/{templateId}
+PUT    /api/configuration/mimic-templates/{templateId}
+DELETE /api/configuration/mimic-templates/{templateId}
+POST   /api/configuration/mimics/{mimicId}/templates/{templateId}/instantiate
+```
+
+Template read требует `Runtime.Read`, template mutation — `Templates.Edit`, instantiate изменяет target mimic и требует `Mimics.Edit`. Instantiate разрешает Tag parameters, добавляет insertion offset, генерирует новые `ElementId` и сохраняет обычные mimic elements. Back-reference на template в instance не сохраняется, поэтому последующее изменение template не меняет уже созданную мнемосхему.
+
+Web picker/placement и template editing workflow остаются V2-S13B. Generic Template Catalog намеренно не вводится до второго concrete use case V2-S14.
+
 ## Новая БД
 
-Новая configuration database по-прежнему не создаёт sample devices/tags/mimics/alarms. Local user также не создаётся без явно заданного bootstrap password. После V2-S10A schema version — `7`; built-in security roles по-прежнему idempotently поддерживаются при startup, а Alarm definitions появляются только через явную configuration mutation.
+Новая configuration database по-прежнему не создаёт sample devices/tags/mimics/alarms/templates. Local user также не создаётся без явно заданного bootstrap password. После V2-S13A schema version — `8`; built-in security roles по-прежнему idempotently поддерживаются при startup, а Alarm definitions и Mimic templates появляются только через явные configuration mutations.
 
 ## Roadmap v2
 
@@ -1160,12 +1190,12 @@ Editor использует client-side draft и explicit `Сохранить`. 
 docs/ROADMAP_V2.md
 ```
 
-Phase 8 завершена: V2-S10A/B дали Alarm configuration/editor, V2-S11 — runtime state machine, V2-S12 — actor-aware ACK, SignalR и operator Web.
+Phase 8 завершена: V2-S10A/B дали Alarm configuration/editor, V2-S11 — runtime state machine, V2-S12 — actor-aware ACK, SignalR и operator Web. Phase 9 начата V2-S13A: durable Mimic templates + Server instantiate-by-copy API.
 
-Следующий шаг после принятия V2-S12:
+Следующий подшаг после принятия V2-S13A:
 
 ```text
-V2-S13 — Mimic templates
+V2-S13B — Mimic Editor template integration
 ```
 
 ## Документы

@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S12
+## 1. Состояние после V2-S13A
 
-Application layer содержит operational services, permission-based administration, Alarm configuration/editor, Alarm runtime state machine и operator Alarm runtime:
+Application layer содержит operational services, permission-based administration, Alarm configuration/runtime и concrete Mimic template Server foundation:
 
 ```text
 Protocol workers
@@ -20,6 +20,7 @@ Mimic Editor   → mimic definition
 Security Admin → users / roles
 Alarm runtime  → current/history + ACK
 Alarm Editor   → alarm definitions
+Mimic templates → reusable concrete fragments
 
 Configuration SQLite
       ↓
@@ -37,7 +38,7 @@ Web AuthenticationClient
       ├── login / current-user shell
       └── permission-aware routes/navigation/actions
 
-Configuration SQLite v7
+Configuration SQLite v8
       ↓
 roles + role permissions + user-role assignments
       ↓
@@ -51,7 +52,7 @@ REST + RuntimeHub permission enforcement
       ↓ Users.Manage / Roles.Manage
 SecurityManagementService
       ↓ durable mutation + reload
-Configuration SQLite v7 → SecurityCatalog.ReplaceAll
+Configuration SQLite v8 → SecurityCatalog.ReplaceAll
 
 Alarm definitions / TagId
       ↓
@@ -66,7 +67,7 @@ AlarmDefinitionCatalog
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, V2-S10B завершает configuration slice Web Alarm Editor, V2-S11 добавляет Server alarm lifecycle с delay/hysteresis и durable transition events, а V2-S12 раскрывает current/history/ACK через REST, SignalR и operator Web. Server остаётся единственной authoritative authorization boundary.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, V2-S10B завершает configuration slice Web Alarm Editor, V2-S11 добавляет Server alarm lifecycle с delay/hysteresis и durable transition events, V2-S12 раскрывает current/history/ACK через REST, SignalR и operator Web, а V2-S13A добавляет concrete Mimic template storage/API и instantiate-by-copy. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -128,7 +129,7 @@ Public boundary находится в `Dispatcher.Contracts.Mimics`.
 Configuration SQLite schema version:
 
 ```text
-7
+8
 ```
 
 Tables, добавленные после базовой protocol configuration:
@@ -141,6 +142,7 @@ security_roles
 security_role_permissions
 security_user_roles
 alarm_definitions
+mimic_templates
 ```
 
 Schema migration:
@@ -159,9 +161,11 @@ v5  local_users
 v6  security roles / permissions / assignments
  ↓
 v7  alarm_definitions
+ ↓
+v8  mimic_templates
 ```
 
-При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются. При `v6 → v7` existing protocol/mimic/historian/user/security configuration также сохраняется; добавляется только `alarm_definitions`.
+При `v4 → v5` protocol/mimic/historian tables не перестраиваются и не очищаются. При `v6 → v7` existing protocol/mimic/historian/user/security configuration также сохраняется; добавляется только `alarm_definitions`. При `v7 → v8` существующая configuration сохраняется и добавляется только concrete `mimic_templates`.
 
 Operational SQLite schema развивается независимо: V2-S05 поднял её до `2`, а V2-S09C — до `3` для nullable audit actor columns.
 
@@ -3500,3 +3504,82 @@ Current table показывает severity, AlarmId/TagId, state, raised time, 
 History использует bounded query `100/200/500`, presets времени и paging. Persisted `EventAdded` используется как notification о новых alarm events, а historical truth перечитывается через REST.
 
 Phase 8 после V2-S12 завершена. Shelving, suppression, groups, bulk ACK и complex expressions остаются вне текущего scope.
+
+## 112. V2-S13A concrete Mimic template boundary
+
+Первый template use case намеренно остаётся внутри Mimic domain:
+
+```text
+MimicTemplateDto
+      ↓
+MimicTemplateService
+      ↓
+Configuration SQLite v8 / mimic_templates
+```
+
+Template содержит fragment-local данные:
+
+```text
+TemplateId
+Name
+Width / Height
+Parameters[]
+Elements[]
+```
+
+Parameter в S13A имеет только `ParameterId + Name` и означает logical `TagId` placeholder. Protocol-specific Modbus address или SNMP OID не сохраняются. Общие `Kind`, `Version` и generic Template Catalog не извлекаются до V2-S14, когда появится второй concrete Device/Tag use case.
+
+## 113. Mimic template element binding
+
+Relative template element повторяет текущие visual/mimic properties и добавляет один template-only binding selector:
+
+```text
+TagId?
+TagParameterId?
+```
+
+Для `Value`, `Indicator`, `Button` задаётся ровно один вариант. `TagParameterId` обязан ссылаться на declared parameter. `Text`/`Rectangle` не имеют tag binding. Button по-прежнему требует `CommandValue`.
+
+Template coordinates проверяются относительно собственных `Width/Height`, а не target mimic. Это делает fragment валидируемым до placement.
+
+## 114. Instantiate-by-copy semantics
+
+Endpoint:
+
+```text
+POST /api/configuration/mimics/{MimicId}/templates/{TemplateId}/instantiate
+```
+
+Request содержит insertion `X/Y` и полный dictionary `TagBindings`. Server:
+
+```text
+load concrete template
+→ validate exact parameter names/bindings
+→ resolve TagParameterId → ordinary TagId
+→ add insertion offset
+→ generate fresh ElementId per element
+→ append to current MimicConfiguration under mimic mutation lock
+→ validate whole target mimic
+→ persist ordinary elements_json
+```
+
+После persistence в mimic отсутствуют `TemplateId` и `TagParameterId`. Экземпляр является обычным набором элементов и не подписан на template updates. Update/delete template не изменяет ранее созданные instances.
+
+## 115. S13A permissions, audit и scope
+
+Permission matrix:
+
+```text
+GET/HEAD /api/configuration/mimic-templates*
+    → Runtime.Read
+
+PUT/DELETE /api/configuration/mimic-templates*
+    → Templates.Edit
+
+POST /api/configuration/mimics/{MimicId}/templates/{TemplateId}/instantiate
+    → Mimics.Edit
+```
+
+Instantiate изменяет target mimic, поэтому не требует `Templates.Edit`: инженер может использовать read-visible approved template без права редактировать сам catalog. Template mutations и instantiate создают existing actor-aware `ConfigurationChanged`; отдельный EventType/operational schema не вводится.
+
+Configuration schema после S13A — `8`, operational schema остаётся `3`. Web layout/navigation в S13A не меняются; picker/parameter placement workflow остаётся V2-S13B.

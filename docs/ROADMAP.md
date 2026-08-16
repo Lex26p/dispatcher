@@ -149,10 +149,19 @@ V2-S11 и V2-S12 завершают Alarm runtime/operator vertical slice:
 
 Реализованы four-state lifecycle, High/Low hysteresis, continuous raise delay, durable transition events, permission-protected actor-aware ACK, Alarm SignalR projection и operator Web current/history.
 
-Phase 8 завершена. Следующий шаг после принятия V2-S12:
+Phase 8 завершена. V2-S13 разбит на проверяемые подшаги:
 
 ```text
-V2-S13 — Mimic templates
+[x] V2-S13A — Mimic template Server/storage/API foundation
+[ ] V2-S13B — Mimic Editor template integration
+```
+
+V2-S13A добавляет durable concrete Mimic templates, TagId parameters, permission-protected CRUD и instantiate-by-copy в существующую мнемосхему. Общий Template Catalog не вводится до второго concrete use case V2-S14.
+
+Следующий шаг после принятия V2-S13A:
+
+```text
+V2-S13B — Mimic Editor template integration
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

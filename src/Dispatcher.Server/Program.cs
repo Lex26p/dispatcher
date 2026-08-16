@@ -110,6 +110,7 @@ builder.Services.AddHostedService<SnmpRuntimeHostedService>(
 builder.Services.AddSingleton<RuntimeConfigurationCoordinator>();
 builder.Services.AddSingleton<ConfigurationEditorService>();
 builder.Services.AddSingleton<MimicConfigurationService>();
+builder.Services.AddSingleton<MimicTemplateService>();
 builder.Services.AddHostedService<RuntimeHubPublisher>();
 
 var app =
@@ -181,6 +182,7 @@ app.MapHistorianPolicyEndpoints();
 app.MapHistoryEndpoints();
 app.MapEventEndpoints();
 app.MapMimicEndpoints();
+app.MapMimicTemplateEndpoints();
 app.MapAuthenticationEndpoints();
 app.MapSecurityManagementEndpoints();
 

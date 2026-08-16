@@ -1043,34 +1043,52 @@ Dispatcher имеет полноценный минимальный alarm lifecy
 
 ## [ ] V2-S13 — Mimic templates
 
-Первый конкретный template use case.
+Первый concrete template use case разделён на два проверяемых подшага.
 
-Цель: повторно использовать фрагменты мнемосхем.
+### [x] V2-S13A — Mimic template Server/storage/API foundation
 
-Template может содержать:
+Реализовано:
+
+- configuration SQLite `v7 → v8`;
+- concrete table `mimic_templates` без преждевременного generic Template Catalog;
+- template хранит `TemplateId`, `Name`, fragment `Width/Height`, parameters и relative elements;
+- Tag-bound element использует либо fixed `TagId`, либо `TagParameterId`;
+- template parameter задаёт только logical TagId placeholder, protocol address/OID в template domain не попадает;
+- CRUD `/api/configuration/mimic-templates`;
+- reads требуют `Runtime.Read`, mutations — `Templates.Edit`;
+- instantiate `POST /api/configuration/mimics/{mimicId}/templates/{templateId}/instantiate` остаётся mutation target mimic и требует `Mimics.Edit`;
+- instantiate проверяет полный parameter binding, добавляет insertion offset, генерирует новые ElementId и сохраняет обычные `MimicElementConfiguration`;
+- созданный instance не хранит ссылку на template и не меняется после будущего template update/delete;
+- successful template CRUD и instantiate пишут existing actor-aware `ConfigurationChanged`;
+- storage/API tests покрывают v7→v8 migration, round-trip, permissions, parameters и copy independence.
+
+Не добавлено в S13A:
 
 ```text
-elements
-relative positions
-visual properties
-TagId placeholders/parameters
+Mimic Editor template picker/placement UI
+generic Template Catalog / Kind / Version
+device/tag templates
+linked template instances
+automatic propagation
 ```
 
-Первый instantiate workflow:
+### [ ] V2-S13B — Mimic Editor template integration
+
+Web editor должен дать инженерный workflow:
 
 ```text
-template
-   ↓ instantiate
-copy elements into MimicDefinition
+выбрать template
+→ заполнить TagId parameters
+→ задать insertion position
+→ instantiate
+→ получить обычные editable mimic elements
 ```
 
-Экземпляр не должен автоматически изменяться после изменения template.
+Template management/editing UI и placement должны соблюдать существующий dense Mimic Editor layout и permission projection `Templates.Edit` / `Mimics.Edit`.
 
-Это избегает неочевидных каскадных изменений работающих экранов.
+### Результат после V2-S13
 
-### Результат
-
-Часто повторяющийся visual fragment можно вставлять без ручного повторения всех элементов.
+Часто повторяющийся visual fragment можно вставлять без ручного повторения всех элементов, при этом работающая мнемосхема не получает скрытой зависимости от последующих изменений template.
 
 ---
 

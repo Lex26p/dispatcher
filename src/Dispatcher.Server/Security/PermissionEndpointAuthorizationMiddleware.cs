@@ -148,6 +148,15 @@ public sealed class PermissionEndpointAuthorizationMiddleware
         }
 
         if (path.StartsWithSegments(
+                "/api/configuration/mimic-templates"))
+        {
+            return IsReadMethod(
+                    request.Method)
+                ? PermissionNames.RuntimeRead
+                : PermissionNames.TemplatesEdit;
+        }
+
+        if (path.StartsWithSegments(
                 "/api/configuration/mimics"))
         {
             return IsReadMethod(

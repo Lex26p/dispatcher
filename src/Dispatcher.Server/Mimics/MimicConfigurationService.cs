@@ -77,6 +77,61 @@ public sealed class MimicConfigurationService
         }
     }
 
+    public async Task<MimicConfiguration?> AppendElementsAsync(
+        string mimicId,
+        IReadOnlyList<MimicElementConfiguration> elements,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            mimicId);
+        ArgumentNullException.ThrowIfNull(
+            elements);
+
+        await _mutationLock.WaitAsync(
+            cancellationToken);
+
+        try
+        {
+            var mimics =
+                await _store.LoadMimicsAsync(
+                    cancellationToken);
+            var mimic =
+                mimics.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate.MimicId,
+                        mimicId,
+                        StringComparison.Ordinal));
+
+            if (mimic is null)
+            {
+                return null;
+            }
+
+            var updated =
+                mimic with
+                {
+                    Elements =
+                        mimic.Elements
+                            .Concat(
+                                elements)
+                            .ToArray()
+                };
+
+            MimicConfigurationValidator.Validate(
+                updated);
+
+            await _store.UpsertMimicAsync(
+                updated,
+                cancellationToken);
+
+            return updated;
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+    }
+
     public async Task<bool> DeleteAsync(
         string mimicId,
         CancellationToken cancellationToken)

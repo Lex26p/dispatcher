@@ -8,7 +8,7 @@ namespace Dispatcher.Server.Configuration;
 
 public sealed partial class SqliteConfigurationStore
 {
-    private const int CurrentSchemaVersion = 7;
+    private const int CurrentSchemaVersion = 8;
 
     private readonly string _connectionString;
 
@@ -70,6 +70,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 1:
@@ -96,6 +100,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 2:
@@ -118,6 +126,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 3:
@@ -136,6 +148,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 4:
@@ -150,6 +166,10 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 5:
@@ -160,10 +180,24 @@ public sealed partial class SqliteConfigurationStore
                 await MigrateV6ToV7Async(
                     connection,
                     cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
                 return;
 
             case 6:
                 await MigrateV6ToV7Async(
+                    connection,
+                    cancellationToken);
+
+                await MigrateV7ToV8Async(
+                    connection,
+                    cancellationToken);
+                return;
+
+            case 7:
+                await MigrateV7ToV8Async(
                     connection,
                     cancellationToken);
                 return;
@@ -1382,6 +1416,38 @@ public sealed partial class SqliteConfigurationStore
                 ON alarm_definitions(tag_id);
 
             PRAGMA user_version = 7;
+            """;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
+    private static async Task MigrateV7ToV8Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        using var transaction =
+            connection.BeginTransaction();
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+        command.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS mimic_templates (
+                template_id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                width INTEGER NOT NULL CHECK (width > 0),
+                height INTEGER NOT NULL CHECK (height > 0),
+                parameters_json TEXT NOT NULL,
+                elements_json TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 8;
             """;
 
         await command.ExecuteNonQueryAsync(

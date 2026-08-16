@@ -1676,3 +1676,42 @@ SignalR не создаёт новый hub: `AlarmChanged` добавляетс�
 - reuse existing RuntimeHub сохраняет один realtime transport;
 - `/alarms` должен быть доступен Viewer-like runtime user, тогда как `/alarms/editor` остаётся engineering workflow;
 - bulk ACK, shelving/suppression и alarm groups не нужны для минимального Phase 8 lifecycle.
+
+---
+
+## D-075 — Первый template use case остаётся concrete Mimic template и instantiate создаёт независимую копию
+
+**Status:** Accepted
+
+V2-S13A повышает configuration SQLite `v7 → v8` и добавляет `mimic_templates`. В таблице хранится только concrete Mimic fragment: `TemplateId`, name, fragment bounds, TagId parameters и relative elements. Generic `TemplateKind`, versioning и общий Template Catalog не вводятся до V2-S14, когда появится второй concrete Device/Tag use case.
+
+Tag-bound template element задаёт либо fixed logical `TagId`, либо `TagParameterId`. Parameter resolution происходит только при instantiate:
+
+```text
+template parameter
+      ↓ binding request
+logical TagId
+      ↓
+new MimicElementConfiguration
+```
+
+Server генерирует новые `ElementId`, применяет insertion offset и сохраняет скопированные элементы прямо в current `MimicConfiguration`. Созданный instance не содержит back-reference/version template и поэтому не изменяется после template update/delete.
+
+Permissions разделены по изменяемой сущности:
+
+```text
+template read      → Runtime.Read
+template mutation  → Templates.Edit
+instantiate/copy   → Mimics.Edit
+```
+
+Successful mutations повторно используют actor-aware `ConfigurationChanged`. Operational schema и runtime renderer не меняются.
+
+Причина:
+
+- первый concrete use case ещё не доказывает полезную generic template abstraction;
+- template placeholder должен сохранять protocol-neutral `TagId` boundary;
+- copy semantics исключает скрытые каскадные изменения работающих мнемосхем;
+- target mimic после instantiate должен оставаться обычным existing definition, понятным текущему runtime/editor;
+- право редактировать reusable template и право изменять конкретную мнемосхему являются разными capabilities;
+- generic catalog/versioning следует извлекать только после появления второго реального use case V2-S14.
