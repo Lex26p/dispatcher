@@ -1586,3 +1586,53 @@ Condition-aware form не дублирует runtime evaluator: digital conditio
 - stale logical binding должен быть наблюдаемым, а не молча удаляться;
 - permission-aware navigation не должна превращаться в альтернативную authorization систему;
 - runtime condition semantics должны иметь одно место реализации в будущем Alarm state machine.
+
+
+---
+
+## D-073 — Alarm runtime использует four-state lifecycle, live definition catalog и existing Event Journal без новой operational schema
+
+**Status:** Accepted
+
+V2-S11 добавляет `AlarmDefinitionCatalog` и singleton hosted `AlarmRuntimeService`. Runtime подписывается на protocol-neutral `TagService.Changed` и различает:
+
+```text
+Normal
+ActiveUnacknowledged
+ActiveAcknowledged
+ReturnedUnacknowledged
+```
+
+High/Low hysteresis применяется только в runtime:
+
+```text
+High raise  >= Threshold
+High return <  Threshold - Hysteresis
+Low raise   <= Threshold
+Low return  >  Threshold + Hysteresis
+```
+
+Raise delay требует непрерывно active condition; pending raise отменяется при return condition, semantic definition change или shutdown и перед фактическим raise повторно проверяет current Tag value. Pending delay не становится отдельным public state.
+
+Live definition CRUD обновляет `AlarmDefinitionCatalog`. `TagService.Cleared` при device/tag live apply отменяет pending raises; runtime state stale/removed TagId сбрасывается в `Normal`, а state всё ещё configured TagId сохраняется до нового sample. Metadata-only (`Name/Message/Severity`) change сохраняет state; evaluation-semantic change (`Enabled/TagId/Condition/Threshold/Delay/Hysteresis`) сбрасывает instance в `Normal` и переоценивает current value. Disable/delete не создают fake physical-return event.
+
+Alarm lifecycle persistence повторно использует current immutable Event Journal:
+
+```text
+Category = System
+Type = AlarmRaised | AlarmAcknowledged | AlarmReturned
+Source = AlarmId
+Severity = Alarm definition severity
+```
+
+Operational SQLite остаётся schema `3`; новый `EventCategory.Alarm` и отдельная mutable alarm-state table в S11 не создаются. Automatic raise/return actor-less. Internal acknowledge transition принимает optional `EventActor`, а public permission-protected ACK boundary добавляется в V2-S12.
+
+Причина:
+
+- Alarm evaluator не должен читать SQLite из synchronous protocol/tag callback;
+- explicit four-state lifecycle закрывает active/returned ACK semantics без boolean shortcut;
+- hysteresis/delay должны иметь одну Server implementation, а не дублироваться Web;
+- reusing bounded Event Journal сохраняет non-blocking polling path и уже существующую durable timeline;
+- новый event category сам по себе не даёт S11 функциональной ценности, но потребовал бы operational table migration/rebuild;
+- configuration disable/delete нельзя выдавать за физический return condition;
+- actor-aware ACK уже подготовлен в domain boundary, но authorization/API остаются отдельно проверяемым V2-S12.

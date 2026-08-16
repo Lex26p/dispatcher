@@ -2,7 +2,7 @@
 
 `Dispatcher` — развиваемая система диспетчеризации для опроса, управления и визуализации устройств через разные промышленные и сетевые протоколы.
 
-Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 продолжена V2-S10A/B: Alarm definitions имеют durable Server CRUD foundation и permission-aware Web Alarm Editor; runtime alarm state machine остаётся V2-S11.
+Базовый цикл S00–S12 завершён. Roadmap v2: Phase 5 Historian и Phase 6 Events завершены. V2-S07 Authentication foundation и V2-S08 Permissions/Roles vertical slice завершены. Phase 7 завершена V2-S09A/B/C: Server и Web имеют permission-based Users/Roles administration, а security-sensitive actions записываются в immutable Event Journal с actor identity. Phase 8 продолжена V2-S10A/B и V2-S11: Alarm definitions имеют durable Server CRUD foundation и permission-aware Web Alarm Editor, а Server runtime вычисляет alarm lifecycle по logical Tag changes. Operator ACK API/realtime/Web runtime остаются V2-S12.
 
 ## Рабочая цепочка
 
@@ -75,6 +75,9 @@ SNMP v2c  ─→ Dispatcher.Snmp ────┘             ↓
 56. Показывать Alarm Editor только при `Runtime.Read + Alarms.Configure`, не подменяя client visibility Server authorization.
 57. Выбирать logical `TagId` из общей Modbus/SNMP configuration и явно показывать stale binding.
 58. Использовать client-side draft + explicit Save/Delete без запуска alarm runtime evaluation.
+59. Вычислять Alarm runtime lifecycle `Normal / ActiveUnacknowledged / ActiveAcknowledged / ReturnedUnacknowledged` по logical Tag changes.
+60. Применять High/Low hysteresis и continuous raise delay только в Server runtime.
+61. Записывать `AlarmRaised / AlarmAcknowledged / AlarmReturned` в immutable Event Journal без отдельного operational state database.
 
 ## Базовый стек
 
@@ -1049,6 +1052,34 @@ Layout:
 
 Route/navigation доступны только при `Runtime.Read + Alarms.Configure`. Editor использует S10A API, client-side draft и explicit Save/Delete. Persisted `AlarmId` read-only; stale `TagId` остаётся видимым, но Save требует выбора существующего configured logical tag. Digital conditions не показывают Threshold/Hysteresis; High/Low редактируют decimal Threshold/Hysteresis. Runtime evaluation/raise/return/ACK в S10B не выполняются.
 
+V2-S11 добавляет Server-side `AlarmRuntimeService` и in-memory `AlarmDefinitionCatalog`. Runtime подписывается на `TagService.Changed`, держит четыре состояния:
+
+```text
+Normal
+ActiveUnacknowledged
+ActiveAcknowledged
+ReturnedUnacknowledged
+```
+
+Transitions:
+
+```text
+Normal + raise                 → ActiveUnacknowledged
+ActiveUnacknowledged + ACK     → ActiveAcknowledged
+ActiveUnacknowledged + return  → ReturnedUnacknowledged
+ActiveAcknowledged + return    → Normal
+ReturnedUnacknowledged + ACK   → Normal
+ReturnedUnacknowledged + raise → ActiveUnacknowledged
+```
+
+`High` поднимается при `value >= Threshold`, а после raise возвращается только при `value < Threshold - Hysteresis`. `Low` симметрично использует `value <= Threshold` и return при `value > Threshold + Hysteresis`. Digital conditions принимают `bool` и numeric zero/non-zero values. Unsupported nonnumeric values не создают transition.
+
+`DelayMilliseconds` применяется только к raise/re-raise: condition должна оставаться active непрерывно весь delay; исчезновение condition отменяет pending raise. Definition create/update/delete обновляют live catalog. При `TagService.Clear()` во время device/tag live reconfiguration pending delay отменяется; alarm с удалённым/stale `TagId` сбрасывается в `Normal` без fake physical-return event, а состояние alarm на всё ещё configured tag сохраняется до нового sample. Изменение evaluation semantics (`Enabled/TagId/Condition/Threshold/Delay/Hysteresis`) сбрасывает runtime instance в `Normal` и немедленно переоценивает current tag value; изменение только metadata (`Name/Message/Severity`) сохраняет текущий lifecycle state.
+
+Каждый фактический transition публикуется в существующий immutable Event Journal как `System` event с `source = AlarmId` и типом `AlarmRaised`, `AlarmAcknowledged` или `AlarmReturned`. Operational SQLite остаётся schema `3`: отдельная таблица current alarm state и новый EventCategory для S11 не нужны. Automatic raise/return actor-less; internal ACK transition принимает optional `EventActor`, что подготавливает actor-aware `Alarms.Acknowledge` API V2-S12.
+
+S11 не добавляет operator ACK endpoint, Alarm SignalR contract или runtime Alarm Web screen — это V2-S12.
+
 
 ## Web
 
@@ -1110,16 +1141,10 @@ Editor использует client-side draft и explicit `Сохранить`. 
 docs/ROADMAP_V2.md
 ```
 
-V2-S10 завершён подшагами S10A/S10B. Следующий шаг после принятия S10B:
+V2-S10 завершён подшагами S10A/S10B, V2-S11 реализует Alarm runtime state machine. Следующий шаг после принятия V2-S11:
 
 ```text
-V2-S11 — Alarm runtime state machine
-```
-
-Следующий подшаг после локальной проверки и нового Git SHA:
-
-```text
-V2-S10B — Alarm Editor Web
+V2-S12 — Alarm ACK, realtime и Web
 ```
 
 ## Документы

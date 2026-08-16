@@ -1,3 +1,4 @@
+using Dispatcher.Server.Alarms;
 using Dispatcher.Server.Historian;
 using Dispatcher.Server.Security;
 
@@ -9,6 +10,7 @@ public sealed class ConfigurationInitializationHostedService
     private readonly SqliteConfigurationStore _store;
     private readonly ConfigurationCatalog _catalog;
     private readonly HistorianPolicyCatalog _historianPolicies;
+    private readonly AlarmDefinitionCatalog _alarmDefinitions;
     private readonly SecurityCatalog _securityCatalog;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ConfigurationInitializationHostedService> _logger;
@@ -19,6 +21,7 @@ public sealed class ConfigurationInitializationHostedService
         SqliteConfigurationStore store,
         ConfigurationCatalog catalog,
         HistorianPolicyCatalog historianPolicies,
+        AlarmDefinitionCatalog alarmDefinitions,
         SecurityCatalog securityCatalog,
         IConfiguration configuration,
         ILogger<ConfigurationInitializationHostedService> logger,
@@ -31,6 +34,8 @@ public sealed class ConfigurationInitializationHostedService
             catalog;
         _historianPolicies =
             historianPolicies;
+        _alarmDefinitions =
+            alarmDefinitions;
         _securityCatalog =
             securityCatalog;
         _configuration =
@@ -70,6 +75,8 @@ public sealed class ConfigurationInitializationHostedService
             cancellationToken);
         var historianPolicies = await _store.LoadHistorianPoliciesAsync(
             cancellationToken);
+        var alarmDefinitions = await _store.LoadAlarmDefinitionsAsync(
+            cancellationToken);
         var localUsers = await _store.LoadLocalUsersAsync(
             cancellationToken);
         var securityRoles = await _store.LoadSecurityRolesAsync(
@@ -84,18 +91,22 @@ public sealed class ConfigurationInitializationHostedService
         _historianPolicies.ReplaceAll(
             historianPolicies);
 
+        _alarmDefinitions.ReplaceAll(
+            alarmDefinitions);
+
         _securityCatalog.ReplaceAll(
             localUsers,
             securityRoles,
             userRoleAssignments);
 
         _logger.LogInformation(
-            "Loaded {ModbusDeviceCount} Modbus device(s), {ModbusTagCount} Modbus tag(s), {SnmpDeviceCount} SNMP device(s), {SnmpTagCount} SNMP tag(s), {HistorianPolicyCount} historian policy/policies, {LocalUserCount} local user(s), {SecurityRoleCount} security role(s), and {UserRoleAssignmentCount} user-role assignment(s) from configuration database {DatabasePath}.",
+            "Loaded {ModbusDeviceCount} Modbus device(s), {ModbusTagCount} Modbus tag(s), {SnmpDeviceCount} SNMP device(s), {SnmpTagCount} SNMP tag(s), {HistorianPolicyCount} historian policy/policies, {AlarmDefinitionCount} alarm definition(s), {LocalUserCount} local user(s), {SecurityRoleCount} security role(s), and {UserRoleAssignmentCount} user-role assignment(s) from configuration database {DatabasePath}.",
             modbusDevices.Count,
             modbusDevices.Sum(device => device.Tags.Count),
             snmpDevices.Count,
             snmpDevices.Sum(device => device.Tags.Count),
             historianPolicies.Count,
+            alarmDefinitions.Count,
             localUsers.Count,
             securityRoles.Count,
             userRoleAssignments.Count,

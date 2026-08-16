@@ -1,8 +1,8 @@
 # Архитектура Dispatcher
 
-## 1. Состояние после V2-S10B
+## 1. Состояние после V2-S11
 
-Application layer содержит operational services, permission-based administration и Alarm configuration editor:
+Application layer содержит operational services, permission-based administration, Alarm configuration editor и Alarm runtime state machine:
 
 ```text
 Protocol workers
@@ -51,11 +51,21 @@ REST + RuntimeHub permission enforcement
 SecurityManagementService
       ↓ durable mutation + reload
 Configuration SQLite v7 → SecurityCatalog.ReplaceAll
+
+Alarm definitions / TagId
+      ↓
+AlarmDefinitionCatalog
+      ↓                 TagService.Changed
+      └──────────────→ AlarmRuntimeService
+                            ↓ four-state lifecycle
+                      EventJournalService
+                            ↓
+                    operational SQLite events
 ```
 
 Mimic runtime и Mimic Editor не знают protocol-specific address.
 
-V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, а V2-S10B завершает configuration slice Web Alarm Editor. Server остаётся единственной authoritative authorization boundary.
+V2-S07A сохраняет local user identities/password hashes, V2-S07B добавляет login/logout/current-user и ASP.NET Core cookie session boundary, V2-S07C отображает identity state в Web, V2-S08A/B/C формируют permission vertical slice, V2-S09A/B/C добавляют Users/Roles management и actor-aware audit, V2-S10A добавляет durable alarm definitions/Server CRUD, V2-S10B завершает configuration slice Web Alarm Editor, а V2-S11 добавляет Server alarm lifecycle с delay/hysteresis и durable transition events. Server остаётся единственной authoritative authorization boundary.
 
 ## 2. Главная граница binding
 
@@ -3159,4 +3169,190 @@ Server CRUD + permissions + audit
 Web Alarm Editor
 ```
 
-Alarm evaluation, transitions и operational state начинаются только в V2-S11.
+Alarm evaluation, transitions и operational state реализованы V2-S11; operator ACK API/realtime/Web runtime остаются V2-S12.
+
+## 103. Alarm definition live catalog
+
+V2-S11 добавляет read-mostly in-memory boundary для Alarm runtime:
+
+```text
+Configuration SQLite v7 / alarm_definitions
+        ↓ startup
+ConfigurationInitializationHostedService
+        ↓
+AlarmDefinitionCatalog
+        ↓ Changed
+AlarmRuntimeService
+```
+
+`AlarmDefinitionCatalog` повторяет уже используемый snapshot-подход `HistorianPolicyCatalog`: immutable sorted definitions snapshot публикуется через `Volatile.Write`, поэтому runtime читает current rules без SQLite access из `TagService.Changed` callback.
+
+S10A `AlarmDefinitionService` после successful durable create/update/delete обновляет этот catalog в той же mutation boundary. Поэтому Alarm runtime не перечитывает configuration database на каждом `TagService.Changed` и не требует restart protocol polling после изменения alarm rule.
+
+Metadata-only definition change:
+
+```text
+Name
+Message
+Severity
+```
+
+сохраняет lifecycle state. Изменение evaluation semantics:
+
+```text
+Enabled
+TagId
+Condition
+Threshold
+DelayMilliseconds
+Hysteresis
+```
+
+отменяет pending raise, сбрасывает конкретный runtime instance в `Normal` и, если definition включён, немедленно переоценивает current `TagService` value. Disable/delete не публикуют synthetic `AlarmReturned`: это configuration mutation, уже имеющая `ConfigurationChanged`, а не физический return condition.
+
+## 104. Alarm runtime state machine
+
+`AlarmRuntimeService` является singleton hosted service. Startup order:
+
+```text
+configuration initialization
+        ↓ load AlarmDefinitionCatalog
+EventJournalService
+        ↓
+AlarmRuntimeService
+        ↓ subscribe TagService.Changed
+Modbus/SNMP polling
+```
+
+Таким образом alarm producer стартует после durable Event Journal, но до protocol workers. Callback `TagService.Changed` не пишет SQLite: он только вычисляет state и вызывает bounded `EventJournalService.Publish(...)`.
+
+Минимальный lifecycle:
+
+```text
+Normal
+ActiveUnacknowledged
+ActiveAcknowledged
+ReturnedUnacknowledged
+```
+
+Transitions:
+
+```text
+Normal + raise
+    → ActiveUnacknowledged
+
+ActiveUnacknowledged + acknowledge
+    → ActiveAcknowledged
+
+ActiveUnacknowledged + physical return
+    → ReturnedUnacknowledged
+
+ActiveAcknowledged + physical return
+    → Normal
+
+ReturnedUnacknowledged + acknowledge
+    → Normal
+
+ReturnedUnacknowledged + new raise
+    → ActiveUnacknowledged
+```
+
+ACK method является внутренней Server runtime boundary S11. Public REST authorization/actor extraction для operator ACK появляется только в V2-S12.
+
+## 105. Alarm condition, hysteresis и delay runtime semantics
+
+Digital conditions принимают только однозначные runtime values:
+
+```text
+bool true/false
+numeric zero/non-zero
+```
+
+String/JSON/прочие CLR objects не парсятся скрыто в boolean/numeric semantics и не создают transition.
+
+Numeric `High/Low` работают с CLR integral/floating/decimal values, которые можно безопасно представить как `decimal`. `NaN`, infinity и overflow conversion отвергаются как неоценимые значения.
+
+Hysteresis:
+
+```text
+High raise  : value >= Threshold
+High active : пока value >= Threshold - Hysteresis
+High return : value <  Threshold - Hysteresis
+
+Low raise   : value <= Threshold
+Low active  : пока value <= Threshold + Hysteresis
+Low return  : value >  Threshold + Hysteresis
+```
+
+При расчёте clear boundary используется saturating decimal arithmetic, чтобы крайние `decimal.MinValue/MaxValue` не создавали overflow.
+
+`DelayMilliseconds` применяется только к raise/re-raise. Первый active sample запускает asynchronous delay. Новые active samples не перезапускают таймер. Если condition исчезла, definition изменилась или service остановился, pending delay отменяется. После истечения delay runtime повторно читает current `TagService` value и поднимает alarm только если condition всё ещё active.
+
+Pending delay не вводится как пятое публичное alarm state: до фактического raise state остаётся `Normal` или `ReturnedUnacknowledged`.
+
+`TagService.Clear()` публикует отдельный `Cleared` signal, на который подписан Alarm runtime. Pending delay отменяется для всех rules. Если logical `TagId` удалён из current `ConfigurationCatalog`, соответствующий alarm instance сбрасывается в `Normal` без synthetic return event; для всё ещё configured TagId ACK/lifecycle state сохраняется до первого нового poll sample. Это не превращает кратковременный protocol restart в ложный alarm return/re-raise, но stale binding не остаётся бесконечно active.
+
+## 106. Alarm transitions в Event Journal
+
+Каждый фактический lifecycle transition записывается через существующий immutable Event Journal:
+
+```text
+AlarmRaised
+AlarmAcknowledged
+AlarmReturned
+```
+
+S11 намеренно не создаёт новый `EventCategory` и не меняет operational schema. Alarm transition record:
+
+```text
+Category = System
+Type     = AlarmRaised | AlarmAcknowledged | AlarmReturned
+Severity = definition Severity
+Source   = AlarmId
+DataJson = AlarmId / Name / TagId / condition / thresholds /
+           previous state / new state / normalized runtime value
+```
+
+Operational SQLite остаётся:
+
+```text
+schema v3
+history_samples
+ events + nullable actor_user_id / actor_user_name
+```
+
+Automatic raise/return не имеют actor. Internal acknowledge принимает optional `EventActor`; это позволяет V2-S12 передать verified authenticated actor без изменения state-machine logic.
+
+Причина не вводить `EventCategory.Alarm` в S11: durable filtering уже однозначно возможен по `Alarm*` Type и `Source=AlarmId`, тогда как новый category потребовал бы rebuild/migration существующей append-only events table только ради классификации. Отдельный Alarm operator query/view проектируется в V2-S12 поверх runtime states и persisted transition events.
+
+## 107. V2-S11 scope boundary
+
+После V2-S11 цепочка имеет вид:
+
+```text
+Alarm definition / TagId
+        ↓ live catalog
+TagService.Changed
+        ↓
+AlarmRuntimeService
+        ↓
+four-state lifecycle
+        ↓
+EventJournalService.Publish
+        ↓ async persistence
+operational SQLite events
+```
+
+S11 не добавляет:
+
+```text
+public ACK REST endpoint
+Alarms.Acknowledge endpoint enforcement
+Alarm-specific SignalR messages
+Active alarms Web runtime
+Alarm history Web service
+shelving / suppression / groups
+complex expression language
+```
+
+Эти operator-facing boundaries остаются V2-S12.

@@ -31,6 +31,7 @@ builder.Services.AddLocalAuthentication();
 
 builder.Services.AddSingleton<ConfigurationCatalog>();
 builder.Services.AddSingleton<HistorianPolicyCatalog>();
+builder.Services.AddSingleton<AlarmDefinitionCatalog>();
 builder.Services.AddSingleton<SecurityCatalog>();
 builder.Services.AddSingleton<SecurityManagementService>();
 builder.Services.AddHostedService<ConfigurationInitializationHostedService>();
@@ -87,6 +88,11 @@ builder.Services.AddSingleton<SnmpPollingService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<EventHubPublisher>();
+
+builder.Services.AddSingleton<AlarmRuntimeService>();
+builder.Services.AddHostedService<AlarmRuntimeService>(
+    services =>
+        services.GetRequiredService<AlarmRuntimeService>());
 
 builder.Services.AddSingleton<ModbusRuntimeHostedService>();
 builder.Services.AddHostedService<ModbusRuntimeHostedService>(

@@ -7,24 +7,28 @@ public sealed class AlarmDefinitionService
 {
     private readonly SqliteConfigurationStore _store;
     private readonly ConfigurationCatalog _configuration;
+    private readonly AlarmDefinitionCatalog _catalog;
     private readonly SemaphoreSlim _mutationLock =
         new(1, 1);
 
     public AlarmDefinitionService(
         SqliteConfigurationStore store,
-        ConfigurationCatalog configuration)
+        ConfigurationCatalog configuration,
+        AlarmDefinitionCatalog catalog)
     {
         _store =
             store;
         _configuration =
             configuration;
+        _catalog =
+            catalog;
     }
 
     public Task<IReadOnlyList<AlarmDefinitionConfiguration>> GetAllAsync(
         CancellationToken cancellationToken = default)
     {
-        return _store.LoadAlarmDefinitionsAsync(
-            cancellationToken);
+        return Task.FromResult<IReadOnlyList<AlarmDefinitionConfiguration>>(
+            _catalog.Definitions);
     }
 
     public async Task<AlarmDefinitionConfiguration> CreateAsync(
@@ -44,8 +48,7 @@ public sealed class AlarmDefinitionService
                 definition.TagId);
 
             var existing =
-                await _store.LoadAlarmDefinitionsAsync(
-                    cancellationToken);
+                _catalog.Definitions;
 
             if (existing.Any(candidate =>
                     string.Equals(
@@ -60,6 +63,12 @@ public sealed class AlarmDefinitionService
             await _store.InsertAlarmDefinitionAsync(
                 definition,
                 cancellationToken);
+
+            _catalog.ReplaceAll(
+                existing
+                    .Append(
+                        definition)
+                    .ToArray());
 
             return definition;
         }
@@ -98,6 +107,17 @@ public sealed class AlarmDefinitionService
                     $"Alarm '{alarmId}' was not found.");
             }
 
+            _catalog.ReplaceAll(
+                _catalog.Definitions
+                    .Where(candidate =>
+                        !string.Equals(
+                            candidate.AlarmId,
+                            alarmId,
+                            StringComparison.Ordinal))
+                    .Append(
+                        definition)
+                    .ToArray());
+
             return definition;
         }
         finally
@@ -125,6 +145,15 @@ public sealed class AlarmDefinitionService
                 throw new AlarmDefinitionNotFoundException(
                     $"Alarm '{alarmId}' was not found.");
             }
+
+            _catalog.ReplaceAll(
+                _catalog.Definitions
+                    .Where(definition =>
+                        !string.Equals(
+                            definition.AlarmId,
+                            alarmId,
+                            StringComparison.Ordinal))
+                    .ToArray());
         }
         finally
         {

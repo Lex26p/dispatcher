@@ -140,10 +140,18 @@ V2-S10 разбит на проверяемые подшаги:
 
 V2-S10 завершён: durable alarm definitions, permission-protected CRUD и permission-aware Web editor собраны в один configuration vertical slice.
 
-Следующий шаг после принятия V2-S10B:
+V2-S11 завершает Server runtime lifecycle foundation:
 
 ```text
-V2-S11 — Alarm runtime state machine
+[x] V2-S11 — Alarm runtime state machine
+```
+
+Реализованы four-state lifecycle, High/Low hysteresis, continuous raise delay и durable transition events. Operator ACK API/realtime/Web остаются отдельным V2-S12.
+
+Следующий шаг после принятия V2-S11:
+
+```text
+V2-S12 — Alarm ACK, realtime и Web
 ```
 
 Подробный порядок и зависимости определены в `docs/ROADMAP_V2.md`.

@@ -921,35 +921,55 @@ Editor использует стандартную схему:
 
 ---
 
-## [ ] V2-S11 — Alarm runtime state machine
+## [x] V2-S11 — Alarm runtime state machine
 
-Alarm runtime подписывается на logical Tag changes.
+Реализовано:
 
-Минимальные состояния должны явно различать:
+- live `AlarmDefinitionCatalog`, загружаемый из configuration SQLite на startup и обновляемый после S10A CRUD mutations;
+- singleton/hosted `AlarmRuntimeService`;
+- subscription только на protocol-neutral `TagService.Changed`;
+- states:
+  - `Normal`;
+  - `ActiveUnacknowledged`;
+  - `ActiveAcknowledged`;
+  - `ReturnedUnacknowledged`;
+- transitions:
+  - raise;
+  - acknowledge;
+  - return-to-normal;
+  - acknowledge after return;
+  - re-raise from `ReturnedUnacknowledged`;
+- `High` raise при `value >= Threshold`;
+- `High` return только при `value < Threshold - Hysteresis`;
+- `Low` raise при `value <= Threshold`;
+- `Low` return только при `value > Threshold + Hysteresis`;
+- saturating decimal hysteresis bounds без overflow на крайних `decimal` values;
+- `DigitalTrue/DigitalFalse` для bool и numeric zero/non-zero values;
+- unsupported nonnumeric runtime value не создаёт transition;
+- `DelayMilliseconds` применяется только к raise/re-raise;
+- pending raise отменяется, если condition перестала быть active до истечения delay;
+- delayed raise перед transition повторно проверяет current `TagService` value;
+- metadata-only definition update (`Name/Message/Severity`) сохраняет lifecycle state;
+- изменение evaluation semantics (`Enabled/TagId/Condition/Threshold/Delay/Hysteresis`) отменяет pending delay, сбрасывает instance в `Normal` и переоценивает current value;
+- delete/disable не имитирует `return-to-normal` event: это configuration change, а не физический return condition;
+- `TagService.Cleared` при device/tag live apply отменяет pending delay; stale/removed TagId сбрасывается в `Normal`, а state ещё configured tag сохраняется до нового sample;
+- automatic raise/return actor-less; internal acknowledge transition принимает optional `EventActor` для будущего S12 API;
+- переходы записываются в existing immutable Event Journal:
+  - `AlarmRaised`;
+  - `AlarmAcknowledged`;
+  - `AlarmReturned`;
+- alarm transition events используют current `EventCategory.System`, `source = AlarmId` и alarm severity;
+- operational SQLite остаётся schema `3`; отдельная mutable current-state table и новый EventCategory не добавлены;
+- state-machine tests покрывают active ACK, ACK after return, High/Low hysteresis, digital conditions, delay cancellation/continuous activation и live definition changes.
+
+Не добавлено в S11:
 
 ```text
-Normal
-ActiveUnacknowledged
-ActiveAcknowledged
-ReturnedUnacknowledged
-```
-
-Нужно определить transitions для:
-
-```text
-raise
-acknowledge
-return-to-normal
-ack after return
-```
-
-Alarm transition записывается в Event Journal/operational storage.
-
-Delay и hysteresis применяются в runtime, а не в Web.
-
-Не добавлять пока:
-
-```text
+operator ACK REST API
+Alarms.Acknowledge enforcement endpoint
+Alarm SignalR realtime contract
+Active alarms Web runtime
+Alarm history Web service
 shelving
 suppression
 alarm groups
@@ -958,7 +978,7 @@ complex expressions
 
 ### Результат
 
-Alarm имеет воспроизводимый lifecycle, а не просто boolean flag.
+Alarm имеет воспроизводимый four-state lifecycle и durable transition timeline, а не просто boolean flag. Внешний operator workflow остаётся V2-S12.
 
 ---
 

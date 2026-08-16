@@ -14,6 +14,10 @@ public static class EventTypes
     public const string RuntimeConfigurationApplied = "RuntimeConfigurationApplied";
     public const string ConfigurationChanged = "ConfigurationChanged";
 
+    public const string AlarmRaised = "AlarmRaised";
+    public const string AlarmAcknowledged = "AlarmAcknowledged";
+    public const string AlarmReturned = "AlarmReturned";
+
     public const string LoginSucceeded = "LoginSucceeded";
     public const string LoginFailed = "LoginFailed";
 

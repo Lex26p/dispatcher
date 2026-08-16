@@ -9,6 +9,8 @@ public sealed class TagService
 
     public event Action<TagValue>? Changed;
 
+    public event Action? Cleared;
+
     public TagValue Set(string tagId, object? value)
     {
         return Set(tagId, value, DateTimeOffset.UtcNow);
@@ -45,6 +47,7 @@ public sealed class TagService
     public void Clear()
     {
         _values.Clear();
+        Cleared?.Invoke();
     }
 
     private static void ValidateTagId(string tagId)
