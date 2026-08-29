@@ -183,13 +183,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-004 — Project Manager
 
-**Статус:** в разработке.
+**Статус:** завершён.
 
 **Цель:** реализовать проекты как самостоятельные точки консолидации и контекста.
 
 **Результат:** проекты можно создавать, получать, изменять и использовать как контекст платформы без превращения их во владельцев остальных ресурсов.
 
-План спринта: [`sprints/CORE-004.md`](sprints/CORE-004.md).
+План и итоговый отчёт: [`sprints/CORE-004.md`](sprints/CORE-004.md).
 
 ### CORE-005 — Users & Access
 
@@ -519,14 +519,14 @@ Step 4 зафиксировал `/projects`, typed Project Manager client adapte
 
 Step 5 зафиксировал общий React project context, browser-session persistence, remote `get-project` validation, выбор из реального списка и compact Header indication без изменения backend contracts.
 
-Текущий шаг:
+`CORE-004 / Step 6` завершён commit:
 
-**CORE-004 / Step 6 — Реальная integration и restart recovery.**
+`9818254650fdf26ba8a2708dacca16433989d8fe`
 
-Step 6 проверяет production Web против реальных C++ Service Hub + Project Manager + SQLite: create/edit/context, parallel project requests, временную недоступность Project Manager, restart на той же database, повторную provider registration и сохранность данных/context.
+Step 6 подтвердил production browser → Service Hub → Project Manager → SQLite path: create/edit/context, parallel project requests, локальное состояние при недоступном Project Manager, restart на той же database, повторную provider registration, stable project ID и сохранность данных/context.
 
-После успешного commit Step 6 следующим будет:
+`CORE-004 / Step 7` завершает спринт acceptance/report/documentation closure без новых product features.
 
-**CORE-004 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit.**
+`CORE-004 — Project Manager` завершён. Проекты остаются самостоятельными плоскими точками консолидации/контекста и не становятся владельцами Dashboard/Device/других будущих ресурсов. Users & Access/authentication не имитировались.
 
-CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.
+Следующее действие после проверки documentation closure commit — подготовить отдельный план `CORE-005 — Users & Access`. Реализация CORE-005 не начинается до фиксации и проверки этого плана.

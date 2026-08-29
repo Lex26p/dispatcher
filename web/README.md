@@ -22,7 +22,9 @@
 
 `CORE-004 / Step 5` established shared project context for the Web Shell: selected Project or explicit global mode, current-session persistence, remote validation and compact Header indication.
 
-`CORE-004 / Step 6` adds a separate real Project Manager browser integration path with durable restart recovery.
+`CORE-004 / Step 6` established a separate real Project Manager browser integration path with durable restart recovery.
+
+`CORE-004 — Project Manager` is complete. The next planned sprint is `CORE-005 — Users & Access`; its implementation starts only after a separate sprint plan is committed and verified.
 
 Notifications, messages, user actions, authentication, Dashboard and later service screens are not implemented yet.
 

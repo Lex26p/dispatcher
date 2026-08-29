@@ -8,7 +8,11 @@ Project Manager is the core service responsible for Dispatcher projects as stabl
 
 `CORE-004 / Step 2` established the first production durable storage adapter using local SQLite.
 
-`CORE-004 / Step 3` adds the versioned Service Hub provider contract at `project-manager.v1`.
+`CORE-004 / Step 3` established the versioned Service Hub provider contract at `project-manager.v1`.
+
+`CORE-004 / Steps 4–6` established the `/projects` Web UI, shared browser project context, and real browser → Service Hub → Project Manager → SQLite restart-recovery integration.
+
+`CORE-004 — Project Manager` is complete.
 
 The current Project model contains only:
 
@@ -77,12 +81,24 @@ Operations:
 
 The full payload/error contract is documented in `docs/architecture/project-manager-contract.md`. Project-specific fields stay inside Service Hub `operation`/`payload`; the common Service Hub envelope is unchanged.
 
+
+## Web integration
+
+The Web Shell uses the existing shared `ServiceHubClient` and service `project-manager.v1`; it does not open a second transport. `/projects` provides list/create/edit behavior, while `ProjectContextProvider` keeps either a real Project v1 snapshot or explicit global mode for the current browser session.
+
+The real Windows + WSL acceptance command is:
+
+    npx.cmd --yes npm@11.19.0 run test:e2e:project-manager
+
+It starts real C++ Service Hub and Project Manager processes, uses a temporary SQLite database, exercises the production Web UI, restarts Project Manager on the same database, waits for provider re-registration, and verifies stable ID/data/context recovery.
+
 ## Intentionally not implemented yet
 
 - authentication/authorization;
 - project ownership of future resources;
 - Dashboard relations;
-- Web Project Manager UI.
+- project deletion lifecycle;
+- user-specific persistence of selected project context.
 
 ## Dependencies
 

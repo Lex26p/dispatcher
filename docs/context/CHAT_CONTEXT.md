@@ -101,6 +101,19 @@ Realtime-значения находятся в Data Hub.
 
 Подробный контракт: `docs/architecture/service-hub-contract.md`.
 
+### Project Manager
+- реализован и завершён в `CORE-004` как отдельный C++20-сервис;
+- Project v1 содержит только stable opaque `id`, `name`, `description`;
+- production persistence — локальный SQLite schema v1, внутренний для Project Manager;
+- внешний service address — `project-manager.v1` поверх существующего Service Hub v1;
+- операции — `create-project`, `list-projects`, `get-project`, `update-project`;
+- Service Hub envelope не содержит project-specific field;
+- Web Shell имеет `/projects`, list/create/edit UI и общий project context с явным global mode;
+- project context сохраняется только в browser `sessionStorage`, проверяется через `get-project` и не является user preference до CORE-005;
+- реальная browser integration подтверждает durable restart/re-registration path.
+
+Подробный контракт: `docs/architecture/project-manager-contract.md`.
+
 ### Независимость
 Сервис не должен знать других потребителей своих данных без необходимости. Плагины работают через общие контракты.
 
@@ -120,12 +133,12 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 
 ## Пока не выбрано
 
-Для Data Hub и Service Hub transport/serialization уже выбраны.
+Для Data Hub и Service Hub transport/serialization уже выбраны. Project Manager использует локальный SQLite schema v1; это не определяет общую persistence-технологию платформы.
 
 Пока не утверждены:
 
 - технология Event Hub;
-- БД и постоянное хранение;
+- общая persistence-стратегия будущих сервисов и истории;
 - deployment;
 - внешний Driver Runtime API и межпроцессный путь write-provider;
 - механизм восстановления runtime state;
@@ -139,107 +152,30 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 Завершены:
 
 - `CORE-001 — Data Hub`;
-- `CORE-002 — Service Hub`.
+- `CORE-002 — Service Hub`;
+- `CORE-003 — Web Shell`;
+- `CORE-004 — Project Manager`.
 
-Финальный baseline CORE-002:
-
-`7df47f234f6e0638e0f41ef81706d05244d7d2ea`
-
-Текущий спринт — `CORE-003 — Web Shell`.
-
-Его подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-003.md`.
-
-Web Shell должен дать React + TypeScript shell, глобальный Header/navigation/workspace и общую browser-side Service Hub connection. Он не реализует предметные Web-интерфейсы следующих сервисов.
-
-Frontend state manager и UI-библиотека не выбираются заранее в плане.
-
-Plan `CORE-003` зафиксирован commit:
-
-`12f0fd374e515d47aa8289f476ff233cc69d201c`
-
-`CORE-003 / Step 1` завершён commit:
-
-`f974baa578ad310cbcd3403836d47fc2a32ec7d8`
-
-Step 1 создал `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Testing Library, reproducible `package-lock.json` и Playwright browser smoke.
-
-`CORE-003 / Step 2` завершён commit:
-
-`a8f7b91a8b0c23385ce349c55ca6e6a70e9685c8`
-
-Step 2 создал базовый App Shell: компактный global Header, menu trigger, резерв будущих global actions и рабочую область. Generated `*.tsbuildinfo` исключены из version control.
-
-`CORE-003 / Step 3` завершён commit:
-
-`81264746c0948b664c30b91418b8cc477b6b2f82`
-
-Step 3 добавил global menu и shell-level navigation: текущий `/` workspace, unknown-route fallback и keyboard-friendly open/close behavior без router dependency.
-
-`CORE-003 / Step 4` завершён commit:
-
-`02002f48a08cae6697b28be5e06b73864c2d9384`
-
-Step 4 создал самостоятельный TypeScript client Service Hub v1: configurable WebSocket URL, subprotocol, connection state, request correlation, cancel и разделение Hub request errors / transport failures.
-
-`CORE-003 / Step 5` завершён commit:
-
-`d612dcfec40c6447c35bc59993514fbb05e20e73`
-
-Step 5 связал client с React lifecycle через shared Provider/context, добавил общую URL-конфигурацию и ненавязчивый connection status в global Header.
-
-`CORE-003 / Step 6` завершён commit:
-
-`f128c55748a5e2957151ba29b0c1d872614ccadf`
-
-Step 6 подтвердил реальный browser path через существующий C++ Service Hub и automation-only test provider: success, parallel correlation, cancel, Hub close/disconnected state и явный reconnect.
-
-`CORE-003 — Web Shell` окончательно закрыт commit:
+Финальный documentation baseline CORE-003:
 
 `88c5bb30f182f7d9898ad4c95b210a045060c94f`
 
-Текущий спринт:
-
-`CORE-004 — Project Manager`.
-
-Sprint plan CORE-004 зафиксирован commit:
+Sprint plan CORE-004:
 
 `d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
-Границы CORE-004: отдельный C++ Project Manager, durable project persistence, Service Hub contract/provider, Web список/редактор и общий frontend project context. Проект остаётся плоской точкой консолидации и не владеет Dashboard/Device/другими будущими ресурсами. Users & Access/authentication остаётся CORE-005.
+Функциональные commits CORE-004:
 
-`CORE-004 / Step 1` завершён commit:
+- Step 1 — `172e40887fde3b5b963264904e0c4fa73225a34a`;
+- Step 2 — `1d90091ee7804d1bb8c49618a1780a226488c671`;
+- Step 3 — `7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`;
+- Step 4 — `7527e2758f77e40cb6b86795e2b2a21896e55224`;
+- Step 5 — `1b4017526789e32e5e4ece90a63fa287cddb57c8`;
+- Step 6 — `9818254650fdf26ba8a2708dacca16433989d8fe`.
 
-`172e40887fde3b5b963264904e0c4fa73225a34a`
+CORE-004 даёт отдельный C++ Project Manager, local durable SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared frontend project context и реальный browser/backend restart-recovery acceptance path. Проект не владеет будущими Dashboard/Device/resources; auth/ACL не имитируются.
 
-Step 1 зафиксировал opaque stable `id`, `name`, `description`, application boundary create/list/get/update, storage port, in-memory unit tests и Linux SIGINT/SIGTERM lifecycle.
-
-`CORE-004 / Step 2` завершён commit:
-
-`1d90091ee7804d1bb8c49618a1780a226488c671`
-
-Step 2 зафиксировал локальный SQLite schema v1, production repository adapter и restart/reopen tests. SQLite является storage detail Project Manager, не общей БД платформы.
-
-`CORE-004 / Step 3` завершён commit:
-
-`7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`
-
-Step 3 зафиксировал `project-manager.v1`, create/list/get/update contract, provider-specific `project.*` errors, real Service Hub registration/reconnect и межпроцессный integration test.
-
-`CORE-004 / Step 4` завершён commit:
-
-`7527e2758f77e40cb6b86795e2b2a21896e55224`
-
-Step 4 зафиксировал `/projects`, typed Project Manager adapter и list/create/edit UI через существующий shared `ServiceHubClient`.
-
-`CORE-004 / Step 5` завершён commit:
-
-`1b4017526789e32e5e4ece90a63fa287cddb57c8`
-
-Step 5 зафиксировал общий React project context с явным global mode, browser-session persistence, remote `get-project` validation, выбором из реального списка и compact Header indication.
-
-Текущий шаг — `CORE-004 / Step 6 — Реальная integration и restart recovery`. Отдельный Web runner должен проверить production browser → Service Hub → Project Manager → SQLite path, create/edit/context, parallel requests, временную недоступность Project Manager, restart на той же database, повторную provider registration и сохранность project/context. Production contracts не меняются.
-
-После успешного Step 6 commit следующее действие — `CORE-004 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit`.
+Следующий планируемый спринт — `CORE-005 — Users & Access`. Сначала должен быть подготовлен и отдельным commit зафиксирован sprint plan на проверенном CORE-004 closure baseline; только после проверки SHA начинается реализация.
 
 ## Рабочий процесс
 

@@ -14,7 +14,9 @@
 
 `CORE-003 — Web Shell` завершён: существует самостоятельный React + TypeScript Web Shell с компактным global Header, глобальной навигацией, рабочей областью, общим browser-side Service Hub client/React connection boundary и реальной browser → Service Hub → test provider интеграционной проверкой.
 
-`CORE-004 — Project Manager` — текущий спринт. Его подробный план зафиксирован в `docs/development/sprints/CORE-004.md`; реализация начинается после отдельного plan commit. Конкретная технология durable persistence выбирается внутри спринта после фиксации минимальной Project model, а authentication/authorization остаётся `CORE-005`.
+`CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery. Authentication/authorization по-прежнему относится к `CORE-005 — Users & Access`.
+
+Следующий спринт — `CORE-005 — Users & Access`. Его реализация начинается только после отдельного sprint plan commit на проверенном closure baseline `CORE-004`.
 
 ## Документация
 
@@ -26,6 +28,8 @@
 
 Контракт Service Hub: [`docs/architecture/service-hub-contract.md`](docs/architecture/service-hub-contract.md).
 
+Контракт Project Manager: [`docs/architecture/project-manager-contract.md`](docs/architecture/project-manager-contract.md).
+
 Дорожная карта: [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md).
 
 Итог `CORE-001`: [`docs/development/sprints/CORE-001.md`](docs/development/sprints/CORE-001.md).
@@ -34,6 +38,6 @@
 
 Итог `CORE-003`: [`docs/development/sprints/CORE-003.md`](docs/development/sprints/CORE-003.md).
 
-План `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
+Итог `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

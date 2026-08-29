@@ -37,12 +37,12 @@
 
 Согласованная архитектура системы на текущем уровне детализации.
 
-- [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, Device Manager, модель метрик и выбранные языки/инструменты.
+- [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, границы основных сервисов, модель метрик и выбранные языки/инструменты.
 - [`data-hub-contract.md`](architecture/data-hub-contract.md) — внешний gRPC + Protocol Buffers контракт Data Hub и его runtime-семантика.
 - [`service-hub-contract.md`](architecture/service-hub-contract.md) — внешний WebSocket + JSON контракт Service Hub, provider registration и request/response semantics.
 - [`project-manager-contract.md`](architecture/project-manager-contract.md) — versioned Project Manager v1 operations/payload/errors поверх Service Hub.
 
-Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт и сериализация уже зафиксированы; технологии Event Hub, БД и deployment выбираются в соответствующих будущих спринтах.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Этот SQLite является внутренним storage detail Project Manager, а не выбором общей БД платформы. Event Hub, общая persistence-стратегия других сервисов и deployment выбираются в соответствующих будущих спринтах.
 
 ### `docs/development/`
 
@@ -52,9 +52,9 @@
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
-- [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план текущего спринта Project Manager.
+- [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
 
-Текущий спринт — `CORE-004 — Project Manager`. Реализация начинается после фиксации sprint plan отдельным commit.
+`CORE-004 — Project Manager` завершён. Следующий планируемый спринт — `CORE-005 — Users & Access`; перед реализацией для него должен быть зафиксирован отдельный sprint plan на проверенном closure baseline CORE-004.
 
 ### `docs/context/`
 

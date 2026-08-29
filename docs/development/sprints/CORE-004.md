@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 5 завершён; текущий шаг — Step 6.**
+**Завершён.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -527,6 +527,10 @@ Playwright сценарий использует реальный browser UI и 
 
 Step 6 не меняет Project Manager/Service Hub contracts и не добавляет production backend code. Новых npm dependencies нет; `package-lock.json` не меняется, поскольку добавляется только npm script и permanent E2E infrastructure.
 
+Step 6 завершён commit:
+
+`9818254650fdf26ba8a2708dacca16433989d8fe`
+
 ## Step 7 — Sprint acceptance, итоговый отчёт и documentation audit
 
 ### Что делаем
@@ -547,7 +551,7 @@ Step 6 не меняет Project Manager/Service Hub contracts и не доба�
 После этого:
 
 - заполняем итоговый отчёт этого файла;
-- синхронизируем architecture/project contract docs;
+- проверяем architecture/project contract docs и изменяем только если они действительно устарели;
 - обновляем roadmap/root/docs/service READMEs/context;
 - проверяем, не устарела ли концепция проектов или Web UI;
 - closure commit фиксируется отдельно и его SHA проверяется перед `CORE-005`.
@@ -580,28 +584,101 @@ Step 6 не меняет Project Manager/Service Hub contracts и не доба�
 
 # Итоговый отчёт
 
-Заполняется после завершения спринта.
-
 ## Фактически реализовано
 
-Пока не заполнено.
+`CORE-004 — Project Manager` дал первую полноценную project boundary платформы:
+
+- отдельный C++20 `dispatcher-project-manager`;
+- минимальную плоскую Project model: stable opaque `id`, `name`, `description`;
+- application boundary create/list/get/update и абстрактный `ProjectRepository`;
+- локальный SQLite schema v1 как production durable storage Project Manager без общей platform database abstraction;
+- restart/reopen persistence и stable IDs;
+- versioned language-independent Service Hub contract `project-manager.v1`;
+- operations `create-project`, `list-projects`, `get-project`, `update-project`;
+- provider-specific `project.*` errors без изменения общего Service Hub envelope;
+- production provider reconnect/re-registration через существующий WebSocket Service Hub v1;
+- Web destination `/projects` с loading/empty/error states, созданием и редактированием проектов через shared `ServiceHubClient`;
+- общий React `ProjectContextProvider` с selected Project либо явным global mode;
+- browser-session persistence context в `sessionStorage`, remote `get-project` validation и очистку только при подтверждённом `project.not_found`;
+- compact Header indication и явный возврат в global context;
+- отдельную real browser → Service Hub → Project Manager → SQLite integration с Project Manager restart на той же DB, provider re-registration и проверкой сохранности project/context.
+
+Функциональный Step 6 завершён commit:
+
+`9818254650fdf26ba8a2708dacca16433989d8fe`
 
 ## Выполненные проверки
 
-Пока не заполнено.
+Перед documentation closure commit Step 7 выполняется полный acceptance-набор. Backend проверяется в WSL/Linux:
+
+    wsl -- bash -lc 'cd /mnt/c/Projects/dispatcher && cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON'
+    wsl -- bash -lc 'cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_project_manager dispatcher_project_manager_tests dispatcher_project_manager_persistence_tests dispatcher_project_manager_service_hub_test_client'
+    wsl -- bash -lc 'ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^project-manager\."'
+
+Web acceptance выполняется нативно в Windows на зафиксированном npm 11.19.0:
+
+    Set-Location C:\Projects\dispatcher\web
+    npx.cmd --yes npm@11.19.0 ci
+    npx.cmd --yes npm@11.19.0 run typecheck
+    npx.cmd --yes npm@11.19.0 run test
+    npx.cmd --yes npm@11.19.0 run test:e2e
+    npx.cmd --yes npm@11.19.0 run test:e2e:service-hub
+    npx.cmd --yes npm@11.19.0 run test:e2e:project-manager
+
+Closure commit допускается только при успешном выполнении всего блока. Набор подтверждает domain/application behavior, durable SQLite restart, provider boundary, production Web build, project list/editor/context, общий Service Hub regression и реальный Project Manager outage/restart recovery path.
 
 ## Отклонения от плана
 
-Пока не заполнено.
+Цель и продуктовая/архитектурная граница спринта не менялись.
+
+SQLite был выбран только на Step 2 после фиксации минимальной Project model, как и предусматривал план. Решение осталось локальным storage detail Project Manager и не стало общей БД платформы.
+
+Удаление project не добавлялось: roadmap требует create/get/update/context, а destructive lifecycle не был нужен критериям первого Project Manager sprint.
+
+Router, внешний frontend state manager и UI kit не добавлялись: текущие shell routes и React boundaries остаются достаточными. В ходе Step 5/6 исправлялись только test selectors/`act()` synchronization, обнаруженные реальными Vitest/Playwright прогонами; production contract из-за этого не менялся.
 
 ## Известные ограничения
 
-Пока не заполнено.
+После CORE-004 сознательно остаются вне Project Manager:
+
+- Users & Access, authentication, roles/permissions/ACL и control mode — `CORE-005`;
+- project deletion lifecycle;
+- вложенные проекты;
+- Dashboard relations/start Dashboard до реального Dashboard contract;
+- ownership Device/Metric/других future resources;
+- user-specific сохранение выбранного project context;
+- history/audit trail;
+- общая database/persistence platform abstraction;
+- production TLS/Origin/auth policy Service Hub;
+- deployment/high availability/production observability.
 
 ## Проверка актуальности документации
 
-Пока не выполнена.
+На Step 7 выполнен targeted audit документов, которые могли устареть за CORE-004. Обновлены:
+
+- root `README.md`;
+- `docs/README.md`;
+- `docs/development/ROADMAP.md`;
+- `docs/context/CHAT_CONTEXT.md`;
+- этот sprint report;
+- `services/project-manager/README.md`;
+- `web/README.md`.
+
+Проверены и оставлены без изменений, потому что их границы остаются корректными:
+
+- `docs/architecture/README.md`;
+- `docs/architecture/project-manager-contract.md`;
+- `docs/architecture/service-hub-contract.md`;
+- `docs/concept/02-projects.md`;
+- `docs/concept/10-web-ui.md`;
+- `services/service-hub/README.md`.
+
+Service Hub envelope не менялся, Project Manager v1 contract после Step 3 не расширялся, а concept-документы не загрязняются implementation details.
 
 ## Итоговый baseline
 
-Пока не определён.
+Последний функциональный commit CORE-004 до documentation closure:
+
+`9818254650fdf26ba8a2708dacca16433989d8fe`
+
+Documentation closure commit не записывает собственный SHA внутрь этого отчёта, чтобы не создавать рекурсивный commit только ради само-ссылки. После пользовательской проверки и push именно проверенный closure SHA становится baseline для подготовки плана `CORE-005 — Users & Access`.
