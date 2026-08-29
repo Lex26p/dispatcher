@@ -4,61 +4,76 @@ Data Hub is the runtime service responsible for current metric values in Dispatc
 
 ## Current implementation stage
 
-`CORE-001 / Step 6` verifies and fixes the runtime model for state metrics.
+`CORE-001 / Step 7` adds the basic write-request path.
 
 Implemented at this stage:
 
 - independent C++ Data Hub executable;
 - Protocol Buffers / gRPC contract;
-- internal thread-safe current-value storage;
-- working `PublishMetric` RPC;
-- working `GetCurrent` RPC;
-- working server-streaming `Subscribe` RPC;
-- retained-like delivery of current values;
-- live delivery of later metric changes;
-- working metrics and their state metrics using the same generic Data Hub mechanisms.
+- current-value storage;
+- `PublishMetric`;
+- `GetCurrent`;
+- retained/live `Subscribe`;
+- generic state-metric behavior;
+- `WriteMetric`;
+- routing of a write request to the provider registered for the metric.
 
-`WriteMetric` remains explicitly unimplemented until `CORE-001 / Step 7`.
+## Write semantics
 
-## State metric model
+`PublishMetric` and `WriteMetric` have deliberately different meanings.
 
-A state metric is an ordinary metric from the point of view of Data Hub.
+`PublishMetric` reports the factual current runtime value:
 
-Conceptually:
+    source/provider -> Data Hub -> CurrentValueStore
 
-    AHU01.Temperature       = 26.0
-    AHU01.Temperature.State = Alarm
+`WriteMetric` requests that the owner of a metric try to change its value:
 
-The `.State` suffix above is only a readable example used in the current documentation and tests. Data Hub does not parse or enforce that naming convention.
+    client -> Data Hub -> MetricWriteProvider
 
-Data Hub does not:
+A successful `WriteMetric` response means that Data Hub delivered the request to the current provider and the provider accepted it for processing.
 
-- calculate `Normal`, `Warning`, `Alarm`, `NoData`, `Maintenance`, or any other state;
-- define the final set of allowed state values;
-- infer which state metric belongs to which working metric;
-- store device descriptions or other descriptive metric metadata.
+It does not mean:
 
-The future Event Manager will calculate the current state and publish the corresponding state metric into Data Hub.
+- equipment has already applied the value;
+- the physical operation succeeded;
+- Data Hub should immediately replace the current value.
 
-The future Device Manager is the appropriate place for descriptive metadata and the relationship between a working metric and its associated state metric.
+The current value changes only after a source/provider later publishes the resulting factual value through `PublishMetric`.
 
-Data Hub only stores and distributes the resulting runtime values.
+This prevents an operator command from being mistaken for equipment feedback.
 
-## Subscription behavior
+## Write routing
 
-The v1 contract subscribes to an explicit list of metric ids.
+`WriteRouter` keeps one current provider for a metric id.
 
-For every requested metric that already has a current value, a new subscriber receives that value before later live updates.
+The first implementation uses an internal C++ port:
 
-A consumer that needs both a working value and its state subscribes to both metric ids.
+    MetricWriteProvider
 
-No special state-specific RPC or subscription type is required.
+This is intentionally a service-internal abstraction rather than a C++ interface shared between independent services.
 
-## Internal implementation
+`CORE-001` only needs to prove the route from the external `WriteMetric` RPC to a metric owner.
 
-`CurrentValueStore` and `SubscriptionManager` do not distinguish state metrics from other metrics.
+The concrete inter-process protocol used by the future Driver Runtime to become that owner is not invented in this step. It will be defined when Driver Runtime is developed and its real requirements are known.
 
-That is intentional: the runtime mechanisms remain universal and do not duplicate the domain model.
+A future adapter can implement `MetricWriteProvider` and forward the request through the appropriate language-independent service contract.
+
+## Current gRPC results
+
+`WriteMetric` returns:
+
+- `OK` when a provider exists and accepts the request;
+- `INVALID_ARGUMENT` for an incomplete write request;
+- `NOT_FOUND` when no provider is registered for the metric;
+- `FAILED_PRECONDITION` when the provider explicitly rejects the request.
+
+Data Hub does not currently check user permissions or the descriptive writable flag. Those responsibilities are added later through Users & Access, Service Hub and Device Manager.
+
+## State metrics
+
+State metrics continue to use the same generic publish/get/subscribe path as all other metrics.
+
+No state-specific storage or RPC exists.
 
 ## Toolchain
 
@@ -77,11 +92,13 @@ That is intentional: the runtime mechanisms remain universal and do not duplicat
     cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
 
-The Step 6 transport test verifies:
+The Step 7 test verifies:
 
-1. publication of a working metric;
-2. publication of a separate state metric;
-3. independent `GetCurrent` for both metrics;
-4. retained delivery of both metrics to one subscriber;
-5. live delivery of a new working value;
-6. live delivery of a new state value.
+1. a test provider is registered for `AHU01.Setpoint`;
+2. the last factual value `22.0` is published;
+3. a gRPC client sends `WriteMetric(Setpoint, 24.0)`;
+4. the test provider receives exactly that request;
+5. `GetCurrent(Setpoint)` still returns `22.0`;
+6. an unowned metric returns `NOT_FOUND`;
+7. an invalid write returns `INVALID_ARGUMENT`;
+8. provider rejection returns `FAILED_PRECONDITION`.

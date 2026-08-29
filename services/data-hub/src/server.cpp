@@ -9,10 +9,18 @@ namespace dispatcher::data_hub {
 
 DataHubServer::DataHubServer(std::string listen_address)
     : listen_address_(std::move(listen_address)),
-      grpc_service_(current_values_) {}
+      grpc_service_(current_values_, write_router_) {}
 
 DataHubServer::~DataHubServer() {
     shutdown();
+}
+
+bool DataHubServer::register_write_provider(
+    std::string metric_id,
+    std::shared_ptr<MetricWriteProvider> provider) {
+    return write_router_.register_provider(
+        std::move(metric_id),
+        std::move(provider));
 }
 
 bool DataHubServer::start() {

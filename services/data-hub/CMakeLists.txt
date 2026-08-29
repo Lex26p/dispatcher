@@ -74,6 +74,7 @@ add_library(dispatcher_data_hub_core STATIC
     src/grpc_service.cpp
     src/server.cpp
     src/subscription_manager.cpp
+    src/write_router.cpp
 )
 
 target_include_directories(dispatcher_data_hub_core
@@ -122,5 +123,5 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_data_hub_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    add_test(NAME data-hub.subscription COMMAND dispatcher_data_hub_tests)
+    add_test(NAME data-hub.write-routing COMMAND dispatcher_data_hub_tests)
 endif()

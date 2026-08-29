@@ -7,8 +7,11 @@
 
 namespace dispatcher::data_hub {
 
-DataHubGrpcService::DataHubGrpcService(CurrentValueStore& current_values) noexcept
-    : current_values_(current_values) {}
+DataHubGrpcService::DataHubGrpcService(
+    CurrentValueStore& current_values,
+    WriteRouter& write_router) noexcept
+    : current_values_(current_values),
+      write_router_(write_router) {}
 
 grpc::Status DataHubGrpcService::PublishMetric(
     grpc::ServerContext*,
@@ -95,9 +98,6 @@ grpc::Status DataHubGrpcService::Subscribe(
         std::lock_guard lock(publish_subscription_mutex_);
         handle = subscriptions_.create(metric_ids);
 
-        // Queue retained/current values in the same order as the request.
-        // Publication cannot interleave with this block, so every later live
-        // update is queued after these retained values.
         for (const auto& metric_id : metric_ids) {
             const auto current = current_values_.get(metric_id);
 
@@ -144,11 +144,36 @@ grpc::Status DataHubGrpcService::Subscribe(
 
 grpc::Status DataHubGrpcService::WriteMetric(
     grpc::ServerContext*,
-    const v1::WriteMetricRequest*,
+    const v1::WriteMetricRequest* request,
     v1::WriteMetricResponse*) {
+    if (request == nullptr ||
+        !request->has_metric_id() ||
+        request->metric_id().value().empty() ||
+        !request->has_value() ||
+        request->value().kind_case() == v1::MetricValue::KIND_NOT_SET) {
+        return {
+            grpc::StatusCode::INVALID_ARGUMENT,
+            "write request must contain a non-empty metric id and a value"};
+    }
+
+    switch (write_router_.dispatch(*request)) {
+    case WriteRouter::DispatchResult::accepted:
+        return grpc::Status::OK;
+
+    case WriteRouter::DispatchResult::no_provider:
+        return {
+            grpc::StatusCode::NOT_FOUND,
+            "no write provider is registered for the metric"};
+
+    case WriteRouter::DispatchResult::rejected:
+        return {
+            grpc::StatusCode::FAILED_PRECONDITION,
+            "write provider rejected the request"};
+    }
+
     return {
-        grpc::StatusCode::UNIMPLEMENTED,
-        "metric writes are implemented in CORE-001 / Step 7"};
+        grpc::StatusCode::INTERNAL,
+        "unknown write routing result"};
 }
 
 }  // namespace dispatcher::data_hub

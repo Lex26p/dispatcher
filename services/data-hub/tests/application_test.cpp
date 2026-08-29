@@ -3,6 +3,7 @@
 #include "dispatcher/data_hub/server.hpp"
 #include "dispatcher/data_hub/v1/data_hub.grpc.pb.h"
 #include "dispatcher/data_hub/v1/data_hub.pb.h"
+#include "dispatcher/data_hub/write_router.hpp"
 
 #include <grpcpp/grpcpp.h>
 
@@ -10,8 +11,10 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -75,6 +78,41 @@ int publish_string(
     return status.ok() ? 0 : 1;
 }
 
+class RecordingWriteProvider final
+    : public dispatcher::data_hub::MetricWriteProvider {
+public:
+    explicit RecordingWriteProvider(bool accept = true)
+        : accept_(accept) {}
+
+    bool write(
+        const dispatcher::data_hub::v1::WriteMetricRequest& request) override {
+        std::lock_guard lock(mutex_);
+        requests_.push_back(request);
+        return accept_;
+    }
+
+    [[nodiscard]] std::size_t request_count() const {
+        std::lock_guard lock(mutex_);
+        return requests_.size();
+    }
+
+    [[nodiscard]] dispatcher::data_hub::v1::WriteMetricRequest
+    last_request() const {
+        std::lock_guard lock(mutex_);
+
+        if (requests_.empty()) {
+            return {};
+        }
+
+        return requests_.back();
+    }
+
+private:
+    bool accept_;
+    mutable std::mutex mutex_;
+    std::vector<dispatcher::data_hub::v1::WriteMetricRequest> requests_;
+};
+
 int test_application_metadata() {
     using dispatcher::data_hub::Application;
 
@@ -119,7 +157,7 @@ int test_current_value_store() {
     return 0;
 }
 
-int test_working_and_state_metrics_over_grpc() {
+int test_state_metrics_over_grpc() {
     namespace api = dispatcher::data_hub::v1;
     using dispatcher::data_hub::DataHubServer;
 
@@ -129,67 +167,26 @@ int test_working_and_state_metrics_over_grpc() {
     DataHubServer server("127.0.0.1:0");
 
     if (!server.start()) {
-        return fail("gRPC server failed to start");
+        return fail("state-metric test server failed to start");
     }
 
     const std::string target =
         "127.0.0.1:" + std::to_string(server.bound_port());
 
-    auto publisher_channel =
-        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
-    auto subscriber_channel =
-        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
-    auto reader_channel =
+    auto channel =
         grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
 
-    if (!wait_for_channel(publisher_channel) ||
-        !wait_for_channel(subscriber_channel) ||
-        !wait_for_channel(reader_channel)) {
+    if (!wait_for_channel(channel)) {
         server.shutdown();
-        return fail("gRPC clients failed to connect");
+        return fail("state-metric client failed to connect");
     }
 
-    auto publisher = api::DataHub::NewStub(publisher_channel);
-    auto subscriber = api::DataHub::NewStub(subscriber_channel);
-    auto reader = api::DataHub::NewStub(reader_channel);
+    auto stub = api::DataHub::NewStub(channel);
 
-    if (publish_double(
-            *publisher,
-            working_metric,
-            25.0,
-            1000) != 0) {
+    if (publish_double(*stub, working_metric, 25.0, 1000) != 0 ||
+        publish_string(*stub, state_metric, "Warning", 1100) != 0) {
         server.shutdown();
-        return fail("working metric publication failed");
-    }
-
-    if (publish_string(
-            *publisher,
-            state_metric,
-            "Warning",
-            1100) != 0) {
-        server.shutdown();
-        return fail("state metric publication failed");
-    }
-
-    api::GetCurrentRequest working_get;
-    working_get.mutable_metric_id()->set_value(std::string(working_metric));
-
-    api::GetCurrentResponse working_response;
-    grpc::ClientContext working_context;
-
-    const auto working_status = reader->GetCurrent(
-        &working_context,
-        working_get,
-        &working_response);
-
-    if (!working_status.ok() ||
-        !working_response.has_sample() ||
-        working_response.sample().metric_id().value() != working_metric ||
-        working_response.sample().value().kind_case() !=
-            api::MetricValue::kDoubleValue ||
-        working_response.sample().value().double_value() != 25.0) {
-        server.shutdown();
-        return fail("working metric GetCurrent result is invalid");
+        return fail("working/state metric publication failed");
     }
 
     api::GetCurrentRequest state_get;
@@ -198,14 +195,13 @@ int test_working_and_state_metrics_over_grpc() {
     api::GetCurrentResponse state_response;
     grpc::ClientContext state_context;
 
-    const auto state_status = reader->GetCurrent(
+    const auto state_status = stub->GetCurrent(
         &state_context,
         state_get,
         &state_response);
 
     if (!state_status.ok() ||
         !state_response.has_sample() ||
-        state_response.sample().metric_id().value() != state_metric ||
         state_response.sample().value().kind_case() !=
             api::MetricValue::kStringValue ||
         state_response.sample().value().string_value() != "Warning") {
@@ -213,112 +209,173 @@ int test_working_and_state_metrics_over_grpc() {
         return fail("state metric GetCurrent result is invalid");
     }
 
-    api::SubscribeRequest subscribe_request;
-    subscribe_request.add_metric_ids()->set_value(std::string(working_metric));
-    subscribe_request.add_metric_ids()->set_value(std::string(state_metric));
+    server.shutdown();
+    return 0;
+}
 
-    grpc::ClientContext subscribe_context;
-    subscribe_context.set_deadline(
-        std::chrono::system_clock::now() + std::chrono::seconds(10));
+int test_write_routing_over_grpc() {
+    namespace api = dispatcher::data_hub::v1;
+    using dispatcher::data_hub::DataHubServer;
 
-    auto stream = subscriber->Subscribe(
-        &subscribe_context,
-        subscribe_request);
+    constexpr std::string_view setpoint_metric = "AHU01.Setpoint";
 
-    api::MetricUpdate retained_working;
-    api::MetricUpdate retained_state;
+    auto provider = std::make_shared<RecordingWriteProvider>();
 
-    if (!stream->Read(&retained_working) ||
-        !stream->Read(&retained_state)) {
-        subscribe_context.TryCancel();
-        stream->Finish();
-        server.shutdown();
-        return fail("subscriber did not receive retained metric pair");
+    DataHubServer server("127.0.0.1:0");
+
+    if (!server.register_write_provider(
+            std::string(setpoint_metric),
+            provider)) {
+        return fail("write provider registration failed");
     }
 
-    if (!retained_working.has_sample() ||
-        retained_working.sample().metric_id().value() != working_metric ||
-        retained_working.sample().value().kind_case() !=
+    if (server.register_write_provider(
+            std::string(setpoint_metric),
+            std::make_shared<RecordingWriteProvider>())) {
+        return fail("duplicate write provider registration was accepted");
+    }
+
+    if (!server.start()) {
+        return fail("write-routing test server failed to start");
+    }
+
+    const std::string target =
+        "127.0.0.1:" + std::to_string(server.bound_port());
+
+    auto channel =
+        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+
+    if (!wait_for_channel(channel)) {
+        server.shutdown();
+        return fail("write-routing client failed to connect");
+    }
+
+    auto stub = api::DataHub::NewStub(channel);
+
+    // Publish the last confirmed physical/runtime value first.
+    if (publish_double(*stub, setpoint_metric, 22.0, 1000) != 0) {
+        server.shutdown();
+        return fail("initial setpoint publication failed");
+    }
+
+    api::WriteMetricRequest write_request;
+    write_request.mutable_metric_id()->set_value(
+        std::string(setpoint_metric));
+    write_request.mutable_value()->set_double_value(24.0);
+
+    api::WriteMetricResponse write_response;
+    grpc::ClientContext write_context;
+
+    const auto write_status = stub->WriteMetric(
+        &write_context,
+        write_request,
+        &write_response);
+
+    if (!write_status.ok()) {
+        server.shutdown();
+        return fail("WriteMetric RPC failed");
+    }
+
+    if (provider->request_count() != 1) {
+        server.shutdown();
+        return fail("write provider did not receive exactly one request");
+    }
+
+    const auto received = provider->last_request();
+
+    if (!received.has_metric_id() ||
+        received.metric_id().value() != setpoint_metric ||
+        !received.has_value() ||
+        received.value().kind_case() != api::MetricValue::kDoubleValue ||
+        received.value().double_value() != 24.0) {
+        server.shutdown();
+        return fail("write provider received an unexpected request");
+    }
+
+    // WriteMetric is a control request, not confirmation of the actual value.
+    // Data Hub must keep the last published current value until a source
+    // publishes a new confirmed value.
+    api::GetCurrentRequest current_request;
+    current_request.mutable_metric_id()->set_value(
+        std::string(setpoint_metric));
+
+    api::GetCurrentResponse current_response;
+    grpc::ClientContext current_context;
+
+    const auto current_status = stub->GetCurrent(
+        &current_context,
+        current_request,
+        &current_response);
+
+    if (!current_status.ok() ||
+        !current_response.has_sample() ||
+        current_response.sample().value().kind_case() !=
             api::MetricValue::kDoubleValue ||
-        retained_working.sample().value().double_value() != 25.0) {
-        subscribe_context.TryCancel();
-        stream->Finish();
+        current_response.sample().value().double_value() != 22.0) {
         server.shutdown();
-        return fail("retained working metric is invalid");
+        return fail("WriteMetric incorrectly changed the current value");
     }
 
-    if (!retained_state.has_sample() ||
-        retained_state.sample().metric_id().value() != state_metric ||
-        retained_state.sample().value().kind_case() !=
-            api::MetricValue::kStringValue ||
-        retained_state.sample().value().string_value() != "Warning") {
-        subscribe_context.TryCancel();
-        stream->Finish();
+    api::WriteMetricRequest unowned_request;
+    unowned_request.mutable_metric_id()->set_value("AHU01.Unowned");
+    unowned_request.mutable_value()->set_bool_value(true);
+
+    api::WriteMetricResponse unowned_response;
+    grpc::ClientContext unowned_context;
+
+    const auto unowned_status = stub->WriteMetric(
+        &unowned_context,
+        unowned_request,
+        &unowned_response);
+
+    if (unowned_status.error_code() != grpc::StatusCode::NOT_FOUND) {
         server.shutdown();
-        return fail("retained state metric is invalid");
+        return fail("unowned metric did not return NOT_FOUND");
     }
 
-    if (publish_double(
-            *publisher,
-            working_metric,
-            26.0,
-            2000) != 0) {
-        subscribe_context.TryCancel();
-        stream->Finish();
+    api::WriteMetricRequest invalid_request;
+    invalid_request.mutable_metric_id()->set_value(
+        std::string(setpoint_metric));
+
+    api::WriteMetricResponse invalid_response;
+    grpc::ClientContext invalid_context;
+
+    const auto invalid_status = stub->WriteMetric(
+        &invalid_context,
+        invalid_request,
+        &invalid_response);
+
+    if (invalid_status.error_code() != grpc::StatusCode::INVALID_ARGUMENT) {
         server.shutdown();
-        return fail("live working metric publication failed");
+        return fail("invalid write request did not return INVALID_ARGUMENT");
     }
 
-    if (publish_string(
-            *publisher,
-            state_metric,
-            "Alarm",
-            2100) != 0) {
-        subscribe_context.TryCancel();
-        stream->Finish();
+    auto rejecting_provider =
+        std::make_shared<RecordingWriteProvider>(false);
+
+    if (!server.register_write_provider(
+            "AHU01.Rejected",
+            rejecting_provider)) {
         server.shutdown();
-        return fail("live state metric publication failed");
+        return fail("rejecting provider registration failed");
     }
 
-    api::MetricUpdate live_working;
-    api::MetricUpdate live_state;
+    api::WriteMetricRequest rejected_request;
+    rejected_request.mutable_metric_id()->set_value("AHU01.Rejected");
+    rejected_request.mutable_value()->set_bool_value(true);
 
-    if (!stream->Read(&live_working) ||
-        !stream->Read(&live_state)) {
-        subscribe_context.TryCancel();
-        stream->Finish();
+    api::WriteMetricResponse rejected_response;
+    grpc::ClientContext rejected_context;
+
+    const auto rejected_status = stub->WriteMetric(
+        &rejected_context,
+        rejected_request,
+        &rejected_response);
+
+    if (rejected_status.error_code() !=
+        grpc::StatusCode::FAILED_PRECONDITION) {
         server.shutdown();
-        return fail("subscriber did not receive live metric pair");
-    }
-
-    if (!live_working.has_sample() ||
-        live_working.sample().metric_id().value() != working_metric ||
-        live_working.sample().value().kind_case() !=
-            api::MetricValue::kDoubleValue ||
-        live_working.sample().value().double_value() != 26.0) {
-        subscribe_context.TryCancel();
-        stream->Finish();
-        server.shutdown();
-        return fail("live working metric is invalid");
-    }
-
-    if (!live_state.has_sample() ||
-        live_state.sample().metric_id().value() != state_metric ||
-        live_state.sample().value().kind_case() !=
-            api::MetricValue::kStringValue ||
-        live_state.sample().value().string_value() != "Alarm") {
-        subscribe_context.TryCancel();
-        stream->Finish();
-        server.shutdown();
-        return fail("live state metric is invalid");
-    }
-
-    subscribe_context.TryCancel();
-    const auto finish_status = stream->Finish();
-
-    if (finish_status.error_code() != grpc::StatusCode::CANCELLED) {
-        server.shutdown();
-        return fail("cancelled subscription did not finish as CANCELLED");
+        return fail("provider rejection did not return FAILED_PRECONDITION");
     }
 
     server.shutdown();
@@ -336,12 +393,14 @@ int main() {
         return result;
     }
 
-    if (const auto result = test_working_and_state_metrics_over_grpc();
-        result != 0) {
+    if (const auto result = test_state_metrics_over_grpc(); result != 0) {
         return result;
     }
 
-    std::cout
-        << "Data Hub working/state metric tests passed\n";
+    if (const auto result = test_write_routing_over_grpc(); result != 0) {
+        return result;
+    }
+
+    std::cout << "Data Hub write-routing tests passed\n";
     return 0;
 }
