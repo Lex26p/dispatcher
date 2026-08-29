@@ -495,10 +495,16 @@ Sprint plan CORE-004 зафиксирован commit:
 
 Step 1 зафиксировал отдельный C++ Project Manager target, минимальную Project model (`id`, `name`, `description`), application boundary, storage port, unit tests и Linux lifecycle.
 
+`CORE-004 / Step 2` завершён commit:
+
+`1d90091ee7804d1bb8c49618a1780a226488c671`
+
+Step 2 зафиксировал локальный SQLite schema v1 и durable restart/reopen behavior без выбора общей БД платформы.
+
 Текущий шаг:
 
-**CORE-004 / Step 2 — Durable persistence baseline.**
+**CORE-004 / Step 3 — Project Manager contract и Service Hub provider.**
 
-Step 2 использует локальный SQLite adapter как внутреннее durable storage Project Manager. Это не является выбором общей БД платформы; Service Hub provider остаётся Step 3.
+Step 3 фиксирует `project-manager.v1`, create/list/get/update payload/errors и реальную provider registration/reconnect boundary. Web Project Manager остаётся Step 4.
 
 CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

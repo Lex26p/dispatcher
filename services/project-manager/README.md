@@ -6,7 +6,9 @@ Project Manager is the core service responsible for Dispatcher projects as stabl
 
 `CORE-004 / Step 1` established the domain/application boundary and standalone C++ service skeleton.
 
-`CORE-004 / Step 2` adds the first production durable storage adapter using local SQLite.
+`CORE-004 / Step 2` established the first production durable storage adapter using local SQLite.
+
+`CORE-004 / Step 3` adds the versioned Service Hub provider contract at `project-manager.v1`.
 
 The current Project model contains only:
 
@@ -49,19 +51,34 @@ A new database path is initialized automatically. A database with a schema versi
 
 The executable is:
 
-    dispatcher-project-manager [database-path]
+    dispatcher-project-manager [database-path] [service-hub-address]
 
-Default database path:
+Defaults:
 
-    dispatcher-project-manager.db
+    database-path        dispatcher-project-manager.db
+    service-hub-address  127.0.0.1:50052
 
 On startup the executable opens/initializes SQLite storage before entering the Linux signal lifecycle. If storage cannot be opened or initialized, startup fails instead of running with volatile data.
 
-Step 2 still does not listen on a network endpoint. Service Hub provider integration is added in `CORE-004 / Step 3`.
+Project Manager does not open its own server endpoint. It connects as a provider to Service Hub `/v1/ws`, requests subprotocol `dispatcher.service-hub.v1`, and registers service `project-manager.v1`. If the Hub connection is lost, the provider retries and registers again after reconnect.
+
+## Service Hub contract
+
+Project Manager v1 uses service address:
+
+    project-manager.v1
+
+Operations:
+
+- `create-project`;
+- `list-projects`;
+- `get-project`;
+- `update-project`.
+
+The full payload/error contract is documented in `docs/architecture/project-manager-contract.md`. Project-specific fields stay inside Service Hub `operation`/`payload`; the common Service Hub envelope is unchanged.
 
 ## Intentionally not implemented yet
 
-- Service Hub provider/Project Manager external contract;
 - authentication/authorization;
 - project ownership of future resources;
 - Dashboard relations;
@@ -69,23 +86,26 @@ Step 2 still does not listen on a network endpoint. Service Hub provider integra
 
 ## Dependencies
 
-On Ubuntu/WSL the Step 2 development dependency is:
+On Ubuntu/WSL the Project Manager dependencies are already aligned with existing core services:
 
     libsqlite3-dev
+    libboost-dev
+    libjson-c-dev
 
-No standalone SQLite server is required.
+SQLite remains local persistence; Boost.Beast + json-c implement the Service Hub adapter. No standalone SQLite server is required.
 
 ## Build and test in WSL
 
 From the repository root:
 
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_project_manager dispatcher_project_manager_tests dispatcher_project_manager_persistence_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_project_manager dispatcher_project_manager_tests dispatcher_project_manager_persistence_tests dispatcher_project_manager_service_hub_test_client
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^project-manager\."
 
 Current CTest checks:
 
 - `project-manager.domain-and-application`;
 - `project-manager.persistence`;
+- `project-manager.service-hub-integration`;
 - `project-manager.signal-term`;
 - `project-manager.signal-int`.

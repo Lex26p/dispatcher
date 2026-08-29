@@ -213,7 +213,13 @@ Sprint plan CORE-004 зафиксирован commit:
 
 Step 1 зафиксировал opaque stable `id`, `name`, `description`, application boundary create/list/get/update, storage port, in-memory unit tests и Linux SIGINT/SIGTERM lifecycle.
 
-Текущий шаг — `CORE-004 / Step 2 — Durable persistence baseline`. Для Project Manager выбирается локальный SQLite adapter с внутренним schema version 1 и restart/reopen tests. SQLite является только storage detail Project Manager, не общей БД платформы. Service Hub contract/provider остаётся Step 3.
+`CORE-004 / Step 2` завершён commit:
+
+`1d90091ee7804d1bb8c49618a1780a226488c671`
+
+Step 2 зафиксировал локальный SQLite schema v1, production repository adapter и restart/reopen tests. SQLite является storage detail Project Manager, не общей БД платформы.
+
+Текущий шаг — `CORE-004 / Step 3 — Project Manager contract и Service Hub provider`: service `project-manager.v1`, create/list/get/update contract, provider-specific `project.*` errors, real Service Hub registration и reconnect. Web список/редактор остаётся Step 4.
 
 ## Рабочий процесс
 

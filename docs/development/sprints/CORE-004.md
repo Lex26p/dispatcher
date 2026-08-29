@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 1 завершён; текущий шаг — Step 2.**
+**В разработке. Step 2 завершён; текущий шаг — Step 3.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -281,6 +281,10 @@ Persistence test проверяет create/update, primary-key conflict, missing
 
 Новая WSL development dependency Step 2 — `libsqlite3-dev`. Отдельный SQLite server не требуется. Service Hub contract/provider по-прежнему остаётся Step 3.
 
+Step 2 завершён commit:
+
+`1d90091ee7804d1bb8c49618a1780a226488c671`
+
 ## Step 3 — Project Manager contract и Service Hub provider
 
 ### Что делаем
@@ -312,6 +316,27 @@ Authentication не добавляем.
 ### Результат
 
 Другой процесс или Web client может работать с Project Manager через стабильную language-independent Service Hub boundary.
+
+### Реализация Step 3
+
+Project Manager публикует versioned provider address `project-manager.v1` через существующий Service Hub v1 без изменения общего envelope.
+
+Контракт фиксируется в `docs/architecture/project-manager-contract.md` и machine-readable payload definitions `services/project-manager/protocol/dispatcher/project_manager/v1/project_manager.schema.json`.
+
+Operations v1:
+
+- `create-project`;
+- `list-projects`;
+- `get-project`;
+- `update-project`.
+
+Successful payload содержит Project (`id`, `name`, `description`) либо список проектов. Provider-specific errors используют prefix `project.`; prefix `hub.` остаётся зарезервирован Service Hub.
+
+Production adapter `ServiceHubProvider` использует Boost.Beast + `json-c`, запрашивает subprotocol `dispatcher.service-hub.v1`, регистрирует `project-manager.v1`, принимает `request`/`cancel` и отправляет обычные Service Hub `response`.
+
+При transport disconnect Project Manager сохраняет process/SQLite state, выполняет bounded retry loop, создаёт новое WebSocket connection и повторно регистрирует provider route. SIGINT/SIGTERM останавливает retry loop через общий application lifecycle.
+
+CTest `project-manager.service-hub-integration` запускает реальные процессы Service Hub и Project Manager, проверяет create/list/get/update, invalid payload/domain error, несколько одновременно активных requests, затем перезапускает Service Hub на том же порту и подтверждает повторную provider registration и доступ к сохранённому проекту. Production Project Manager не линкуется с внутренним C++ API Service Hub.
 
 ## Step 4 — Web Project Manager: список и редактор
 

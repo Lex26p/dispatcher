@@ -39,15 +39,13 @@ public:
         }
 
         int signal_number = 0;
-
         if (sigwait(&wait_set_, &signal_number) != 0) {
             return std::nullopt;
         }
-
         return signal_number;
     }
 
-    [[nodiscard]] static std::string_view name(int signal_number) noexcept {
+    [[nodiscard]] static std::string_view name(const int signal_number) noexcept {
         switch (signal_number) {
         case SIGINT:
             return "SIGINT";
@@ -66,7 +64,11 @@ private:
 
 }  // namespace
 
-int Application::run(std::ostream& output) const {
+int Application::run(
+    std::ostream& output,
+    ProjectServiceProvider& provider,
+    const std::string_view database_path,
+    const std::string_view service_hub_address) const {
     const ShutdownSignalWaiter shutdown_signal;
 
     if (!shutdown_signal.ready()) {
@@ -74,8 +76,15 @@ int Application::run(std::ostream& output) const {
         return 1;
     }
 
+    if (!provider.start()) {
+        output << "Failed to start Dispatcher Project Manager Service Hub provider\n";
+        return 1;
+    }
+
     output << "Dispatcher Project Manager started"
-           << " (SQLite persistence ready; Service Hub provider not configured)\n";
+           << " (SQLite " << database_path
+           << "; Service Hub provider project-manager.v1 -> "
+           << service_hub_address << ")\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();
@@ -83,14 +92,18 @@ int Application::run(std::ostream& output) const {
     if (!signal_number.has_value()) {
         output << "Failed to wait for Dispatcher Project Manager shutdown signal\n";
         output.flush();
+        provider.stop();
         return 1;
     }
 
     output << "Dispatcher Project Manager shutdown requested by "
            << ShutdownSignalWaiter::name(*signal_number) << '\n';
-    output << "Dispatcher Project Manager stopped\n";
     output.flush();
 
+    provider.stop();
+
+    output << "Dispatcher Project Manager stopped\n";
+    output.flush();
     return 0;
 }
 
