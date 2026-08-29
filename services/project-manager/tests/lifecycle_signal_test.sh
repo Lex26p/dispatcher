@@ -6,6 +6,8 @@ signal_name="${2:?signal name is required}"
 signal_label="${3:?signal label is required}"
 
 log_file="$(mktemp)"
+storage_dir="$(mktemp -d)"
+database_path="${storage_dir}/projects.db"
 pid=""
 
 cleanup() {
@@ -15,11 +17,12 @@ cleanup() {
     fi
 
     rm -f "${log_file}"
+    rm -rf "${storage_dir}"
 }
 
 trap cleanup EXIT
 
-"${executable}" >"${log_file}" 2>&1 &
+"${executable}" "${database_path}" >"${log_file}" 2>&1 &
 pid="$!"
 
 started=0
@@ -42,6 +45,12 @@ done
 if [[ "${started}" -ne 1 ]]; then
     cat "${log_file}"
     echo "Project Manager did not report readiness" >&2
+    exit 1
+fi
+
+if [[ ! -f "${database_path}" ]]; then
+    cat "${log_file}"
+    echo "Project Manager did not initialize SQLite storage" >&2
     exit 1
 fi
 

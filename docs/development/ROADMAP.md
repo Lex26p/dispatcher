@@ -481,7 +481,7 @@ Step 6 подтвердил реальный browser → Service Hub → test pr
 
 Подробный план и критерии завершения находятся в `docs/development/sprints/CORE-004.md`.
 
-Базовая точка CORE-004:
+Базовая точка CORE-004 перед реализацией:
 
 `d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
@@ -489,10 +489,16 @@ Sprint plan CORE-004 зафиксирован commit:
 
 `d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
+`CORE-004 / Step 1` завершён commit:
+
+`172e40887fde3b5b963264904e0c4fa73225a34a`
+
+Step 1 зафиксировал отдельный C++ Project Manager target, минимальную Project model (`id`, `name`, `description`), application boundary, storage port, unit tests и Linux lifecycle.
+
 Текущий шаг:
 
-**CORE-004 / Step 1 — Project domain и backend service skeleton.**
+**CORE-004 / Step 2 — Durable persistence baseline.**
 
-Step 1 создаёт отдельный C++ Project Manager target, минимальную Project model (`id`, `name`, `description`), application boundary, storage port, unit tests и Linux lifecycle. Durable persistence выбирается только в Step 2, Service Hub provider появляется в Step 3.
+Step 2 использует локальный SQLite adapter как внутреннее durable storage Project Manager. Это не является выбором общей БД платформы; Service Hub provider остаётся Step 3.
 
 CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

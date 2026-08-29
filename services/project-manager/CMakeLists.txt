@@ -1,3 +1,4 @@
+find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
 
 add_library(dispatcher_project_manager_core STATIC
@@ -29,6 +30,36 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     )
 endif()
 
+add_library(dispatcher_project_manager_sqlite STATIC
+    src/sqlite_project_repository.cpp
+)
+
+target_include_directories(
+    dispatcher_project_manager_sqlite
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+    dispatcher_project_manager_sqlite
+    PUBLIC
+        dispatcher_project_manager_core
+    PRIVATE
+        SQLite::SQLite3
+)
+
+target_compile_features(dispatcher_project_manager_sqlite PUBLIC cxx_std_20)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        dispatcher_project_manager_sqlite
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+    )
+endif()
+
 add_executable(dispatcher_project_manager
     src/main.cpp
 )
@@ -37,6 +68,7 @@ target_link_libraries(
     dispatcher_project_manager
     PRIVATE
         dispatcher_project_manager_core
+        dispatcher_project_manager_sqlite
 )
 
 set_target_properties(
@@ -80,9 +112,39 @@ if(DISPATCHER_BUILD_TESTS)
         )
     endif()
 
+    add_executable(dispatcher_project_manager_persistence_tests
+        tests/sqlite_project_repository_test.cpp
+    )
+
+    target_link_libraries(
+        dispatcher_project_manager_persistence_tests
+        PRIVATE
+            dispatcher_project_manager_sqlite
+    )
+
+    set_target_properties(
+        dispatcher_project_manager_persistence_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-project-manager-persistence-tests"
+    )
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            dispatcher_project_manager_persistence_tests
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+        )
+    endif()
+
     add_test(
         NAME project-manager.domain-and-application
         COMMAND dispatcher_project_manager_tests
+    )
+
+    add_test(
+        NAME project-manager.persistence
+        COMMAND dispatcher_project_manager_persistence_tests
     )
 
     add_test(
@@ -107,6 +169,7 @@ if(DISPATCHER_BUILD_TESTS)
 
     set_tests_properties(
         project-manager.domain-and-application
+        project-manager.persistence
         project-manager.signal-term
         project-manager.signal-int
         PROPERTIES TIMEOUT 15

@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Sprint plan зафиксирован; текущий шаг — Step 1.**
+**В разработке. Step 1 завершён; текущий шаг — Step 2.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -225,6 +225,10 @@ Executable `dispatcher-project-manager` на этом шаге реализуе�
 
 CTest Step 1 проверяет domain/application behavior и clean shutdown по SIGINT/SIGTERM. Durable DB/file technology в Step 1 не выбрана.
 
+Step 1 завершён commit:
+
+`172e40887fde3b5b963264904e0c4fa73225a34a`
+
 ## Step 2 — Durable persistence baseline
 
 ### Что делаем
@@ -246,6 +250,36 @@ CTest Step 1 проверяет domain/application behavior и clean shutdown п
 ### Результат
 
 Project records переживают restart Project Manager, а persistence остаётся внутренней ответственностью сервиса.
+
+### Решение и реализация Step 2
+
+Для production persistence Project Manager выбирается локальный **SQLite** adapter. Это решение относится только к Project Manager и не является выбором общей БД платформы.
+
+Причины выбора:
+
+- текущая Project model — небольшой локальный metadata-набор (`id`, `name`, `description`);
+- SQLite embedded и transactional, поэтому не появляется отдельный database service/process;
+- database file остаётся внутренней деталью Project Manager и не становится межсервисным контрактом;
+- create/read/list/update и restart/reopen проверяются напрямую;
+- решение не ограничивает выбор persistence для других сервисов, Event Hub или будущей истории.
+
+Production adapter `SqliteProjectRepository` реализует существующий `ProjectRepository` port без изменения domain/application API.
+
+Внутренний schema baseline:
+
+- SQLite `PRAGMA user_version = 1`;
+- таблица `projects`;
+- `id TEXT PRIMARY KEY NOT NULL`;
+- `name TEXT NOT NULL`;
+- `description TEXT NOT NULL`.
+
+Новая database создаётся и инициализируется автоматически. Database с `user_version`, который новее поддерживаемого executable, отвергается вместо неявного downgrade. Empty/unopenable storage path приводит к startup/storage error.
+
+Executable получает optional `database-path`; default — `dispatcher-project-manager.db`. Storage открывается до входа в signal lifecycle, поэтому сервис не запускается в volatile режиме при ошибке persistence.
+
+Persistence test проверяет create/update, primary-key conflict, missing update, reopen сохранённой database, stable project ID после reopen и ошибки инициализации storage. Signal lifecycle tests используют временную SQLite database и подтверждают её создание перед clean SIGINT/SIGTERM shutdown.
+
+Новая WSL development dependency Step 2 — `libsqlite3-dev`. Отдельный SQLite server не требуется. Service Hub contract/provider по-прежнему остаётся Step 3.
 
 ## Step 3 — Project Manager contract и Service Hub provider
 

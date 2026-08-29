@@ -75,7 +75,7 @@ int Application::run(std::ostream& output) const {
     }
 
     output << "Dispatcher Project Manager started"
-           << " (Step 1 domain/storage skeleton; Service Hub provider not configured)\n";
+           << " (SQLite persistence ready; Service Hub provider not configured)\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();

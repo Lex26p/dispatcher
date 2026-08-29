@@ -207,7 +207,13 @@ Sprint plan CORE-004 зафиксирован commit:
 
 Границы CORE-004: отдельный C++ Project Manager, durable project persistence, Service Hub contract/provider, Web список/редактор и общий frontend project context. Проект остаётся плоской точкой консолидации и не владеет Dashboard/Device/другими будущими ресурсами. Users & Access/authentication остаётся CORE-005.
 
-Текущий шаг — `CORE-004 / Step 1 — Project domain и backend service skeleton`. Минимальная внутренняя модель: opaque stable `id`, `name`, `description`; application boundary create/list/get/update; storage port с in-memory test implementation; Linux SIGINT/SIGTERM lifecycle. Durable storage technology не выбирается до Step 2, Service Hub provider не добавляется до Step 3.
+`CORE-004 / Step 1` завершён commit:
+
+`172e40887fde3b5b963264904e0c4fa73225a34a`
+
+Step 1 зафиксировал opaque stable `id`, `name`, `description`, application boundary create/list/get/update, storage port, in-memory unit tests и Linux SIGINT/SIGTERM lifecycle.
+
+Текущий шаг — `CORE-004 / Step 2 — Durable persistence baseline`. Для Project Manager выбирается локальный SQLite adapter с внутренним schema version 1 и restart/reopen tests. SQLite является только storage detail Project Manager, не общей БД платформы. Service Hub contract/provider остаётся Step 3.
 
 ## Рабочий процесс
 
