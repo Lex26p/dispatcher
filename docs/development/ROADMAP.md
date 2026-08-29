@@ -448,12 +448,18 @@ Step 2 зафиксировал компактный global Header, структ
 
 Step 3 зафиксировал global menu, shell-level route `/`, unknown-route fallback и keyboard-friendly navigation без router dependency.
 
+`CORE-003 / Step 4` завершён commit:
+
+`02002f48a08cae6697b28be5e06b73864c2d9384`
+
+Step 4 зафиксировал самостоятельный TypeScript client Service Hub v1 с configurable WebSocket URL, connection state, request correlation, cancel и разделением Hub request errors / transport failures.
+
 Текущий шаг:
 
-**CORE-003 / Step 4 — TypeScript client Service Hub.**
-
-После успешной проверки и фиксации Step 4 следующим будет:
-
 **CORE-003 / Step 5 — React-интеграция Service Hub.**
+
+После успешной проверки и фиксации Step 5 следующим будет:
+
+**CORE-003 / Step 6 — Реальная browser/backend интеграция.**
 
 Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.

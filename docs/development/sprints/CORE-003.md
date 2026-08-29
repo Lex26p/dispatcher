@@ -322,6 +322,10 @@ Unit tests с fake WebSocket проверяют handshake/subprotocol, connectio
 
 Локальные Web-проверки выполняются нативно в Windows на зафиксированных Node.js 24.20.0 / npm 11.19.0; C++ backend workflow остаётся Linux/WSL.
 
+Step 4 завершён commit:
+
+`02002f48a08cae6697b28be5e06b73864c2d9384`
+
 ## Step 5 — React-интеграция Service Hub
 
 ### Что делаем
@@ -343,6 +347,25 @@ Web Shell должен запускаться даже если backend недо
 ### Результат
 
 Будущие Web-сервисы смогут использовать общую Service Hub connection вместо создания собственных WebSocket connections в каждом экране.
+
+### Реализация Step 5
+
+React application получает одну общую connection boundary поверх client Step 4:
+
+- `web/src/service-hub/ServiceHubProvider.tsx` хранит общий React context с client и текущим connection state;
+- `useServiceHub()` даёт будущим Web-экранам общий доступ к тому же client/request API без создания собственных WebSocket connections;
+- Provider подписывается на connection state, выполняет `connect()` при mount и `disconnect()` при unmount;
+- ошибка первоначального подключения не разрушает React tree: состояние остаётся/возвращается в `disconnected`, а shell продолжает работать;
+- общий `ServiceHubClient` создаётся один раз в `main.tsx`, а Provider размещается выше `StrictMode`, чтобы dev StrictMode не выполнял двойной lifecycle реального WebSocket;
+- `web/src/service-hub/serviceHubConfig.ts` использует `VITE_SERVICE_HUB_URL`, если он задан, иначе выводит same-origin URL `/v1/ws` с `ws://` для HTTP и `wss://` для HTTPS;
+- правая область global Header показывает компактный status `Service Hub` для `disconnected`, `connecting`, `connected`, `disconnecting` без кнопок и ложной пользовательской функциональности;
+- автоматическая reconnect policy, authentication и application heartbeat по-прежнему не добавляются.
+
+Unit/component tests проверяют URL resolution, lifecycle Provider, доступ shared client/state через context и отображение state в App Shell. Playwright без запущенного backend подтверждает, что production shell остаётся рабочим и явно показывает недоступный Service Hub.
+
+Реальный Service Hub, test provider и browser request/response path остаются Step 6.
+
+Новых frontend dependencies в Step 5 не требуется.
 
 ## Step 6 — Реальная browser/backend интеграция
 

@@ -114,8 +114,39 @@ a {
 }
 
 .global-actions-slot {
+  display: flex;
   min-width: 34px;
   min-height: 34px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.service-hub-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: #5b6570;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.service-hub-status__indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #7c8792;
+}
+
+.service-hub-status--connecting .service-hub-status__indicator,
+.service-hub-status--disconnecting .service-hub-status__indicator {
+  background: #a56a19;
+}
+
+.service-hub-status--connected .service-hub-status__indicator {
+  background: #2f7a4c;
 }
 
 .navigation-layer {
@@ -233,6 +264,10 @@ a {
   .global-header {
     gap: 8px;
     padding-right: 10px;
+  }
+
+  .service-hub-status {
+    font-size: 0.7rem;
   }
 
   .workspace {

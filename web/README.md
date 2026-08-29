@@ -10,7 +10,9 @@
 
 `CORE-003 / Step 3` established the first real global navigation behavior without adding a router dependency. The menu exposes only the current Web Shell workspace, uses the browser History API, provides an unknown-route fallback and supports predictable keyboard interaction.
 
-`CORE-003 / Step 4` adds a reusable TypeScript Service Hub v1 client. It is independent of React and covers the direct browser WebSocket boundary, connection state, request correlation, cancellation, Hub request errors and transport failures. React lifecycle integration starts in Step 5.
+`CORE-003 / Step 4` established a reusable TypeScript Service Hub v1 client. It is independent of React and covers the direct browser WebSocket boundary, connection state, request correlation, cancellation, Hub request errors and transport failures.
+
+`CORE-003 / Step 5` adds shared React ownership of that client: one provider controls connect/disconnect lifecycle, exposes the client and connection state through a hook, and shows a compact Service Hub connection indicator in the global Header. The shell remains usable when Service Hub is unavailable.
 
 Notifications, messages, user actions, authentication, Dashboard and future service screens are not implemented yet.
 
@@ -99,4 +101,15 @@ The client:
 - distinguishes `ServiceHubRequestError`, `ServiceHubTransportError` and connection-level `ServiceHubProtocolError`;
 - does not implement authentication, automatic reconnect or an application heartbeat.
 
-React ownership of the shared connection is added in `CORE-003 / Step 5`.
+React integration is provided by `src/service-hub/ServiceHubProvider.tsx`. `useServiceHub()` exposes the shared client and current connection state to future Web screens.
+
+## Service Hub URL configuration
+
+The shared client uses `VITE_SERVICE_HUB_URL` when it is set. Example for local development:
+
+    $env:VITE_SERVICE_HUB_URL = "ws://127.0.0.1:8090/v1/ws"
+    npm.cmd run dev -- --host 0.0.0.0
+
+When `VITE_SERVICE_HUB_URL` is not set, Web Shell derives the URL from the page origin and uses `/v1/ws`, choosing `ws://` for HTTP pages and `wss://` for HTTPS pages.
+
+Step 5 does not add automatic reconnect. A failed or closed connection returns the shared client to its disconnected state while the React application stays usable.

@@ -20,6 +20,14 @@ test('production build keeps the App Shell layout and global navigation usable',
     page.getByRole('heading', { name: 'Рабочая область' }),
   ).toBeVisible();
 
+  const serviceHubStatus = page.getByRole('status', {
+    name: 'Состояние Service Hub',
+  });
+  await expect(serviceHubStatus).toBeVisible();
+  await expect(serviceHubStatus).toContainText('Service Hub недоступен', {
+    timeout: 10_000,
+  });
+
   expect(
     await header.evaluate((element) => Math.round(element.getBoundingClientRect().height)),
   ).toBe(48);
@@ -64,6 +72,7 @@ test('production build keeps the App Shell layout and global navigation usable',
   await expect(
     page.getByRole('heading', { name: 'Рабочая область' }),
   ).toBeVisible();
+  await expect(serviceHubStatus).toBeVisible();
 
   await menuTrigger.click();
   await expect(navigation).toBeVisible();

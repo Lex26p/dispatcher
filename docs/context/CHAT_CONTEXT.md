@@ -175,11 +175,17 @@ Step 2 создал базовый App Shell: компактный global Header
 
 Step 3 добавил global menu и shell-level navigation: текущий `/` workspace, unknown-route fallback и keyboard-friendly open/close behavior без router dependency.
 
-Текущий Step 4 создаёт самостоятельный TypeScript client Service Hub v1: configurable WebSocket URL, subprotocol, connection state, request correlation, cancel и разделение Hub request errors / transport failures. React integration остаётся Step 5.
+`CORE-003 / Step 4` завершён commit:
 
-После успешного commit Step 4 следующее действие:
+`02002f48a08cae6697b28be5e06b73864c2d9384`
 
-`CORE-003 / Step 5 — React-интеграция Service Hub`.
+Step 4 создал самостоятельный TypeScript client Service Hub v1: configurable WebSocket URL, subprotocol, connection state, request correlation, cancel и разделение Hub request errors / transport failures.
+
+Текущий Step 5 связывает этот client с React lifecycle через shared Provider/context, добавляет общую URL-конфигурацию и ненавязчивый connection status в global Header. Реальный backend request/response path остаётся Step 6.
+
+После успешного commit Step 5 следующее действие:
+
+`CORE-003 / Step 6 — Реальная browser/backend интеграция`.
 
 ## Рабочий процесс
 

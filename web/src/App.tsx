@@ -5,9 +5,20 @@ import {
   useState,
 } from 'react';
 
+import type { ServiceHubConnectionState } from './service-hub/ServiceHubClient';
+import { useServiceHub } from './service-hub/ServiceHubProvider';
+
 const workspacePath = '/';
 
+const connectionStateLabels: Record<ServiceHubConnectionState, string> = {
+  disconnected: 'Service Hub недоступен',
+  connecting: 'Service Hub: подключение',
+  connected: 'Service Hub подключен',
+  disconnecting: 'Service Hub: отключение',
+};
+
 export function App() {
+  const { connectionState } = useServiceHub();
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -92,7 +103,17 @@ export function App() {
           className="global-actions-slot"
           role="group"
           aria-label="Область глобальных действий"
-        />
+        >
+          <div
+            className={`service-hub-status service-hub-status--${connectionState}`}
+            role="status"
+            aria-live="polite"
+            aria-label="Состояние Service Hub"
+          >
+            <span className="service-hub-status__indicator" aria-hidden="true" />
+            <span>{connectionStateLabels[connectionState]}</span>
+          </div>
+        </div>
       </header>
 
       {menuOpen ? (
