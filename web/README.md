@@ -4,9 +4,11 @@
 
 ## Current stage
 
-`CORE-003 / Step 1` establishes only the frontend build/test skeleton.
+`CORE-003 / Step 1` established the frontend build/test skeleton.
 
-This step does **not** implement the final App Shell layout, navigation, Service Hub client, authentication, Dashboard, or future service screens.
+`CORE-003 / Step 2` adds the first App Shell layout: a compact global Header, a reserved global-actions area and a workspace that keeps most of the viewport available to future service UIs.
+
+The main-menu trigger is intentionally disabled until Step 3 adds real navigation. Notifications, messages, user actions, Service Hub client, authentication, Dashboard and future service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -71,6 +73,6 @@ Combined unit + production build check:
 
 ## Current page
 
-The current UI is intentionally only a bootstrap page proving that React, TypeScript, production build, component testing and browser smoke testing work.
+The current UI is the base Dispatcher App Shell. It contains only the structural Header and workspace required by Step 2.
 
-The actual Dispatcher App Shell starts in `CORE-003 / Step 2`.
+Navigation behavior starts in `CORE-003 / Step 3`; the current menu trigger is visible but disabled so the shell does not expose a false working action.

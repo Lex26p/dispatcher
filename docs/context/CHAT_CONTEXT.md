@@ -157,11 +157,17 @@ Plan `CORE-003` зафиксирован commit:
 
 `12f0fd374e515d47aa8289f476ff233cc69d201c`
 
-Текущий Step 1 создаёт `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Testing Library и Playwright browser smoke. Router, state manager, UI kit и Service Hub client на этом шаге не добавляются.
+`CORE-003 / Step 1` завершён commit:
 
-После успешного commit Step 1 следующее действие:
+`f974baa578ad310cbcd3403836d47fc2a32ec7d8`
 
-`CORE-003 / Step 2 — Базовый App Shell layout`.
+Step 1 создал `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Testing Library, reproducible `package-lock.json` и Playwright browser smoke.
+
+Текущий Step 2 создаёт базовый App Shell: компактный global Header, menu trigger, резерв будущих global actions и рабочую область. Реальная навигация, Service Hub client и предметные service screens на этом шаге не добавляются.
+
+После успешного commit Step 2 следующее действие:
+
+`CORE-003 / Step 3 — Глобальная навигация`.
 
 ## Рабочий процесс
 

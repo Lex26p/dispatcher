@@ -177,6 +177,10 @@ Step 1 включает:
 
 State manager, router, UI kit и Service Hub client в Step 1 не добавляются.
 
+Step 1 завершён commit:
+
+`f974baa578ad310cbcd3403836d47fc2a32ec7d8`
+
 ## Step 2 — Базовый App Shell layout
 
 ### Что делаем
@@ -198,6 +202,22 @@ Shell должен нормально вести себя как минимум 
 ### Результат
 
 Существует узнаваемая базовая оболочка «Диспетчера», пригодная для размещения следующих Web-сервисов.
+
+### Реализация Step 2
+
+Bootstrap-screen Step 1 заменяется базовым App Shell:
+
+- компактный global Header высотой 48 px;
+- слева находится узнаваемый menu trigger и название «Диспетчер»;
+- menu trigger намеренно disabled до Step 3, чтобы не изображать несуществующую навигацию работающей;
+- справа резервируется пустая структурная область будущих глобальных действий без Event Manager/messages/user functionality;
+- основную площадь занимает самостоятельная рабочая область;
+- layout не создаёт Footer, service-specific panels, Dashboard или editor chrome;
+- узкий viewport проверяется browser smoke test и не должен создавать горизонтальный overflow.
+
+Component test подтверждает структуру Header/workspace и отсутствие дополнительных action buttons. Playwright проверяет production build на desktop и узком viewport.
+
+Дополнительно `*.tsbuildinfo` фиксируется как generated build artifact и исключается из дальнейшего version control.
 
 ## Step 3 — Глобальная навигация
 

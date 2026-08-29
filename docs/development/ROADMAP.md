@@ -430,14 +430,18 @@ Plan `CORE-003` зафиксирован commit:
 
 `12f0fd374e515d47aa8289f476ff233cc69d201c`
 
+`CORE-003 / Step 1` завершён commit:
+
+`f974baa578ad310cbcd3403836d47fc2a32ec7d8`
+
+Step 1 зафиксировал `web/`, React + TypeScript toolchain, reproducible npm lockfile, component test и Playwright browser smoke.
+
 Текущий шаг:
 
-**CORE-003 / Step 1 — Frontend-каркас и build/test toolchain.**
-
-В Step 1 фиксируется `web/` и минимальный React + TypeScript toolchain с production build, component test и browser smoke.
-
-После успешной проверки и фиксации Step 1 следующим будет:
-
 **CORE-003 / Step 2 — Базовый App Shell layout.**
+
+После успешной проверки и фиксации Step 2 следующим будет:
+
+**CORE-003 / Step 3 — Глобальная навигация.**
 
 Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.
