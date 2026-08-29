@@ -193,7 +193,7 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-005 — Users & Access
 
-**Статус:** планирование.
+**Статус:** в разработке.
 
 **Цель:** добавить пользовательский контекст и контроль доступа.
 
@@ -432,16 +432,14 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 `CORE-004` дал отдельный C++ Project Manager, durable local SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared browser-session project context и реальную browser → Service Hub → Project Manager → SQLite restart-recovery integration.
 
-Текущий планируемый спринт:
+Текущий спринт:
 
 **CORE-005 — Users & Access.**
 
-Цель roadmap для CORE-005: backend и Web выполняют действия в authenticated user context и проверяют права просмотра, управления, редактирования и администрирования, включая режим управления.
+Plan commit проверен:
 
-Подробный план и критерии завершения:
+`d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-`docs/development/sprints/CORE-005.md`
-
-Plan commit должен быть зафиксирован отдельным SHA поверх closure baseline `29b1f0ea750633cc53cc4e023585835d2b06ad8b` и проверен в репозитории до начала Step 1.
+Текущий шаг — `Step 1 — Users & Access domain и backend skeleton`: отдельный C++ service target, stable user identity, independent `view/control/edit/admin` capabilities, permission sets, global/project assignments, deterministic union-based effective permissions, repository port, unit tests и Linux lifecycle. Durable credentials/storage, authentication/session contract, authenticated Service Hub boundary, Project Manager enforcement и Web остаются последующими шагами.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

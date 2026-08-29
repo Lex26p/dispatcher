@@ -179,15 +179,19 @@ Closure CORE-004:
 
 CORE-004 даёт отдельный C++ Project Manager, local durable SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared frontend project context и реальный browser/backend restart-recovery acceptance path. Проект не владеет будущими Dashboard/Device/resources; auth/ACL не имитировались.
 
-Текущий планируемый спринт — `CORE-005 — Users & Access`.
+Текущий спринт — `CORE-005 — Users & Access`.
 
 План: `docs/development/sprints/CORE-005.md`.
+
+Plan commit проверен:
+
+`d05cba25981599baaeadd9ad452d1f68dbabd834`.
 
 CORE-005 должен дать stable user identity, durable users/access configuration, local authentication/session boundary, согласованный authenticated Service Hub request path, backend-authoritative Project Manager access, Web login/current-user/access administration и control-mode baseline. Первый sprint реально применяет global + project scope; Device/Dashboard-specific ACL, external IdP/MFA и Event Hub audit publication не имитируются.
 
 Exact credential hashing dependency, session/token representation и Service Hub auth representation выбираются только на соответствующих шагах плана.
 
-До проверки отдельного CORE-005 plan commit реализация Step 1 не начинается.
+Текущий шаг — `CORE-005 / Step 1 — Users & Access domain и backend skeleton`. Step 1 фиксирует stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC ещё не добавляются. Durable credentials/storage, Service Hub auth и Web не входят в Step 1.
 
 ## Рабочий процесс
 

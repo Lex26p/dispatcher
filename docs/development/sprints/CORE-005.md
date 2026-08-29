@@ -2,7 +2,7 @@
 
 ## Статус
 
-**План спринта. Реализация не начата.**
+**В разработке. Plan commit проверен; текущий шаг — Step 1.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -12,7 +12,11 @@
 
 Это documentation-closure commit завершённого `CORE-004 — Project Manager`.
 
-После фиксации этого плана отдельным commit его SHA должен быть проверен в репозитории. Только после этого начинается Step 1.
+Plan commit зафиксирован и проверен в репозитории:
+
+`d05cba25981599baaeadd9ad452d1f68dbabd834`
+
+Текущий шаг — `Step 1 — Users & Access domain и backend skeleton`.
 
 ## Цель
 
@@ -321,6 +325,33 @@ Users, credential verifiers, permission sets, assignments и необходим�
 ### Результат
 
 Существует отдельно тестируемая Users & Access domain boundary без придуманного transport/security token format.
+
+### Решение и реализация Step 1
+
+Step 1 создаёт новый `services/users-access/` с отдельными CMake targets `dispatcher_users_access_core`, `dispatcher_users_access` и `dispatcher_users_access_tests`. Production executable на этом шаге не открывает network endpoint и не регистрируется в Service Hub; он подтверждает только самостоятельный Linux lifecycle.
+
+Минимальная модель Step 1:
+
+- `User`: stable opaque `id`, `login`, `display_name`, `enabled`;
+- capabilities имеют machine-readable names `view`, `control`, `edit`, `admin`;
+- capability names независимы: скрытой иерархии `admin => edit => control => view` нет;
+- `PermissionSet` имеет stable opaque ID, имя и набор capabilities;
+- `AccessAssignment` связывает user + permission set + один explicit scope;
+- реально поддерживаются только `global` и `project(project_id)` scopes;
+- explicit deny, nested groups/roles, tenant hierarchy, ABAC и будущие Device/Dashboard scopes не добавляются.
+
+Effective-permission semantics детерминированы:
+
+1. disabled user всегда получает deny и пустой effective set;
+2. global assignments участвуют как в global, так и в project evaluation;
+3. project assignment участвует только для exact matching project ID;
+4. effective capabilities являются union всех matching permission sets;
+5. project assignment не даёт global capability;
+6. missing user/invalid scope/storage inconsistency возвращают evaluation error, а не fail-open.
+
+`UsersAccessRepository` является внутренним storage port сервиса. In-memory implementation существует только в unit tests; production persistence, credential verifier, bootstrap, authentication/session contract и token representation Step 1 сознательно не выбирает.
+
+Unit tests покрывают stable identity, login conflict/validation, canonical permission sets, global/project union semantics, отсутствие implicit capability hierarchy, disabled-user deny, invalid/missing subject behavior и assignment validation/conflict. Lifecycle tests проверяют clean SIGTERM/SIGINT.
 
 ## Step 2 — Durable users/access storage, credentials и bootstrap
 
