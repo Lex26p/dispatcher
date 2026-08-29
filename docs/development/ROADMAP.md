@@ -444,10 +444,16 @@ Step 3 реализовал provider registry и внутреннюю табли
 
 Step 4 реализовал реальный WebSocket request/response маршрут через независимые client и provider connections.
 
+`CORE-002 / Step 5` завершён commit:
+
+`67010fcff69e243f18c21d7909979580cb4d82dc`
+
+Step 5 реализовал параллельные requests, out-of-order correlation, client-local request ID namespaces и общий deadline monitor.
+
 Текущий шаг:
 
-**CORE-002 / Step 5 — Correlation и параллельные запросы.**
-
-После успешной проверки и фиксации Step 5 следующим будет:
-
 **CORE-002 / Step 6 — Клиентская граница для Web Shell.**
+
+После успешной проверки и фиксации Step 6 следующим будет:
+
+**CORE-002 / Step 7 — Lifecycle, ошибки и переподключение.**

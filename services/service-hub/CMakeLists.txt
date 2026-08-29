@@ -167,6 +167,45 @@ if(DISPATCHER_BUILD_TESTS)
         )
     endif()
 
+    add_executable(dispatcher_service_hub_browser_boundary_tests
+        tests/browser_boundary_test.cpp
+    )
+
+    target_include_directories(
+        dispatcher_service_hub_browser_boundary_tests
+        PRIVATE
+            ${SERVICE_HUB_BOOST_INCLUDE_DIR}
+    )
+
+    target_link_libraries(
+        dispatcher_service_hub_browser_boundary_tests
+        PRIVATE
+            dispatcher_service_hub_core
+            Threads::Threads
+            PkgConfig::SERVICE_HUB_JSONC
+    )
+
+    target_compile_definitions(
+        dispatcher_service_hub_browser_boundary_tests
+        PRIVATE
+            BOOST_ERROR_CODE_HEADER_ONLY
+    )
+
+    set_target_properties(
+        dispatcher_service_hub_browser_boundary_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-service-hub-browser-boundary-tests"
+    )
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            dispatcher_service_hub_browser_boundary_tests
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+        )
+    endif()
+
     add_test(
         NAME service-hub.application
         COMMAND dispatcher_service_hub_tests
@@ -182,10 +221,16 @@ if(DISPATCHER_BUILD_TESTS)
         COMMAND dispatcher_service_hub_request_response_tests
     )
 
+    add_test(
+        NAME service-hub.browser-boundary
+        COMMAND dispatcher_service_hub_browser_boundary_tests
+    )
+
     set_tests_properties(
         service-hub.application
         service-hub.provider-registry
         service-hub.request-response
+        service-hub.browser-boundary
         PROPERTIES TIMEOUT 15
     )
 endif()

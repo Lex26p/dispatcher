@@ -286,6 +286,10 @@ Service Hub не создаёт отдельный worker thread на кажды
 
 Полный client cancellation и provider-disconnect/reconnect lifecycle остаются Step 7.
 
+Step 5 завершён commit:
+
+`67010fcff69e243f18c21d7909979580cb4d82dc`
+
 ## Step 6 — Клиентская граница для Web Shell
 
 ### Что делаем
@@ -304,6 +308,30 @@ Web-клиент не должен получать прямой доступ к
 ### Результат
 
 У `CORE-003` есть конкретная рабочая точка входа в backend через Service Hub, а не только архитектурное обещание.
+
+### Реализация Step 6
+
+Отдельный gateway не требуется: Service Hub v1 уже является напрямую browser-compatible WebSocket boundary.
+
+Добавляется CTest `service-hub.browser-boundary`, который использует реальный loopback Service Hub и проверяет browser-shaped connection:
+
+- стандартный WebSocket Upgrade;
+- `Origin` header;
+- subprotocol `dispatcher.service-hub.v1`;
+- отсутствие custom application HTTP headers;
+- явное согласование subprotocol сервером;
+- JSON request/response через зарегистрированный test provider.
+
+Этим подтверждается конкретная точка входа будущего Web Shell:
+
+```typescript
+const socket = new WebSocket(
+  serviceHubUrl,
+  "dispatcher.service-hub.v1"
+);
+```
+
+React-приложение, authentication, production Origin policy и TLS в Step 6 не добавляются.
 
 ## Step 7 — Lifecycle, ошибки и переподключение
 

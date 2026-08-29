@@ -148,11 +148,13 @@ Step 3 реализовал `ProviderRegistry` и routing table.
 
 Step 4 реализовал реальный WebSocket request/response путь через test provider. Внутренняя JSON implementation использует `json-c`.
 
-Текущий Step 5 добавляет несколько одновременно активных requests, out-of-order responses, client-local request ID namespaces и единый timeout/correlation механизм без отдельного thread на каждый request.
+Step 5 реализовал несколько одновременно активных requests, out-of-order responses, client-local request ID namespaces и единый timeout/correlation механизм без отдельного thread на каждый request.
 
-После успешного commit Step 5 следующее действие:
+Текущий Step 6 подтверждает прямую browser-facing WebSocket boundary: `Origin` + стандартный browser WebSocket handshake + subprotocol `dispatcher.service-hub.v1`, без отдельного gateway и custom application headers.
 
-`CORE-002 / Step 6 — Клиентская граница для Web Shell`.
+После успешного commit Step 6 следующее действие:
+
+`CORE-002 / Step 7 — Lifecycle, ошибки и переподключение`.
 
 ## Рабочий процесс
 

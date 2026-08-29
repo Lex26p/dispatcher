@@ -432,6 +432,32 @@ Production deployment может использовать `wss://` и reverse pr
 
 Конкретная authentication/origin/TLS policy не определяется `CORE-002 / Step 2`.
 
+### Проверка browser boundary в CORE-002 / Step 6
+
+Прямая browser-facing граница подтверждается отдельным integration test.
+
+Тест открывает WebSocket-соединение в форме, доступной обычному Web-приложению:
+
+- endpoint `/v1/ws`;
+- subprotocol `dispatcher.service-hub.v1`;
+- стандартный `Origin` header;
+- без custom application HTTP headers.
+
+Service Hub должен вернуть `101 Switching Protocols` и явно выбрать subprotocol `dispatcher.service-hub.v1`, после чего через то же соединение выполняется реальный JSON request/response к test provider.
+
+Таким образом, для `CORE-003 — Web Shell` рабочая точка входа уже определена:
+
+```typescript
+const socket = new WebSocket(
+  serviceHubUrl,
+  "dispatcher.service-hub.v1"
+);
+```
+
+Отдельный обязательный gateway между браузером и Service Hub не требуется.
+
+Production Origin policy, authentication и `wss://`/TLS остаются отдельными будущими решениями.
+
 ## Security boundary
 
 `CORE-002` определяет routing transport, но не authentication/authorization.

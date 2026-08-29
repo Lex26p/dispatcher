@@ -4,9 +4,9 @@ Service Hub is the addressable request/response service of Dispatcher.
 
 ## Current implementation stage
 
-`CORE-002 / Step 5` completes the first parallel request-correlation model.
+`CORE-002 / Step 6` confirms the direct browser-facing boundary required by the future Web Shell.
 
-The external v1 WebSocket + UTF-8 JSON contract remains unchanged.
+The external v1 WebSocket + UTF-8 JSON contract remains unchanged. No HTTP/gRPC-Web gateway is added.
 
 ## Implemented
 
@@ -20,59 +20,50 @@ Current implementation includes:
 - required WebSocket subprotocol `dispatcher.service-hub.v1`;
 - UTF-8 JSON text messages;
 - provider registration over a real WebSocket connection;
-- client requests over independent WebSocket connections;
-- routing by `service`;
-- Hub-generated provider request IDs (`hub-*`);
-- restoration of the original client request ID in returned responses;
-- opaque JSON payload forwarding;
-- success and provider error response forwarding;
-- multiple simultaneously active requests on one client connection;
-- out-of-order provider responses without response mix-ups;
-- independent client request-ID namespaces per client connection;
-- a global pending-correlation table instead of one worker thread per request;
-- one timeout monitor for active request deadlines;
-- basic unknown-service/invalid-request handling required by the route.
+- request/response routing through independent client/provider connections;
+- parallel request correlation and out-of-order responses;
+- client-local request ID namespaces;
+- timeout handling through one shared deadline monitor;
+- direct browser-compatible WebSocket entry point verified by a dedicated integration test.
 
-## Correlation model
+## Browser/Web Shell boundary
 
-A client request ID is unique only among active requests of that client connection.
+The future Web Shell connects directly with the standard browser WebSocket API:
 
-Service Hub creates a separate provider-scoped ID:
+    const socket = new WebSocket(
+      "ws://host:port/v1/ws",
+      "dispatcher.service-hub.v1"
+    );
 
-    client connection A + req-42 -> hub-1
-    client connection B + req-42 -> hub-2
+No custom HTTP request headers are required by CORE-002.
 
-The provider therefore never sees conflicting client-local IDs.
+The Step 6 integration test uses a browser-shaped handshake:
 
-When a provider response arrives, Service Hub:
+- standard WebSocket Upgrade request;
+- `Origin` header like a development Web application;
+- `Sec-WebSocket-Protocol: dispatcher.service-hub.v1`;
+- no custom authentication or application HTTP headers;
+- normal masked WebSocket client frames;
+- UTF-8 JSON application messages.
 
-1. resolves its `hub-*` ID in the global pending table;
-2. identifies the original client session;
-3. restores the original client request ID;
-4. queues the response to that client session.
+The test verifies that Service Hub:
 
-Each client session owns its WebSocket reads and writes. Completion from another thread does not write directly to the WebSocket; it only appends to the session outbound queue. This keeps WebSocket I/O serialized.
+1. accepts the connection;
+2. returns `101 Switching Protocols`;
+3. explicitly negotiates `dispatcher.service-hub.v1`;
+4. accepts a JSON request from that connection;
+5. routes it through a registered provider;
+6. returns the response with the original browser-client request ID.
 
-## Parallel behavior verified in Step 5
+This proves the concrete transport boundary required by `CORE-003 — Web Shell` without creating the React application early.
 
-The network test now covers:
+## Security note
 
-1. normal single request/response routing;
-2. two requests active at the same time on one client connection;
-3. provider replies in reverse order and each response returns to the correct request ID;
-4. one request reaches `hub.timeout` while another request on the same connection succeeds first;
-5. two different client connections use the same client request ID simultaneously and receive their own responses;
-6. provider-scoped IDs remain different in that case.
+CORE-002 does not define production Origin policy, authentication tokens or TLS.
 
-This is the required Step 5 correlation behavior.
+A development-style `Origin` is accepted because those policies belong to future security/deployment work. The application protocol does not require browser-incompatible custom headers.
 
-## Timeout model
-
-Requests are stored in one global pending table.
-
-A single timeout-monitor thread expires armed entries and queues `hub.timeout` back to the corresponding client. Service Hub does not create one operating-system thread per request.
-
-Provider-side best-effort `cancel` for expired requests is still deferred to Step 7 as planned.
+Production deployment may use `wss://` and a reverse proxy without changing the Service Hub v1 application messages.
 
 ## Internal JSON implementation
 
@@ -82,17 +73,18 @@ The current implementation uses `json-c` internally for parsing and serializatio
 
 ## Not implemented yet
 
-Step 5 intentionally does not complete:
+Step 6 intentionally does not complete:
 
 - client `cancel`;
 - best-effort provider cancel;
 - complete provider-disconnect handling for active requests;
 - provider reconnect integration tests;
-- browser/Web Shell integration test;
 - final lifecycle/signal handling;
-- authentication or authorization.
+- authentication or authorization;
+- production Origin/TLS policy;
+- the React Web Shell itself.
 
-The next step is `CORE-002 / Step 6 — Клиентская граница для Web Shell`.
+The next step is `CORE-002 / Step 7 — Lifecycle, ошибки и переподключение`.
 
 ## Dependencies
 
@@ -111,13 +103,12 @@ On Ubuntu/WSL the development packages are typically:
 
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests dispatcher_service_hub_request_response_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests dispatcher_service_hub_request_response_tests dispatcher_service_hub_browser_boundary_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^service-hub\."
 
 Current CTest checks:
 
 - `service-hub.application`;
 - `service-hub.provider-registry`;
-- `service-hub.request-response`.
-
-The last test includes both the basic route and the Step 5 parallel-correlation scenarios.
+- `service-hub.request-response`;
+- `service-hub.browser-boundary`.
