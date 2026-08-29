@@ -1,9 +1,12 @@
 #pragma once
 
 #include "dispatcher/data_hub/current_value_store.hpp"
+#include "dispatcher/data_hub/subscription_manager.hpp"
 #include "dispatcher/data_hub/v1/data_hub.grpc.pb.h"
 
 #include <grpcpp/grpcpp.h>
+
+#include <mutex>
 
 namespace dispatcher::data_hub {
 
@@ -33,6 +36,11 @@ public:
 
 private:
     CurrentValueStore& current_values_;
+    SubscriptionManager subscriptions_;
+
+    // Serializes publication against subscription registration so retained
+    // values are queued before any later live update for a new subscriber.
+    std::mutex publish_subscription_mutex_;
 };
 
 }  // namespace dispatcher::data_hub

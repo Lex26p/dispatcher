@@ -4,7 +4,7 @@ Data Hub is the runtime service responsible for current metric values in Dispatc
 
 ## Current implementation stage
 
-`CORE-001 / Step 4` connects the current-value store to the real gRPC service boundary.
+`CORE-001 / Step 5` implements subscriptions.
 
 Implemented at this stage:
 
@@ -13,81 +13,64 @@ Implemented at this stage:
 - internal thread-safe current-value storage;
 - working `PublishMetric` RPC;
 - working `GetCurrent` RPC;
-- gRPC server listening on a configurable address;
-- transport-level tests using two independent gRPC client channels.
+- working server-streaming `Subscribe` RPC;
+- retained-like delivery of an already existing current value;
+- live delivery of later changes for explicitly subscribed metric ids;
+- isolation between subscriptions and unrelated metric updates.
 
-`Subscribe` and `WriteMetric` remain explicitly unimplemented until their planned steps.
+`WriteMetric` remains explicitly unimplemented until `CORE-001 / Step 7`.
 
-## Toolchain baseline
+## Subscription behavior
 
-- Linux is the target backend environment.
-- Local backend development uses WSL.
-- C++ standard: C++20.
-- Build system: CMake 3.20 or newer.
-- Preferred local generator: Ninja.
-- Tests are exposed through CTest.
-- Data Hub transport: gRPC.
-- Data Hub serialization/schema: Protocol Buffers proto3.
+The v1 contract subscribes to an explicit list of metric ids.
 
-## Ubuntu / WSL dependencies
+An empty list is invalid and does not mean "subscribe to everything".
 
-    sudo apt-get update
-    sudo apt-get install -y build-essential cmake ninja-build pkg-config protobuf-compiler libprotobuf-dev protobuf-compiler-grpc libgrpc++-dev
+For each requested metric that already has a current value, the new subscriber receives that value first.
 
-## Build in WSL
+After retained/current values are queued, later `PublishMetric` calls for those metric ids are delivered as live `MetricUpdate` messages.
+
+Updates for metric ids that are not part of the subscription are not delivered.
+
+The registration of a subscription is coordinated with publication so that a publish operation cannot occur between registering the subscriber and queuing its retained values. This prevents losing an update at the retained/live boundary.
+
+## Internal implementation
+
+`SubscriptionManager` tracks active subscriptions.
+
+Each `Subscription` has:
+
+- a set of metric ids;
+- its own pending-update queue;
+- a condition variable used by the synchronous gRPC streaming handler.
+
+Publishing does not write to a client socket directly. It queues the sample for matching subscribers. The individual `Subscribe` RPC handler owns its `ServerWriter` and sends queued updates from its own call thread.
+
+This keeps concurrent publishers from writing to the same gRPC stream.
+
+## Toolchain
+
+- Linux / WSL;
+- C++20;
+- CMake 3.20+;
+- Ninja;
+- gRPC;
+- Protocol Buffers proto3;
+- CTest.
+
+## Build and test in WSL
 
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
     cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
 
-## Run
+The Step 5 transport test:
 
-Default endpoint:
-
-    0.0.0.0:50051
-
-Run with the default endpoint:
-
-    "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub"
-
-Run on a custom endpoint:
-
-    "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub" 127.0.0.1:50052
-
-The process blocks while serving gRPC requests. Graceful OS-signal handling is intentionally left for `CORE-001 / Step 8`.
-
-## Step 4 RPC behavior
-
-### PublishMetric
-
-A valid sample is stored as the current value for its metric id.
-
-Invalid samples return gRPC `INVALID_ARGUMENT`.
-
-### GetCurrent
-
-Returns the last stored sample for the requested metric id.
-
-An unknown metric returns gRPC `NOT_FOUND`.
-
-### Subscribe
-
-Returns gRPC `UNIMPLEMENTED` until `CORE-001 / Step 5`.
-
-### WriteMetric
-
-Returns gRPC `UNIMPLEMENTED` until `CORE-001 / Step 7`.
-
-## Test boundary
-
-The Step 4 test starts Data Hub on `127.0.0.1:0`, allowing gRPC to choose a free local TCP port.
-
-It then creates two independent gRPC channels:
-
-- a publisher client;
-- a reader client.
-
-The publisher sends `PublishMetric`, and the reader retrieves the same sample through `GetCurrent`.
-
-This checks the real gRPC/TCP service boundary while avoiding a fixed test port.
+1. publishes `Temperature = 25`;
+2. starts a subscription to `Temperature`;
+3. verifies that the subscriber immediately receives `25`;
+4. publishes an unrelated `Pressure` value;
+5. publishes `Temperature = 26`;
+6. verifies that the next subscription update is `Temperature = 26`;
+7. cancels the stream and verifies normal cancellation behavior.
