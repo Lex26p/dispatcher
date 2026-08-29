@@ -125,7 +125,36 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_data_hub_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
+    add_executable(dispatcher_data_hub_sprint_acceptance
+        tests/sprint_acceptance_test.cpp
+    )
+
+    target_link_libraries(dispatcher_data_hub_sprint_acceptance
+        PRIVATE
+            dispatcher_data_hub_core
+    )
+
+    set_target_properties(
+        dispatcher_data_hub_sprint_acceptance
+        PROPERTIES OUTPUT_NAME "dispatcher-data-hub-sprint-acceptance"
+    )
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            dispatcher_data_hub_sprint_acceptance
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+        )
+    endif()
+
     add_test(NAME data-hub.lifecycle-and-errors COMMAND dispatcher_data_hub_tests)
+
+    add_test(
+        NAME data-hub.sprint-acceptance
+        COMMAND dispatcher_data_hub_sprint_acceptance
+    )
 
     add_test(
         NAME data-hub.signal-term
@@ -149,6 +178,7 @@ if(DISPATCHER_BUILD_TESTS)
 
     set_tests_properties(
         data-hub.lifecycle-and-errors
+        data-hub.sprint-acceptance
         data-hub.signal-term
         data-hub.signal-int
         PROPERTIES TIMEOUT 15

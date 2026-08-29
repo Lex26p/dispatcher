@@ -2,11 +2,11 @@
 
 ## Статус
 
-**Запланирован.**
+**Завершён после успешной проверки Step 9.**
 
 Этап: `L1-01 — Ядро платформы`.
 
-Этот файл является одновременно планом спринта и будущим итоговым отчётом.
+Этот файл является одновременно планом спринта и итоговым отчётом.
 
 ## Цель
 
@@ -255,24 +255,86 @@ Data Hub корректно работает как отдельный проц�
 
 # Итоговый отчёт
 
-Заполняется после завершения спринта.
-
 ## Фактически реализовано
 
-Пока не заполнено.
+- отдельный backend-сервис Data Hub на C++20;
+- сборка через CMake 3.20+ и Ninja в Linux/WSL;
+- внешний versioned-контракт `dispatcher.data_hub.v1` на gRPC + Protocol Buffers proto3;
+- `MetricId` как непрозрачный строковый идентификатор;
+- `MetricValue` с `bool`, `int64`, `uint64`, `double`, `string`, `bytes`;
+- runtime sample с source timestamp;
+- потокобезопасное хранение одного актуального значения на metric ID без истории;
+- `PublishMetric` для публикации фактического текущего значения;
+- `GetCurrent` для получения последнего опубликованного значения;
+- server-streaming `Subscribe` на явно перечисленные metric IDs;
+- retained-подобная семантика: существующее актуальное значение сначала, затем live updates;
+- state-метрики через тот же универсальный runtime-механизм без специального state store или state RPC;
+- `WriteMetric` как отдельный запрос управления, не подменяющий фактическое текущее значение;
+- внутренний `WriteRouter` и `MetricWriteProvider` для проверки доставки write request владельцу метрики;
+- базовые gRPC status-коды для некорректных и неизвестных запросов;
+- повторное подключение клиентов в пределах одного работающего процесса;
+- корректная остановка Linux-процесса по SIGINT/SIGTERM;
+- bounded graceful shutdown gRPC;
+- lifecycle-диагностика без отдельного logging framework.
 
 ## Выполненные проверки
 
-Пока не заполнено.
+Финальный commit CORE-001 создаётся только после успешного выполнения полной WSL-проверки:
+
+- чистая конфигурация CMake;
+- сборка `dispatcher_data_hub`;
+- сборка regression test target;
+- сборка отдельного sprint acceptance target;
+- `data-hub.lifecycle-and-errors`;
+- `data-hub.sprint-acceptance`;
+- `data-hub.signal-term`;
+- `data-hub.signal-int`.
+
+Отдельный `data-hub.sprint-acceptance` подтверждает согласованную цепочку спринта:
+
+1. `Temperature = 23`;
+2. `GetCurrent(Temperature) = 23`;
+3. новый Subscriber сразу получает retained `23`;
+4. после публикации `Temperature = 24` Subscriber получает `24`;
+5. `Temperature.State = Warning` публикуется обычным metric path;
+6. Subscriber получает `Temperature.State = Warning`;
+7. `GetCurrent(Temperature.State) = Warning`;
+8. `WriteMetric(Setpoint, 25)` доходит до test provider;
+9. один `WriteMetric` сам по себе не создаёт ложное factual current value для Setpoint.
+
+Regression-проверки дополнительно покрывают ошибки RPC, отключение/переподключение клиента и завершение активных subscriptions при shutdown.
 
 ## Отклонения от плана
 
-Пока не заполнено.
+Существенного расширения scope не было.
+
+В ходе реализации были сделаны два архитектурных уточнения:
+
+- для state-метрик не потребовался специальный механизм Data Hub: они являются обычными метриками, а связь рабочей метрики со state-метрикой остаётся будущей описательной ответственностью Device Manager;
+- базовый write path заканчивается внутренним `MetricWriteProvider`; отдельный межпроцессный протокол регистрации Driver Runtime намеренно не спроектирован раньше спринта Driver Runtime.
+
+В Step 8 при чистой сборке GCC 15 обнаружил most-vexing-parse в создании `DataHubServer`; ошибка была исправлена внутри того же шага до фиксации его commit SHA.
 
 ## Известные ограничения
 
-Пока не заполнено.
+- runtime current values не восстанавливаются после рестарта Data Hub;
+- исторические значения не хранятся;
+- Data Hub пока не проверяет пользователей, права и control mode;
+- Data Hub не владеет writable/read-only и другой описательной metadata метрик;
+- финальный enum state-значений не определён;
+- реальная регистрация/маршрутизация к отдельному Driver Runtime ещё не существует;
+- текущий `MetricWriteProvider` является только внутренним C++ port Data Hub;
+- gRPC сейчас использует insecure server/channel credentials, production security не входит в CORE-001;
+- очередь каждого Subscriber пока не имеет production backpressure/лимитов;
+- quality и время приёма Data Hub пока не входят в `MetricSample`;
+- production observability, clustering и HA не реализуются в этом спринте.
 
 ## Итоговый commit SHA
 
-Пока не заполнено.
+Финальным SHA `CORE-001` является SHA коммита Step 9, содержащего этот отчёт и `data-hub.sprint-acceptance`.
+
+SHA определяется Git только после создания коммита и поэтому не может быть самоссылочно записан внутрь содержимого того же коммита. После успешной проверки пользователь возвращает SHA, он проверяется в GitHub и фиксируется как финальный baseline спринта.
+
+Предыдущий подтверждённый baseline перед Step 9:
+
+`674228affae64c32949c67fd3fbfd08a70c07fd7`
