@@ -30,6 +30,7 @@ public:
     void wait();
     void shutdown();
 
+    [[nodiscard]] bool running() const noexcept;
     [[nodiscard]] int bound_port() const noexcept;
     [[nodiscard]] std::string_view listen_address() const noexcept;
 

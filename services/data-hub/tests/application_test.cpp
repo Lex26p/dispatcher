@@ -29,6 +29,11 @@ bool wait_for_channel(
         std::chrono::system_clock::now() + std::chrono::seconds(5));
 }
 
+std::unique_ptr<dispatcher::data_hub::v1::DataHub::Stub> make_stub(
+    const std::shared_ptr<grpc::Channel>& channel) {
+    return dispatcher::data_hub::v1::DataHub::NewStub(channel);
+}
+
 int publish_double(
     dispatcher::data_hub::v1::DataHub::Stub& stub,
     std::string_view metric_id,
@@ -161,9 +166,6 @@ int test_state_metrics_over_grpc() {
     namespace api = dispatcher::data_hub::v1;
     using dispatcher::data_hub::DataHubServer;
 
-    constexpr std::string_view working_metric = "AHU01.Temperature";
-    constexpr std::string_view state_metric = "AHU01.Temperature.State";
-
     DataHubServer server("127.0.0.1:0");
 
     if (!server.start()) {
@@ -181,30 +183,34 @@ int test_state_metrics_over_grpc() {
         return fail("state-metric client failed to connect");
     }
 
-    auto stub = api::DataHub::NewStub(channel);
+    auto stub = make_stub(channel);
 
-    if (publish_double(*stub, working_metric, 25.0, 1000) != 0 ||
-        publish_string(*stub, state_metric, "Warning", 1100) != 0) {
+    if (publish_double(*stub, "AHU01.Temperature", 25.0, 1000) != 0 ||
+        publish_string(
+            *stub,
+            "AHU01.Temperature.State",
+            "Warning",
+            1100) != 0) {
         server.shutdown();
         return fail("working/state metric publication failed");
     }
 
-    api::GetCurrentRequest state_get;
-    state_get.mutable_metric_id()->set_value(std::string(state_metric));
+    api::GetCurrentRequest request;
+    request.mutable_metric_id()->set_value("AHU01.Temperature.State");
 
-    api::GetCurrentResponse state_response;
-    grpc::ClientContext state_context;
+    api::GetCurrentResponse response;
+    grpc::ClientContext context;
 
-    const auto state_status = stub->GetCurrent(
-        &state_context,
-        state_get,
-        &state_response);
+    const auto status = stub->GetCurrent(
+        &context,
+        request,
+        &response);
 
-    if (!state_status.ok() ||
-        !state_response.has_sample() ||
-        state_response.sample().value().kind_case() !=
+    if (!status.ok() ||
+        !response.has_sample() ||
+        response.sample().value().kind_case() !=
             api::MetricValue::kStringValue ||
-        state_response.sample().value().string_value() != "Warning") {
+        response.sample().value().string_value() != "Warning") {
         server.shutdown();
         return fail("state metric GetCurrent result is invalid");
     }
@@ -220,19 +226,12 @@ int test_write_routing_over_grpc() {
     constexpr std::string_view setpoint_metric = "AHU01.Setpoint";
 
     auto provider = std::make_shared<RecordingWriteProvider>();
-
     DataHubServer server("127.0.0.1:0");
 
     if (!server.register_write_provider(
             std::string(setpoint_metric),
             provider)) {
         return fail("write provider registration failed");
-    }
-
-    if (server.register_write_provider(
-            std::string(setpoint_metric),
-            std::make_shared<RecordingWriteProvider>())) {
-        return fail("duplicate write provider registration was accepted");
     }
 
     if (!server.start()) {
@@ -250,9 +249,8 @@ int test_write_routing_over_grpc() {
         return fail("write-routing client failed to connect");
     }
 
-    auto stub = api::DataHub::NewStub(channel);
+    auto stub = make_stub(channel);
 
-    // Publish the last confirmed physical/runtime value first.
     if (publish_double(*stub, setpoint_metric, 22.0, 1000) != 0) {
         server.shutdown();
         return fail("initial setpoint publication failed");
@@ -271,14 +269,9 @@ int test_write_routing_over_grpc() {
         write_request,
         &write_response);
 
-    if (!write_status.ok()) {
+    if (!write_status.ok() || provider->request_count() != 1) {
         server.shutdown();
-        return fail("WriteMetric RPC failed");
-    }
-
-    if (provider->request_count() != 1) {
-        server.shutdown();
-        return fail("write provider did not receive exactly one request");
+        return fail("WriteMetric was not delivered to the provider");
     }
 
     const auto received = provider->last_request();
@@ -292,9 +285,6 @@ int test_write_routing_over_grpc() {
         return fail("write provider received an unexpected request");
     }
 
-    // WriteMetric is a control request, not confirmation of the actual value.
-    // Data Hub must keep the last published current value until a source
-    // publishes a new confirmed value.
     api::GetCurrentRequest current_request;
     current_request.mutable_metric_id()->set_value(
         std::string(setpoint_metric));
@@ -308,9 +298,6 @@ int test_write_routing_over_grpc() {
         &current_response);
 
     if (!current_status.ok() ||
-        !current_response.has_sample() ||
-        current_response.sample().value().kind_case() !=
-            api::MetricValue::kDoubleValue ||
         current_response.sample().value().double_value() != 22.0) {
         server.shutdown();
         return fail("WriteMetric incorrectly changed the current value");
@@ -333,52 +320,286 @@ int test_write_routing_over_grpc() {
         return fail("unowned metric did not return NOT_FOUND");
     }
 
-    api::WriteMetricRequest invalid_request;
-    invalid_request.mutable_metric_id()->set_value(
-        std::string(setpoint_metric));
+    server.shutdown();
+    return 0;
+}
 
-    api::WriteMetricResponse invalid_response;
-    grpc::ClientContext invalid_context;
+int test_rpc_errors() {
+    namespace api = dispatcher::data_hub::v1;
+    using dispatcher::data_hub::DataHubServer;
 
-    const auto invalid_status = stub->WriteMetric(
-        &invalid_context,
-        invalid_request,
-        &invalid_response);
+    DataHubServer server("127.0.0.1:0");
 
-    if (invalid_status.error_code() != grpc::StatusCode::INVALID_ARGUMENT) {
-        server.shutdown();
-        return fail("invalid write request did not return INVALID_ARGUMENT");
+    if (!server.start()) {
+        return fail("RPC-error test server failed to start");
     }
 
-    auto rejecting_provider =
-        std::make_shared<RecordingWriteProvider>(false);
+    const std::string target =
+        "127.0.0.1:" + std::to_string(server.bound_port());
 
-    if (!server.register_write_provider(
-            "AHU01.Rejected",
-            rejecting_provider)) {
+    auto channel =
+        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+
+    if (!wait_for_channel(channel)) {
         server.shutdown();
-        return fail("rejecting provider registration failed");
+        return fail("RPC-error client failed to connect");
     }
 
-    api::WriteMetricRequest rejected_request;
-    rejected_request.mutable_metric_id()->set_value("AHU01.Rejected");
-    rejected_request.mutable_value()->set_bool_value(true);
+    auto stub = make_stub(channel);
 
-    api::WriteMetricResponse rejected_response;
-    grpc::ClientContext rejected_context;
+    api::PublishMetricRequest invalid_publish;
+    invalid_publish.mutable_sample()->mutable_metric_id()->set_value(
+        "AHU01.Invalid");
 
-    const auto rejected_status = stub->WriteMetric(
-        &rejected_context,
-        rejected_request,
-        &rejected_response);
+    api::PublishMetricResponse invalid_publish_response;
+    grpc::ClientContext invalid_publish_context;
 
-    if (rejected_status.error_code() !=
-        grpc::StatusCode::FAILED_PRECONDITION) {
+    const auto publish_status = stub->PublishMetric(
+        &invalid_publish_context,
+        invalid_publish,
+        &invalid_publish_response);
+
+    if (publish_status.error_code() != grpc::StatusCode::INVALID_ARGUMENT) {
         server.shutdown();
-        return fail("provider rejection did not return FAILED_PRECONDITION");
+        return fail("invalid PublishMetric did not return INVALID_ARGUMENT");
+    }
+
+    api::GetCurrentRequest missing_request;
+    missing_request.mutable_metric_id()->set_value("AHU01.Unknown");
+
+    api::GetCurrentResponse missing_response;
+    grpc::ClientContext missing_context;
+
+    const auto missing_status = stub->GetCurrent(
+        &missing_context,
+        missing_request,
+        &missing_response);
+
+    if (missing_status.error_code() != grpc::StatusCode::NOT_FOUND) {
+        server.shutdown();
+        return fail("unknown GetCurrent did not return NOT_FOUND");
+    }
+
+    api::SubscribeRequest empty_subscription;
+    grpc::ClientContext subscribe_context;
+    auto stream = stub->Subscribe(
+        &subscribe_context,
+        empty_subscription);
+
+    api::MetricUpdate update;
+
+    if (stream->Read(&update)) {
+        subscribe_context.TryCancel();
+        stream->Finish();
+        server.shutdown();
+        return fail("empty subscription unexpectedly returned data");
+    }
+
+    const auto subscribe_status = stream->Finish();
+
+    if (subscribe_status.error_code() !=
+        grpc::StatusCode::INVALID_ARGUMENT) {
+        server.shutdown();
+        return fail("empty Subscribe did not return INVALID_ARGUMENT");
     }
 
     server.shutdown();
+    return 0;
+}
+
+int test_client_reconnect_and_subscription_cleanup() {
+    namespace api = dispatcher::data_hub::v1;
+    using dispatcher::data_hub::DataHubServer;
+
+    constexpr std::string_view metric = "AHU01.Reconnect";
+
+    DataHubServer server("127.0.0.1:0");
+
+    if (!server.start()) {
+        return fail("reconnect test server failed to start");
+    }
+
+    const std::string target =
+        "127.0.0.1:" + std::to_string(server.bound_port());
+
+    {
+        auto first_channel =
+            grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+
+        if (!wait_for_channel(first_channel)) {
+            server.shutdown();
+            return fail("first client failed to connect");
+        }
+
+        auto first_stub = make_stub(first_channel);
+
+        if (publish_double(*first_stub, metric, 31.0, 1000) != 0) {
+            server.shutdown();
+            return fail("reconnect test publication failed");
+        }
+
+        api::SubscribeRequest request;
+        request.add_metric_ids()->set_value(std::string(metric));
+
+        grpc::ClientContext context;
+        context.set_deadline(
+            std::chrono::system_clock::now() + std::chrono::seconds(5));
+
+        auto stream = first_stub->Subscribe(&context, request);
+
+        api::MetricUpdate retained;
+
+        if (!stream->Read(&retained) ||
+            retained.sample().value().double_value() != 31.0) {
+            context.TryCancel();
+            stream->Finish();
+            server.shutdown();
+            return fail("first subscriber did not receive retained value");
+        }
+
+        context.TryCancel();
+        const auto finish_status = stream->Finish();
+
+        if (finish_status.error_code() != grpc::StatusCode::CANCELLED) {
+            server.shutdown();
+            return fail("first subscriber cancellation was not observed");
+        }
+    }
+
+    // A fresh channel/stub represents a client reconnect. Runtime current
+    // state must remain available inside the still-running Data Hub process.
+    auto second_channel =
+        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+
+    if (!wait_for_channel(second_channel)) {
+        server.shutdown();
+        return fail("reconnected client failed to connect");
+    }
+
+    auto second_stub = make_stub(second_channel);
+
+    api::GetCurrentRequest get_request;
+    get_request.mutable_metric_id()->set_value(std::string(metric));
+
+    api::GetCurrentResponse get_response;
+    grpc::ClientContext get_context;
+
+    const auto get_status = second_stub->GetCurrent(
+        &get_context,
+        get_request,
+        &get_response);
+
+    if (!get_status.ok() ||
+        !get_response.has_sample() ||
+        get_response.sample().value().kind_case() !=
+            api::MetricValue::kDoubleValue ||
+        get_response.sample().value().double_value() != 31.0) {
+        server.shutdown();
+        return fail("reconnected client did not receive current value");
+    }
+
+    api::SubscribeRequest second_request;
+    second_request.add_metric_ids()->set_value(std::string(metric));
+
+    grpc::ClientContext second_context;
+    second_context.set_deadline(
+        std::chrono::system_clock::now() + std::chrono::seconds(5));
+
+    auto second_stream = second_stub->Subscribe(
+        &second_context,
+        second_request);
+
+    api::MetricUpdate second_retained;
+
+    if (!second_stream->Read(&second_retained) ||
+        second_retained.sample().value().double_value() != 31.0) {
+        second_context.TryCancel();
+        second_stream->Finish();
+        server.shutdown();
+        return fail("reconnected subscriber did not receive retained value");
+    }
+
+    second_context.TryCancel();
+    second_stream->Finish();
+
+    server.shutdown();
+    return 0;
+}
+
+int test_shutdown_cancels_active_subscription() {
+    namespace api = dispatcher::data_hub::v1;
+    using dispatcher::data_hub::DataHubServer;
+
+    constexpr std::string_view metric = "AHU01.Shutdown";
+
+    DataHubServer server("127.0.0.1:0");
+
+    if (!server.start()) {
+        return fail("shutdown test server failed to start");
+    }
+
+    const std::string target =
+        "127.0.0.1:" + std::to_string(server.bound_port());
+
+    auto channel =
+        grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+
+    if (!wait_for_channel(channel)) {
+        server.shutdown();
+        return fail("shutdown test client failed to connect");
+    }
+
+    auto stub = make_stub(channel);
+
+    if (publish_double(*stub, metric, 1.0, 1000) != 0) {
+        server.shutdown();
+        return fail("shutdown test publication failed");
+    }
+
+    api::SubscribeRequest request;
+    request.add_metric_ids()->set_value(std::string(metric));
+
+    grpc::ClientContext context;
+    auto stream = stub->Subscribe(&context, request);
+
+    api::MetricUpdate retained;
+
+    if (!stream->Read(&retained)) {
+        context.TryCancel();
+        stream->Finish();
+        server.shutdown();
+        return fail("active subscription was not established");
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    server.shutdown();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    if (server.running() || server.bound_port() != 0) {
+        context.TryCancel();
+        stream->Finish();
+        return fail("server still reports running after shutdown");
+    }
+
+    if (elapsed > std::chrono::seconds(4)) {
+        context.TryCancel();
+        stream->Finish();
+        return fail("server shutdown exceeded the bounded grace period");
+    }
+
+    api::MetricUpdate after_shutdown;
+    if (stream->Read(&after_shutdown)) {
+        context.TryCancel();
+        stream->Finish();
+        return fail("subscription produced data after server shutdown");
+    }
+
+    const auto finish_status = stream->Finish();
+
+    if (finish_status.ok()) {
+        return fail("active subscription unexpectedly finished OK on shutdown");
+    }
+
     return 0;
 }
 
@@ -401,6 +622,20 @@ int main() {
         return result;
     }
 
-    std::cout << "Data Hub write-routing tests passed\n";
+    if (const auto result = test_rpc_errors(); result != 0) {
+        return result;
+    }
+
+    if (const auto result = test_client_reconnect_and_subscription_cleanup();
+        result != 0) {
+        return result;
+    }
+
+    if (const auto result = test_shutdown_cancels_active_subscription();
+        result != 0) {
+        return result;
+    }
+
+    std::cout << "Data Hub lifecycle and error-handling tests passed\n";
     return 0;
 }

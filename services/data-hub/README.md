@@ -4,86 +4,77 @@ Data Hub is the runtime service responsible for current metric values in Dispatc
 
 ## Current implementation stage
 
-`CORE-001 / Step 7` adds the basic write-request path.
+`CORE-001 / Step 8` completes the basic service lifecycle and error-handling work planned for the sprint.
 
 Implemented at this stage:
 
-- independent C++ Data Hub executable;
-- Protocol Buffers / gRPC contract;
 - current-value storage;
 - `PublishMetric`;
 - `GetCurrent`;
 - retained/live `Subscribe`;
-- generic state-metric behavior;
-- `WriteMetric`;
-- routing of a write request to the provider registered for the metric.
+- generic state metrics;
+- `WriteMetric` routing to a metric provider;
+- bounded graceful gRPC shutdown;
+- SIGINT and SIGTERM handling for the Linux service process;
+- client disconnect/reconnect verification;
+- subscription cleanup and shutdown verification;
+- baseline gRPC status handling for invalid and unknown requests;
+- concise startup/shutdown diagnostics.
 
-## Write semantics
+## Process lifecycle
 
-`PublishMetric` and `WriteMetric` have deliberately different meanings.
+The Linux process blocks SIGINT and SIGTERM before the gRPC server creates worker threads.
 
-`PublishMetric` reports the factual current runtime value:
+The main application thread then waits synchronously for one of those shutdown signals.
 
-    source/provider -> Data Hub -> CurrentValueStore
+On SIGINT or SIGTERM:
 
-`WriteMetric` requests that the owner of a metric try to change its value:
+1. Data Hub reports the shutdown request;
+2. gRPC stops accepting new calls;
+3. active RPCs receive a two-second graceful completion window;
+4. calls that are still active after that deadline are cancelled;
+5. the server waits for gRPC worker activity to stop;
+6. the process reports that Data Hub stopped and exits with status 0.
 
-    client -> Data Hub -> MetricWriteProvider
+This bounded shutdown is important for long-lived `Subscribe` streams: an abandoned or slow client must not prevent the service process from stopping indefinitely.
 
-A successful `WriteMetric` response means that Data Hub delivered the request to the current provider and the provider accepted it for processing.
+## Diagnostics
 
-It does not mean:
+Step 8 deliberately does not introduce a logging framework.
 
-- equipment has already applied the value;
-- the physical operation succeeded;
-- Data Hub should immediately replace the current value.
+The executable currently reports only lifecycle-level messages:
 
-The current value changes only after a source/provider later publishes the resulting factual value through `PublishMetric`.
+- startup/listening endpoint and actual bound port;
+- failure to configure shutdown signals;
+- failure to start the server;
+- received shutdown signal;
+- clean stop.
 
-This prevents an operator command from being mistaken for equipment feedback.
+Detailed production logging and monitoring can be introduced later when there are real requirements for them.
 
-## Write routing
+## Error behavior
 
-`WriteRouter` keeps one current provider for a metric id.
+Current gRPC behavior includes:
 
-The first implementation uses an internal C++ port:
+- invalid `PublishMetric` -> `INVALID_ARGUMENT`;
+- unknown `GetCurrent` -> `NOT_FOUND`;
+- empty `Subscribe` -> `INVALID_ARGUMENT`;
+- invalid `WriteMetric` -> `INVALID_ARGUMENT`;
+- write without a provider -> `NOT_FOUND`;
+- provider rejection -> `FAILED_PRECONDITION`;
+- cancelled subscription -> non-success cancellation status.
 
-    MetricWriteProvider
+## Reconnection
 
-This is intentionally a service-internal abstraction rather than a C++ interface shared between independent services.
+Current runtime values belong to the running Data Hub process, not to a client connection.
 
-`CORE-001` only needs to prove the route from the external `WriteMetric` RPC to a metric owner.
+A client may disconnect and create a new gRPC channel. The new client can still:
 
-The concrete inter-process protocol used by the future Driver Runtime to become that owner is not invented in this step. It will be defined when Driver Runtime is developed and its real requirements are known.
+- retrieve the last current value;
+- create a new subscription;
+- receive the retained current value.
 
-A future adapter can implement `MetricWriteProvider` and forward the request through the appropriate language-independent service contract.
-
-## Current gRPC results
-
-`WriteMetric` returns:
-
-- `OK` when a provider exists and accepts the request;
-- `INVALID_ARGUMENT` for an incomplete write request;
-- `NOT_FOUND` when no provider is registered for the metric;
-- `FAILED_PRECONDITION` when the provider explicitly rejects the request.
-
-Data Hub does not currently check user permissions or the descriptive writable flag. Those responsibilities are added later through Users & Access, Service Hub and Device Manager.
-
-## State metrics
-
-State metrics continue to use the same generic publish/get/subscribe path as all other metrics.
-
-No state-specific storage or RPC exists.
-
-## Toolchain
-
-- Linux / WSL;
-- C++20;
-- CMake 3.20+;
-- Ninja;
-- gRPC;
-- Protocol Buffers proto3;
-- CTest.
+This does not imply persistence across a Data Hub process restart. Runtime-state recovery remains outside the current sprint.
 
 ## Build and test in WSL
 
@@ -92,13 +83,25 @@ No state-specific storage or RPC exists.
     cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
 
-The Step 7 test verifies:
+Step 8 adds three CTest checks:
 
-1. a test provider is registered for `AHU01.Setpoint`;
-2. the last factual value `22.0` is published;
-3. a gRPC client sends `WriteMetric(Setpoint, 24.0)`;
-4. the test provider receives exactly that request;
-5. `GetCurrent(Setpoint)` still returns `22.0`;
-6. an unowned metric returns `NOT_FOUND`;
-7. an invalid write returns `INVALID_ARGUMENT`;
-8. provider rejection returns `FAILED_PRECONDITION`.
+- the C++ lifecycle/error/reconnect test;
+- real process shutdown through SIGTERM;
+- real process shutdown through SIGINT.
+
+## Run manually
+
+Default endpoint:
+
+    "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub"
+
+Custom endpoint:
+
+    "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub" 127.0.0.1:50052
+
+Ctrl+C sends SIGINT and should result in lifecycle output ending with:
+
+    Dispatcher Data Hub shutdown requested by SIGINT
+    Dispatcher Data Hub stopped
+
+The automated CTest signal checks already verify this behavior; a separate manual check is not required for Step 8.

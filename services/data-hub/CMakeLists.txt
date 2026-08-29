@@ -1,5 +1,6 @@
 find_package(Protobuf REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
 
 pkg_check_modules(GRPCPP REQUIRED IMPORTED_TARGET grpc++)
 
@@ -85,6 +86,7 @@ target_include_directories(dispatcher_data_hub_core
 target_link_libraries(dispatcher_data_hub_core
     PUBLIC
         dispatcher_data_hub_proto
+        Threads::Threads
 )
 
 target_compile_features(dispatcher_data_hub_core PUBLIC cxx_std_20)
@@ -123,5 +125,32 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_data_hub_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    add_test(NAME data-hub.write-routing COMMAND dispatcher_data_hub_tests)
+    add_test(NAME data-hub.lifecycle-and-errors COMMAND dispatcher_data_hub_tests)
+
+    add_test(
+        NAME data-hub.signal-term
+        COMMAND
+            bash
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/lifecycle_signal_test.sh
+            $<TARGET_FILE:dispatcher_data_hub>
+            TERM
+            SIGTERM
+    )
+
+    add_test(
+        NAME data-hub.signal-int
+        COMMAND
+            bash
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/lifecycle_signal_test.sh
+            $<TARGET_FILE:dispatcher_data_hub>
+            INT
+            SIGINT
+    )
+
+    set_tests_properties(
+        data-hub.lifecycle-and-errors
+        data-hub.signal-term
+        data-hub.signal-int
+        PROPERTIES TIMEOUT 15
+    )
 endif()

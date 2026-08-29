@@ -3,6 +3,7 @@
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
 
+#include <chrono>
 #include <utility>
 
 namespace dispatcher::data_hub {
@@ -53,10 +54,25 @@ void DataHubServer::wait() {
 }
 
 void DataHubServer::shutdown() {
-    if (server_ != nullptr) {
-        server_->Shutdown();
-        server_.reset();
+    if (server_ == nullptr) {
+        return;
     }
+
+    // Stop accepting new calls immediately, allow active RPCs a short grace
+    // period, then force cancellation so a long-lived subscription cannot
+    // keep the process alive indefinitely.
+    constexpr auto graceful_period = std::chrono::seconds(2);
+    const auto deadline =
+        std::chrono::system_clock::now() + graceful_period;
+
+    server_->Shutdown(deadline);
+    server_->Wait();
+    server_.reset();
+    bound_port_ = 0;
+}
+
+bool DataHubServer::running() const noexcept {
+    return server_ != nullptr;
 }
 
 int DataHubServer::bound_port() const noexcept {
