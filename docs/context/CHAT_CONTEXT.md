@@ -187,11 +187,17 @@ Step 4 создал самостоятельный TypeScript client Service Hub
 
 Step 5 связал client с React lifecycle через shared Provider/context, добавил общую URL-конфигурацию и ненавязчивый connection status в global Header.
 
-Текущий Step 6 проверяет реальный browser path через существующий C++ Service Hub и automation-only test provider: success, parallel correlation, cancel, Hub close/disconnected state и явный reconnect. Production service screens и новые backend transports не добавляются.
+`CORE-003 / Step 6` завершён commit:
 
-После успешного commit Step 6 следующее действие:
+`f128c55748a5e2957151ba29b0c1d872614ccadf`
 
-`CORE-003 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit`.
+Step 6 подтвердил реальный browser path через существующий C++ Service Hub и automation-only test provider: success, parallel correlation, cancel, Hub close/disconnected state и явный reconnect.
+
+`CORE-003 / Step 7` выполняет финальный acceptance и documentation audit без новых функций. После успешного closure commit `CORE-003 — Web Shell` считается завершённым.
+
+Следующее действие после проверки closure SHA:
+
+`CORE-004 — Project Manager`: подготовить подробный sprint plan перед реализацией.
 
 ## Рабочий процесс
 

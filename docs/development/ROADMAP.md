@@ -173,13 +173,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-003 — Web Shell
 
-**Статус:** в разработке.
+**Статус:** завершён.
 
 **Цель:** создать базовую Web-оболочку платформы на React + TypeScript.
 
-**Результат:** существует самостоятельное Web-приложение с компактным глобальным Header, глобальной навигацией, рабочей областью и проверенной основой взаимодействия с backend через browser-facing Service Hub.
+**Результат:** существует самостоятельное Web-приложение с компактным global Header, глобальной навигацией, рабочей областью, shared React Service Hub connection и проверенной реальной browser-facing Service Hub integration.
 
-План спринта: [`sprints/CORE-003.md`](sprints/CORE-003.md).
+План и итоговый отчёт: [`sprints/CORE-003.md`](sprints/CORE-003.md).
 
 ### CORE-004 — Project Manager
 
@@ -414,7 +414,8 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 Завершены:
 
 - `CORE-001 — Data Hub`;
-- `CORE-002 — Service Hub`.
+- `CORE-002 — Service Hub`;
+- `CORE-003 — Web Shell`.
 
 Финальный подтверждённый baseline `CORE-002`:
 
@@ -460,12 +461,18 @@ Step 4 зафиксировал самостоятельный TypeScript client
 
 Step 5 зафиксировал shared React Service Hub Provider/context, configurable URL и ненавязчивый connection status при сохранении работоспособности shell без backend.
 
-Текущий шаг:
+`CORE-003 / Step 6` завершён commit:
 
-**CORE-003 / Step 6 — Реальная browser/backend интеграция.**
+`f128c55748a5e2957151ba29b0c1d872614ccadf`
 
-После успешной проверки и фиксации Step 6 следующим будет:
+Step 6 подтвердил реальный browser → Service Hub → test provider path, parallel correlation, cancel, unavailable state и явный reconnect.
 
-**CORE-003 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit.**
+`CORE-003 / Step 7` закрывает спринт итоговым acceptance и целевой ревизией документации без добавления новых функций.
 
-Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.
+Следующий спринт:
+
+**CORE-004 — Project Manager.**
+
+Перед реализацией `CORE-004` должен быть создан и зафиксирован его подробный sprint plan.
+
+Web Shell использует подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication и Event Hub client в `CORE-003` не добавлялись.

@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке.**
+**Завершён.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -10,7 +10,7 @@
 
 `7df47f234f6e0638e0f41ef81706d05244d7d2ea`
 
-Этот файл является планом спринта и после завершения будет дополнен итоговым отчётом.
+Этот файл содержит план и итоговый отчёт завершённого спринта.
 
 ## Цель
 
@@ -422,6 +422,10 @@ Web Shell использует реальную Service Hub boundary, а не mo
 
 Новых frontend dependencies и production backend компонентов Step 6 не добавляет.
 
+Step 6 завершён commit:
+
+`f128c55748a5e2957151ba29b0c1d872614ccadf`
+
 ## Step 7 — Sprint acceptance, итоговый отчёт и documentation audit
 
 ### Что делаем
@@ -485,28 +489,94 @@ Web Shell использует реальную Service Hub boundary, а не mo
 
 # Итоговый отчёт
 
-Заполняется после завершения спринта.
-
 ## Фактически реализовано
 
-Пока не заполнено.
+`CORE-003 — Web Shell` создал самостоятельную frontend-основу платформы:
+
+- отдельный `web/` с React + TypeScript, Vite, Vitest/Testing Library и Playwright;
+- воспроизводимый npm workflow с зафиксированным lockfile и Node.js/npm baseline;
+- компактный global Header, рабочую область и responsive layout без лишнего application chrome;
+- глобальное меню с единственным реально существующим shell destination `/`, unknown-route fallback и keyboard-friendly focus/Escape behavior;
+- самостоятельный browser-oriented `ServiceHubClient` для существующего Service Hub v1;
+- configurable Service Hub URL, subprotocol `dispatcher.service-hub.v1`, connection state, client request IDs, parallel correlation, cancel и различение request/protocol/transport errors;
+- shared React `ServiceHubProvider`/`useServiceHub()` с единым connect/disconnect lifecycle;
+- ненавязчивый Service Hub connection status в Header при сохранении работоспособности shell без backend;
+- реальную browser/backend integration через существующий C++ `dispatcher-service-hub` и automation-only test provider;
+- проверку success, reverse-order parallel correlation, `hub.unknown_service`, cancel propagation, Hub shutdown/disconnected state и явного reconnect;
+- отсутствие ложных экранов будущих сервисов, authentication, второго backend transport, обязательного router/state manager/UI kit.
+
+Функциональный Step 6 завершён commit:
+
+`f128c55748a5e2957151ba29b0c1d872614ccadf`
 
 ## Выполненные проверки
 
-Пока не заполнено.
+Перед фиксацией documentation-closure commit Step 7 выполняется полный acceptance-набор на зафиксированном toolchain:
+
+    Set-Location C:\Projects\dispatcher\web
+    npm.cmd ci
+    npm.cmd run typecheck
+    npm.cmd run test
+    npm.cmd run test:e2e
+    npm.cmd run test:e2e:service-hub
+
+Closure commit допускается только при успешном выполнении всего блока.
+
+Набор подтверждает:
+
+- clean dependency install из `package-lock.json`;
+- TypeScript checks;
+- unit/component tests;
+- fresh production build;
+- backend-independent Playwright smoke/navigation/unavailable-backend behavior;
+- реальный browser → Service Hub → test provider → Service Hub → browser path;
+- параллельную correlation и cancel;
+- disconnected state после остановки Hub;
+- отсутствие automatic reconnect;
+- успешный новый request после явного `connect()`.
 
 ## Отклонения от плана
 
-Пока не заполнено.
+Цель и архитектурная граница спринта не менялись.
+
+Практический локальный workflow Web был уточнён по результатам реального запуска: frontend install/typecheck/Vitest/Playwright выполняются нативно в Windows через `npm.cmd`/`npx.cmd`, а C++ backend остаётся в Linux/WSL. Причина — запуск Vitest workers из WSL поверх `/mnt/c` оказался нестабильным и давал worker startup timeout, тогда как тот же зафиксированный frontend toolchain стабильно работает нативно в Windows.
+
+Router, внешний state manager и UI kit не были добавлены, поскольку текущий shell не требует этих зависимостей.
 
 ## Известные ограничения
 
-Пока не заполнено.
+После `CORE-003` сознательно остаются вне Web Shell:
+
+- Project Manager и project context — следующий `CORE-004`;
+- authentication/authorization и user context;
+- production TLS/Origin policy Service Hub;
+- production-final reconnect/heartbeat policy;
+- Event Hub client и notifications;
+- Device Manager/Package Manager/Dashboard/Mimics и другие предметные Web-интерфейсы;
+- frontend Data Hub client;
+- production hosting/reverse-proxy configuration;
+- универсальный plugin UI registry;
+- production-final design system.
+
+`VITE_SERVICE_HUB_E2E=1` и automation-only provider используются только интеграционным тестом и не являются production API/сервисом.
 
 ## Проверка актуальности документации
 
-Пока не выполнена.
+В Step 7 проведена целевая ревизия документов, которые могли устареть из-за завершения Web Shell:
+
+- корневой `README.md` — CORE-003 отмечен завершённым, следующий спринт изменён на CORE-004;
+- `docs/README.md` — CORE-003 переведён из текущего плана в завершённый plan/report;
+- `docs/development/ROADMAP.md` — завершены Step 6 и CORE-003, текущая точка переведена на подготовку CORE-004;
+- `docs/context/CHAT_CONTEXT.md` — зафиксирован итог CORE-003 и следующий шаг CORE-004;
+- `web/README.md` — Step 6 и весь CORE-003 описаны как установленный baseline, команды Web/real integration сохранены актуальными;
+- `services/service-hub/README.md` — удалены устаревшие формулировки о «будущем Web Shell», зафиксировано реальное использование browser boundary из CORE-003;
+- `docs/architecture/README.md` и `docs/architecture/service-hub-contract.md` проверены: архитектурный транспорт/контракт не изменился, поэтому содержательных изменений контракта не требуется;
+- concept-документы Web UI не требуют изменения: реализованный shell не меняет согласованную продуктовую концепцию.
 
 ## Итоговый baseline
 
-Пока не определён.
+Функциональный baseline перед закрывающей документацией:
+
+`f128c55748a5e2957151ba29b0c1d872614ccadf`
+
+Финальным baseline `CORE-003` является documentation-closure commit, которым фиксируется этот Step 7 отчёт после успешного acceptance. Его SHA намеренно не встраивается в тот же commit, чтобы не создавать рекурсивный commit только ради собственного SHA; пользователь возвращает этот SHA после push, и он отдельно проверяется в репозитории.

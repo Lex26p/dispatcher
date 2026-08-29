@@ -50,7 +50,9 @@
 - [`ROADMAP.md`](development/ROADMAP.md) — этапы, спринты и текущая точка разработки.
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
-- [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план текущего спринта Web Shell.
+- [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
+
+Следующий спринт — `CORE-004 — Project Manager`; его подробный sprint plan создаётся перед началом реализации.
 
 ### `docs/context/`
 

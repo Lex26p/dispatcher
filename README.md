@@ -10,9 +10,11 @@
 
 `CORE-001 — Data Hub` завершён: существует отдельный C++20-сервис с gRPC + Protocol Buffers proto3 контрактом, хранением текущих значений, retained/live подписками, общей моделью state-метрик, базовым путём `WriteMetric` и Linux lifecycle-поведением.
 
-`CORE-002 — Service Hub` завершён: существует отдельный C++20-сервис с WebSocket + UTF-8 JSON v1 контрактом, provider registration, адресным request/response routing, параллельной correlation, timeout/cancel, disconnect/reconnect semantics и напрямую browser-compatible клиентской границей для будущего Web Shell.
+`CORE-002 — Service Hub` завершён: существует отдельный C++20-сервис с WebSocket + UTF-8 JSON v1 контрактом, provider registration, адресным request/response routing, параллельной correlation, timeout/cancel, disconnect/reconnect semantics и напрямую browser-compatible клиентской границей.
 
-Следующий спринт — `CORE-003 — Web Shell`. Перед реализацией для него должен быть зафиксирован подробный sprint plan. Технологии Event Hub, постоянное хранение, deployment, authentication/authorization и другие ещё не проработанные части остаются открытыми до соответствующих спринтов.
+`CORE-003 — Web Shell` завершён: существует самостоятельный React + TypeScript Web Shell с компактным global Header, глобальной навигацией, рабочей областью, общим browser-side Service Hub client/React connection boundary и реальной browser → Service Hub → test provider интеграционной проверкой.
+
+Следующий спринт — `CORE-004 — Project Manager`. Перед реализацией для него должен быть зафиксирован подробный sprint plan. Технологии Event Hub, постоянное хранение, deployment, authentication/authorization и другие ещё не проработанные части остаются открытыми до соответствующих спринтов.
 
 ## Документация
 
@@ -29,5 +31,7 @@
 Итог `CORE-001`: [`docs/development/sprints/CORE-001.md`](docs/development/sprints/CORE-001.md).
 
 Итог `CORE-002`: [`docs/development/sprints/CORE-002.md`](docs/development/sprints/CORE-002.md).
+
+Итог `CORE-003`: [`docs/development/sprints/CORE-003.md`](docs/development/sprints/CORE-003.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

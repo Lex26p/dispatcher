@@ -53,7 +53,7 @@ Shutdown diagnostics include the signal name and final stopped message.
 
 ## Error and reconnect behavior
 
-The Step 7 integration test verifies:
+The `CORE-002 / Step 7` integration test verifies:
 
 - unknown service -> `hub.unknown_service`;
 - invalid request -> `hub.invalid_request`;
@@ -70,14 +70,16 @@ The Step 7 integration test verifies:
 
 ## Browser boundary
 
-The future Web Shell continues to use the same direct WebSocket boundary:
+The Web Shell uses the same direct WebSocket boundary:
 
     const socket = new WebSocket(
       serviceHubUrl,
       "dispatcher.service-hub.v1"
     );
 
-No additional browser gateway is introduced in Step 7.
+`CORE-003 — Web Shell` verifies the real browser path through this boundary with the shared TypeScript client and an automation-only test provider.
+
+No additional browser gateway is required or introduced.
 
 ## Internal implementation notes
 
@@ -109,8 +111,7 @@ Recent timed-out/cancelled Hub request IDs are retained in a bounded internal se
 - no clustering/high availability;
 - no production-final backpressure/queue policy;
 - no active application-defined heartbeat interval;
-- no production observability/log aggregation;
-- the real React Web Shell starts in `CORE-003`.
+- no production observability/log aggregation.
 
 ## Dependencies
 

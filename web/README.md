@@ -14,7 +14,9 @@
 
 `CORE-003 / Step 5` established shared React ownership of that client: one provider controls connect/disconnect lifecycle, exposes the client and connection state through a hook, and shows a compact Service Hub connection indicator in the global Header. The shell remains usable when Service Hub is unavailable.
 
-`CORE-003 / Step 6` adds the real browser/backend integration path against the existing C++ Service Hub and an automation-only test provider.
+`CORE-003 / Step 6` established the real browser/backend integration path against the existing C++ Service Hub and an automation-only test provider.
+
+`CORE-003 — Web Shell` is complete. The next sprint is `CORE-004 — Project Manager`; Web Shell remains the common frontend foundation for that and later service UIs.
 
 Notifications, messages, user actions, authentication, Dashboard and future service screens are not implemented yet.
 
@@ -114,7 +116,7 @@ The shared client uses `VITE_SERVICE_HUB_URL` when it is set. Example for local 
 
 When `VITE_SERVICE_HUB_URL` is not set, Web Shell derives the URL from the page origin and uses `/v1/ws`, choosing `ws://` for HTTP pages and `wss://` for HTTPS pages.
 
-Step 5 does not add automatic reconnect. A failed or closed connection returns the shared client to its disconnected state while the React application stays usable.
+Web Shell does not implement automatic reconnect. A failed or closed connection returns the shared client to its disconnected state while the React application stays usable; reconnect is explicit.
 
 
 ## Real Service Hub browser integration
