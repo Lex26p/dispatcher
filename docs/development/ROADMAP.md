@@ -483,8 +483,16 @@ Step 6 подтвердил реальный browser → Service Hub → test pr
 
 Базовая точка CORE-004:
 
-`88c5bb30f182f7d9898ad4c95b210a045060c94f`
+`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
-Текущий шаг — зафиксировать sprint plan отдельным commit. Реализация Project Manager начинается только после проверки SHA этого plan commit.
+Sprint plan CORE-004 зафиксирован commit:
+
+`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
+
+Текущий шаг:
+
+**CORE-004 / Step 1 — Project domain и backend service skeleton.**
+
+Step 1 создаёт отдельный C++ Project Manager target, минимальную Project model (`id`, `name`, `description`), application boundary, storage port, unit tests и Linux lifecycle. Durable persistence выбирается только в Step 2, Service Hub provider появляется в Step 3.
 
 CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

@@ -14,3 +14,4 @@ endif()
 
 add_subdirectory(services/data-hub)
 add_subdirectory(services/service-hub)
+add_subdirectory(services/project-manager)

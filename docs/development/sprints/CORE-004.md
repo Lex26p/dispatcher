@@ -2,13 +2,17 @@
 
 ## Статус
 
-**В разработке. Реализация начинается после фиксации этого плана отдельным commit.**
+**В разработке. Sprint plan зафиксирован; текущий шаг — Step 1.**
 
 Этап: `L1-01 — Ядро платформы`.
 
 Базовая точка перед началом спринта:
 
 `88c5bb30f182f7d9898ad4c95b210a045060c94f`
+
+Sprint plan зафиксирован commit:
+
+`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
 Этот файл является планом спринта и после завершения будет дополнен итоговым отчётом.
 
@@ -195,6 +199,31 @@ Project Manager — первый конфигурационный/metadata-се�
 ### Результат
 
 Project Manager существует как отдельно тестируемый backend component с минимальной domain model и чистой storage boundary.
+
+### Реализация Step 1
+
+Создаётся самостоятельный `services/project-manager/` без внешних runtime-зависимостей и без Service Hub integration.
+
+Минимальная внутренняя Project model Step 1 содержит:
+
+- стабильный opaque `id`, который генерируется независимо от изменяемого имени;
+- обязательный человекочитаемый `name`;
+- необязательный `description`;
+- никаких parent/resource ownership полей.
+
+Application boundary `ProjectManager` поддерживает `create`, `list`, `get` и `update`. Storage скрыт за `ProjectRepository`; production persistence adapter намеренно отсутствует до Step 2. Unit tests используют локальный in-memory repository и управляемый ID generator.
+
+Validation Step 1:
+
+- `name` должен содержать хотя бы один non-whitespace символ;
+- `name` ограничен 256 байтами UTF-8 payload;
+- `description` ограничен 4096 байтами UTF-8 payload.
+
+Ошибки application boundary различают invalid input, missing project, storage failure и невозможность получить уникальный generated ID. Duplicate display names разрешены: имя не является identity проекта.
+
+Executable `dispatcher-project-manager` на этом шаге реализует только самостоятельный Linux lifecycle skeleton: явно сообщает, что Service Hub provider ещё не настроен, ждёт `SIGINT`/`SIGTERM` и завершается чисто. Сетевой endpoint и provider registration появятся только в Step 3.
+
+CTest Step 1 проверяет domain/application behavior и clean shutdown по SIGINT/SIGTERM. Durable DB/file technology в Step 1 не выбрана.
 
 ## Step 2 — Durable persistence baseline
 

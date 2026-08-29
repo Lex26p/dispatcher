@@ -201,11 +201,13 @@ Step 6 подтвердил реальный browser path через сущес�
 
 `CORE-004 — Project Manager`.
 
-Подробный план создаётся в `docs/development/sprints/CORE-004.md` от baseline `88c5bb30f182f7d9898ad4c95b210a045060c94f`.
+Sprint plan CORE-004 зафиксирован commit:
+
+`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
 
 Границы CORE-004: отдельный C++ Project Manager, durable project persistence, Service Hub contract/provider, Web список/редактор и общий frontend project context. Проект остаётся плоской точкой консолидации и не владеет Dashboard/Device/другими будущими ресурсами. Users & Access/authentication остаётся CORE-005.
 
-Текущее действие — зафиксировать sprint plan отдельным commit и вернуть SHA. Реализация Step 1 начинается только после проверки этого SHA.
+Текущий шаг — `CORE-004 / Step 1 — Project domain и backend service skeleton`. Минимальная внутренняя модель: opaque stable `id`, `name`, `description`; application boundary create/list/get/update; storage port с in-memory test implementation; Linux SIGINT/SIGTERM lifecycle. Durable storage technology не выбирается до Step 2, Service Hub provider не добавляется до Step 3.
 
 ## Рабочий процесс
 
