@@ -1,4 +1,5 @@
 #include "dispatcher/data_hub/application.hpp"
+#include "dispatcher/data_hub/current_value_store.hpp"
 #include "dispatcher/data_hub/v1/data_hub.grpc.pb.h"
 #include "dispatcher/data_hub/v1/data_hub.pb.h"
 
@@ -84,9 +85,97 @@ int test_contract() {
         return fail("write request value type is invalid");
     }
 
-    // Referencing the generated gRPC service type ensures that both protobuf
-    // and gRPC code generation are part of this test target.
     [[maybe_unused]] api::DataHub::Service* grpc_service_type = nullptr;
+
+    return 0;
+}
+
+int test_current_value_store() {
+    namespace api = dispatcher::data_hub::v1;
+    using dispatcher::data_hub::CurrentValueStore;
+
+    CurrentValueStore store;
+
+    if (store.size() != 0) {
+        return fail("new current value store is not empty");
+    }
+
+    if (store.get("AHU01.Temperature").has_value()) {
+        return fail("unknown metric unexpectedly has a current value");
+    }
+
+    api::MetricSample invalid_sample;
+    invalid_sample.mutable_value()->set_double_value(1.0);
+
+    if (store.put(invalid_sample)) {
+        return fail("sample without metric id was accepted");
+    }
+
+    invalid_sample.Clear();
+    invalid_sample.mutable_metric_id()->set_value("AHU01.Invalid");
+
+    if (store.put(invalid_sample)) {
+        return fail("sample without metric value was accepted");
+    }
+
+    api::MetricSample first;
+    first.mutable_metric_id()->set_value("AHU01.Temperature");
+    first.mutable_value()->set_double_value(22.1);
+    first.set_source_timestamp_unix_ms(1000);
+
+    if (!store.put(first)) {
+        return fail("first current value was rejected");
+    }
+
+    const auto stored_first = store.get("AHU01.Temperature");
+    if (!stored_first.has_value()) {
+        return fail("stored current value cannot be retrieved");
+    }
+
+    if (stored_first->value().kind_case() != api::MetricValue::kDoubleValue ||
+        stored_first->value().double_value() != 22.1 ||
+        stored_first->source_timestamp_unix_ms() != 1000) {
+        return fail("stored current value differs from published sample");
+    }
+
+    api::MetricSample replacement;
+    replacement.mutable_metric_id()->set_value("AHU01.Temperature");
+    replacement.mutable_value()->set_double_value(22.8);
+    replacement.set_source_timestamp_unix_ms(2000);
+
+    if (!store.put(replacement)) {
+        return fail("replacement current value was rejected");
+    }
+
+    const auto stored_replacement = store.get("AHU01.Temperature");
+    if (!stored_replacement.has_value() ||
+        stored_replacement->value().double_value() != 22.8 ||
+        stored_replacement->source_timestamp_unix_ms() != 2000) {
+        return fail("replacement did not become the current value");
+    }
+
+    if (store.size() != 1) {
+        return fail("replacing a metric unexpectedly increased store size");
+    }
+
+    api::MetricSample second_metric;
+    second_metric.mutable_metric_id()->set_value("AHU01.Enabled");
+    second_metric.mutable_value()->set_bool_value(true);
+
+    if (!store.put(second_metric)) {
+        return fail("second metric was rejected");
+    }
+
+    const auto stored_second = store.get("AHU01.Enabled");
+    if (!stored_second.has_value() ||
+        stored_second->value().kind_case() != api::MetricValue::kBoolValue ||
+        !stored_second->value().bool_value()) {
+        return fail("second metric current value is invalid");
+    }
+
+    if (store.size() != 2) {
+        return fail("store does not contain two independent metrics");
+    }
 
     return 0;
 }
@@ -102,6 +191,10 @@ int main() {
         return result;
     }
 
-    std::cout << "Data Hub application and contract tests passed\n";
+    if (const auto result = test_current_value_store(); result != 0) {
+        return result;
+    }
+
+    std::cout << "Data Hub application, contract and current value store tests passed\n";
     return 0;
 }

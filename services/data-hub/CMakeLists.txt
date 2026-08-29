@@ -70,11 +70,17 @@ target_compile_features(dispatcher_data_hub_proto PUBLIC cxx_std_20)
 
 add_library(dispatcher_data_hub_core STATIC
     src/application.cpp
+    src/current_value_store.cpp
 )
 
 target_include_directories(dispatcher_data_hub_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(dispatcher_data_hub_core
+    PUBLIC
+        dispatcher_data_hub_proto
 )
 
 target_compile_features(dispatcher_data_hub_core PUBLIC cxx_std_20)
@@ -102,7 +108,6 @@ if(DISPATCHER_BUILD_TESTS)
     target_link_libraries(dispatcher_data_hub_tests
         PRIVATE
             dispatcher_data_hub_core
-            dispatcher_data_hub_proto
     )
 
     set_target_properties(
@@ -114,5 +119,5 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_data_hub_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    add_test(NAME data-hub.application-and-contract COMMAND dispatcher_data_hub_tests)
+    add_test(NAME data-hub.application-contract-and-store COMMAND dispatcher_data_hub_tests)
 endif()
