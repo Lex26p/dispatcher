@@ -501,10 +501,16 @@ Step 1 зафиксировал отдельный C++ Project Manager target, �
 
 Step 2 зафиксировал локальный SQLite schema v1 и durable restart/reopen behavior без выбора общей БД платформы.
 
+`CORE-004 / Step 3` завершён commit:
+
+`7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`
+
+Step 3 зафиксировал `project-manager.v1`, create/list/get/update payload/errors и реальную provider registration/reconnect boundary через существующий Service Hub v1.
+
 Текущий шаг:
 
-**CORE-004 / Step 3 — Project Manager contract и Service Hub provider.**
+**CORE-004 / Step 4 — Web Project Manager: список и редактор.**
 
-Step 3 фиксирует `project-manager.v1`, create/list/get/update payload/errors и реальную provider registration/reconnect boundary. Web Project Manager остаётся Step 4.
+Step 4 добавляет реальный `/projects` destination, типизированный frontend adapter поверх shared `ServiceHubClient` и list/create/edit UI. Общий project context остаётся Step 5.
 
 CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

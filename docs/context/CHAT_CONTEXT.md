@@ -219,7 +219,13 @@ Step 1 зафиксировал opaque stable `id`, `name`, `description`, appli
 
 Step 2 зафиксировал локальный SQLite schema v1, production repository adapter и restart/reopen tests. SQLite является storage detail Project Manager, не общей БД платформы.
 
-Текущий шаг — `CORE-004 / Step 3 — Project Manager contract и Service Hub provider`: service `project-manager.v1`, create/list/get/update contract, provider-specific `project.*` errors, real Service Hub registration и reconnect. Web список/редактор остаётся Step 4.
+`CORE-004 / Step 3` завершён commit:
+
+`7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`
+
+Step 3 зафиксировал `project-manager.v1`, create/list/get/update contract, provider-specific `project.*` errors, real Service Hub registration/reconnect и межпроцессный integration test.
+
+Текущий шаг — `CORE-004 / Step 4 — Web Project Manager: список и редактор`. Web использует существующий shared `ServiceHubClient`; добавляется `/projects`, typed Project Manager adapter и list/create/edit UI. Общий selected project context остаётся Step 5, real browser/backend acceptance — Step 6.
 
 ## Рабочий процесс
 

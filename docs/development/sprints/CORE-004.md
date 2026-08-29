@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 2 завершён; текущий шаг — Step 3.**
+**В разработке. Step 3 завершён; текущий шаг — Step 4.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -338,6 +338,10 @@ Production adapter `ServiceHubProvider` использует Boost.Beast + `json
 
 CTest `project-manager.service-hub-integration` запускает реальные процессы Service Hub и Project Manager, проверяет create/list/get/update, invalid payload/domain error, несколько одновременно активных requests, затем перезапускает Service Hub на том же порту и подтверждает повторную provider registration и доступ к сохранённому проекту. Production Project Manager не линкуется с внутренним C++ API Service Hub.
 
+Step 3 завершён commit:
+
+`7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`
+
 ## Step 4 — Web Project Manager: список и редактор
 
 ### Что делаем
@@ -365,6 +369,44 @@ Router/state/UI library не добавляется автоматически. 
 ### Результат
 
 Проектами можно реально управлять из browser через Project Manager backend.
+
+### Реализация Step 4
+
+Web Shell получает второй реальный shell destination:
+
+`/projects`
+
+Глобальное меню содержит только существующие функции:
+
+- `Рабочая область` → `/`;
+- `Проекты` → `/projects`.
+
+Router dependency на этом шаге не добавляется. Текущий shell-level History API остаётся достаточным: `/projects` является отдельным destination, а переключение «список ↔ создать/редактировать» живёт внутри Project Manager view и не вводит преждевременные deep-link routes.
+
+`ProjectManagerClient` является типизированным adapter поверх уже общего `ServiceHubClient`:
+
+- использует service `project-manager.v1`;
+- вызывает `create-project`, `list-projects`, `get-project`, `update-project`;
+- не создаёт второй WebSocket;
+- сохраняет Service Hub request/cancel boundary;
+- проверяет shape successful Project Manager payload перед передачей данных React.
+
+`ProjectManagerView` реализует:
+
+- загрузку списка;
+- empty state;
+- локальное error state при недоступном Hub/Project Manager;
+- создание проекта;
+- открытие существующего проекта;
+- изменение `name` и `description`;
+- сохранение и возврат к списку;
+- retry списка после service-level error.
+
+Project context не создаётся в Step 4. Выбор проекта как общего frontend context остаётся Step 5.
+
+Unit/component tests используют controllable Service Hub test double; обычный Playwright smoke остаётся backend-independent и проверяет реальный `/projects` route в degraded состоянии без backend. Полный browser → Service Hub → Project Manager flow остаётся Step 6.
+
+Новых npm dependencies не требуется.
 
 ## Step 5 — Project context в Web Shell
 

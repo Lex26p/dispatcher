@@ -5,10 +5,12 @@ import {
   useState,
 } from 'react';
 
+import { ProjectManagerView } from './project-manager/ProjectManagerView';
 import type { ServiceHubConnectionState } from './service-hub/ServiceHubClient';
 import { useServiceHub } from './service-hub/ServiceHubProvider';
 
 const workspacePath = '/';
+const projectsPath = '/projects';
 
 const connectionStateLabels: Record<ServiceHubConnectionState, string> = {
   disconnected: 'Service Hub недоступен',
@@ -58,14 +60,17 @@ export function App() {
     };
   }, [menuOpen]);
 
-  const navigateToWorkspace = (event: MouseEvent<HTMLAnchorElement>) => {
+  const navigateTo = (
+    event: MouseEvent<HTMLAnchorElement>,
+    path: string,
+  ) => {
     event.preventDefault();
 
-    if (window.location.pathname !== workspacePath) {
-      window.history.pushState(null, '', workspacePath);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
     }
 
-    setCurrentPath(workspacePath);
+    setCurrentPath(path);
     setMenuOpen(false);
   };
 
@@ -75,6 +80,7 @@ export function App() {
   };
 
   const workspaceActive = currentPath === workspacePath;
+  const projectsActive = currentPath === projectsPath;
 
   return (
     <div className="app-shell">
@@ -138,9 +144,18 @@ export function App() {
               className="global-navigation__link"
               href={workspacePath}
               aria-current={workspaceActive ? 'page' : undefined}
-              onClick={navigateToWorkspace}
+              onClick={(event) => navigateTo(event, workspacePath)}
             >
               Рабочая область
+            </a>
+
+            <a
+              className="global-navigation__link"
+              href={projectsPath}
+              aria-current={projectsActive ? 'page' : undefined}
+              onClick={(event) => navigateTo(event, projectsPath)}
+            >
+              Проекты
             </a>
           </nav>
         </div>
@@ -155,6 +170,8 @@ export function App() {
               Здесь будут открываться интерфейсы сервисов платформы.
             </p>
           </section>
+        ) : projectsActive ? (
+          <ProjectManagerView />
         ) : (
           <section className="workspace__content" aria-labelledby="not-found-title">
             <p className="workspace__eyebrow">Web Shell</p>
@@ -165,7 +182,7 @@ export function App() {
             <a
               className="workspace__return-link"
               href={workspacePath}
-              onClick={navigateToWorkspace}
+              onClick={(event) => navigateTo(event, workspacePath)}
             >
               Вернуться в рабочую область
             </a>

@@ -96,10 +96,14 @@ describe('App Shell navigation', () => {
     const workspaceLink = within(navigation).getByRole('link', {
       name: 'Рабочая область',
     });
+    const projectsLink = within(navigation).getByRole('link', {
+      name: 'Проекты',
+    });
 
     expect(menuTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(workspaceLink).toHaveAttribute('aria-current', 'page');
-    expect(within(navigation).getAllByRole('link')).toHaveLength(1);
+    expect(projectsLink).not.toHaveAttribute('aria-current');
+    expect(within(navigation).getAllByRole('link')).toHaveLength(2);
     expect(workspaceLink).toHaveFocus();
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -116,6 +120,42 @@ describe('App Shell navigation', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Глобальная навигация' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens the real Project Manager destination without introducing project context', () => {
+    renderApp('disconnected');
+
+    const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
+    fireEvent.click(menuTrigger);
+
+    const navigation = screen.getByRole('navigation', {
+      name: 'Глобальная навигация',
+    });
+    const projectsLink = within(navigation).getByRole('link', {
+      name: 'Проекты',
+    });
+
+    fireEvent.click(projectsLink);
+
+    expect(window.location.pathname).toBe('/projects');
+    expect(
+      screen.getByRole('heading', { name: 'Проекты' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Service Hub недоступен.',
+    );
+
+    fireEvent.click(menuTrigger);
+
+    const reopenedNavigation = screen.getByRole('navigation', {
+      name: 'Глобальная навигация',
+    });
+    expect(
+      within(reopenedNavigation).getByRole('link', { name: 'Проекты' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(reopenedNavigation).getByRole('link', { name: 'Рабочая область' }),
+    ).not.toHaveAttribute('aria-current');
   });
 
   it('shows an unknown-route fallback and returns to the shell workspace', () => {

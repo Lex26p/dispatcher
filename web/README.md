@@ -16,9 +16,11 @@
 
 `CORE-003 / Step 6` established the real browser/backend integration path against the existing C++ Service Hub and an automation-only test provider.
 
-`CORE-003 — Web Shell` is complete. The next sprint is `CORE-004 — Project Manager`; Web Shell remains the common frontend foundation for that and later service UIs.
+`CORE-003 — Web Shell` is complete. `CORE-004 — Project Manager` now uses that frontend foundation.
 
-Notifications, messages, user actions, authentication, Dashboard and future service screens are not implemented yet.
+`CORE-004 / Step 4` adds the first real service UI: the `/projects` destination, typed Project Manager client adapter, project list and create/edit form. Project context is deliberately deferred to Step 5.
+
+Notifications, messages, user actions, authentication, Dashboard and later service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -79,17 +81,31 @@ Combined unit + production build check:
 
 ## Current navigation
 
-The current shell route is `/`.
+The shell currently has two real destinations:
 
-The global menu currently contains exactly one real destination:
-
-- `Рабочая область` → `/`.
+- `Рабочая область` → `/`;
+- `Проекты` → `/projects`.
 
 The menu opens from the compact global Header, marks the active route with `aria-current`, moves keyboard focus into navigation, closes with `Escape`, and closes after navigation.
 
 Unknown paths render a Web Shell fallback with a way back to `/`.
 
-Future service links are intentionally absent until those services exist.
+No router dependency is required yet. The project list/editor uses local component state inside `/projects`; project context and future service destinations are added only when their corresponding functionality exists.
+
+## Project Manager Web client
+
+`src/project-manager/ProjectManagerClient.ts` is a typed adapter over the shared Service Hub client. It uses service address `project-manager.v1` and the four v1 operations from `docs/architecture/project-manager-contract.md`:
+
+- `create-project`;
+- `list-projects`;
+- `get-project`;
+- `update-project`.
+
+It does not open another WebSocket and it validates successful response payload shape before exposing `Project` data to React.
+
+`src/project-manager/ProjectManagerView.tsx` implements the current list/editor UI. It provides loading, empty and local error states, creation and editing of `name`/`description`, and keeps the rest of Web Shell usable if Service Hub or Project Manager is unavailable.
+
+Selected project context is not part of Step 4 and is added in `CORE-004 / Step 5`.
 
 ## Service Hub client
 

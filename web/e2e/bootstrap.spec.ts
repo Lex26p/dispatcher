@@ -46,10 +46,14 @@ test('production build keeps the App Shell layout and global navigation usable',
   const workspaceLink = navigation.getByRole('link', {
     name: 'Рабочая область',
   });
+  const projectsLink = navigation.getByRole('link', {
+    name: 'Проекты',
+  });
 
   await expect(navigation).toBeVisible();
-  await expect(navigation.getByRole('link')).toHaveCount(1);
+  await expect(navigation.getByRole('link')).toHaveCount(2);
   await expect(workspaceLink).toHaveAttribute('aria-current', 'page');
+  await expect(projectsLink).not.toHaveAttribute('aria-current', 'page');
   await expect(workspaceLink).toBeFocused();
 
   await page.keyboard.press('Escape');
@@ -62,6 +66,15 @@ test('production build keeps the App Shell layout and global navigation usable',
   await menuTrigger.click();
   await expect(navigation).toBeHidden();
 
+  await menuTrigger.click();
+  await projectsLink.click();
+
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(
+    page.getByRole('heading', { name: 'Проекты' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Service Hub недоступен');
+
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
   ).toBe(true);
@@ -70,12 +83,13 @@ test('production build keeps the App Shell layout and global navigation usable',
 
   await expect(header).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Рабочая область' }),
+    page.getByRole('heading', { name: 'Проекты' }),
   ).toBeVisible();
   await expect(serviceHubStatus).toBeVisible();
 
   await menuTrigger.click();
   await expect(navigation).toBeVisible();
+  await expect(projectsLink).toHaveAttribute('aria-current', 'page');
 
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
