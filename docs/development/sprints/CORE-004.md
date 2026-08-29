@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 4 завершён; текущий шаг — Step 5.**
+**В разработке. Step 5 завершён; текущий шаг — Step 6.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -456,6 +456,10 @@ Unit/component tests покрывают session restore/persist/clear, remote va
 
 Новых npm dependencies, backend fields, router или отдельного WebSocket Step 5 не добавляет. Реальный browser → Service Hub → Project Manager → SQLite path с restart recovery остаётся Step 6.
 
+Step 5 завершён commit:
+
+`1b4017526789e32e5e4ece90a63fa287cddb57c8`
+
 ## Step 6 — Реальная integration и restart recovery
 
 ### Что делаем
@@ -484,6 +488,44 @@ Automation должен использовать реальные процесс
 ### Результат
 
 Project Manager подтверждён не только unit tests, но и реальной межпроцессной/browser boundary.
+
+### Реализация Step 6
+
+Добавляется отдельная Web automation команда:
+
+`npm run test:e2e:project-manager`
+
+Она не заменяет существующий `test:e2e:service-hub`: Service Hub regression остаётся отдельной проверкой Web Shell transport boundary.
+Вместе эти две проверки покрывают отдельно Hub outage/reconnect и Project Manager outage/restart, не смешивая lifecycle двух сервисов в один сценарий.
+
+Runner `web/e2e/run-project-manager-integration.mjs` для Windows + WSL:
+
+- конфигурирует/собирает реальные C++ targets `dispatcher_service_hub` и `dispatcher_project_manager`;
+- запускает реальный Service Hub на временном loopback port;
+- запускает реальный Project Manager с временной SQLite database;
+- ждёт фактическую регистрацию `project-manager.v1` через Service Hub request probe;
+- собирает production Web с реальным `VITE_SERVICE_HUB_URL`;
+- запускает только `e2e/project-manager.integration.spec.ts`;
+- предоставляет test-only local control endpoint только для остановки/повторного запуска Project Manager;
+- при restart использует тот же SQLite database path;
+- завершает процессы по их точным Linux PID и удаляет только созданную test database;
+- при запуске из зафиксированного npm workflow использует текущий `npm_execpath`, поэтому nested production build остаётся на том же npm toolchain.
+
+Playwright сценарий использует реальный browser UI и shared `ServiceHubClient`:
+
+1. открывает `/projects`;
+2. создаёт Project через UI;
+3. выбирает его как текущий project context;
+4. редактирует имя и подтверждает обновление Header context;
+5. выполняет параллельные реальные `list-projects` + `get-project` requests через тот же browser Service Hub connection;
+6. останавливает только Project Manager, оставляя Service Hub connection живым;
+7. подтверждает локальное `Project Manager недоступен` и сохранение выбранного context;
+8. снова запускает Project Manager на той же SQLite database и ждёт повторную provider registration;
+9. повторно загружает список и делает browser reload;
+10. подтверждает stable project ID, сохранённые данные и восстановление context через реальный `get-project`;
+11. выполняет новый update после restart.
+
+Step 6 не меняет Project Manager/Service Hub contracts и не добавляет production backend code. Новых npm dependencies нет; `package-lock.json` не меняется, поскольку добавляется только npm script и permanent E2E infrastructure.
 
 ## Step 7 — Sprint acceptance, итоговый отчёт и documentation audit
 

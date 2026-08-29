@@ -20,7 +20,9 @@
 
 `CORE-004 / Step 4` established the first real service UI: the `/projects` destination, typed Project Manager client adapter, project list and create/edit form.
 
-`CORE-004 / Step 5` adds shared project context for the Web Shell: selected Project or explicit global mode, current-session persistence, remote validation and compact Header indication.
+`CORE-004 / Step 5` established shared project context for the Web Shell: selected Project or explicit global mode, current-session persistence, remote validation and compact Header indication.
+
+`CORE-004 / Step 6` adds a separate real Project Manager browser integration path with durable restart recovery.
 
 Notifications, messages, user actions, authentication, Dashboard and later service screens are not implemented yet.
 
@@ -175,3 +177,29 @@ This integration command is intended for the Windows + WSL development workflow.
 The Node.js provider is test support only. It is not a production backend service and does not change the platform transport contract.
 
 The integration build enables `VITE_SERVICE_HUB_E2E=1` only to expose the already-created shared client to Playwright. Normal production builds do not expose this test seam.
+
+## Real Project Manager browser integration
+
+The Project Manager end-to-end check is separate from both backend-independent smoke and the generic Service Hub integration:
+
+    npm.cmd run test:e2e:project-manager
+
+When the repository npm baseline is invoked through `npx.cmd --yes npm@11.19.0`, the runner keeps its nested production build on the same npm executable.
+
+The command is intended for the Windows + WSL workflow. It:
+
+- builds the real C++ Service Hub and Project Manager targets in WSL;
+- starts Service Hub on a temporary loopback port;
+- starts Project Manager against a temporary SQLite database;
+- waits until `project-manager.v1` is actually registered;
+- builds and serves the production Web Shell against that Service Hub;
+- creates and edits a project through the real browser UI;
+- selects the real project as shared Web Shell context;
+- performs parallel `list-projects` and `get-project` requests through the shared browser Service Hub client;
+- stops only Project Manager while Service Hub remains connected and verifies the local unavailable-service UI without losing project context;
+- restarts Project Manager with the same SQLite database and waits for provider re-registration;
+- verifies the stable project ID, persisted data, restored session context and a new update after restart;
+- stops the exact temporary processes and removes the temporary database.
+
+This runner does not introduce a test provider for Project Manager: the provider is the production C++ `dispatcher-project-manager` process.
+

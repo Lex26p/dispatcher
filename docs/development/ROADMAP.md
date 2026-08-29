@@ -513,10 +513,20 @@ Step 3 зафиксировал `project-manager.v1`, create/list/get/update pay
 
 Step 4 зафиксировал `/projects`, typed Project Manager client adapter и реальный list/create/edit UI поверх shared `ServiceHubClient`.
 
+`CORE-004 / Step 5` завершён commit:
+
+`1b4017526789e32e5e4ece90a63fa287cddb57c8`
+
+Step 5 зафиксировал общий React project context, browser-session persistence, remote `get-project` validation, выбор из реального списка и compact Header indication без изменения backend contracts.
+
 Текущий шаг:
 
-**CORE-004 / Step 5 — Project context в Web Shell.**
+**CORE-004 / Step 6 — Реальная integration и restart recovery.**
 
-Step 5 добавляет общий React project context с явным глобальным режимом, browser-session persistence, проверкой выбранного Project через `get-project`, выбором из реального списка `/projects` и компактным отображением в global Header. Service Hub envelope и backend contract не меняются; real restart/browser integration остаётся Step 6.
+Step 6 проверяет production Web против реальных C++ Service Hub + Project Manager + SQLite: create/edit/context, parallel project requests, временную недоступность Project Manager, restart на той же database, повторную provider registration и сохранность данных/context.
+
+После успешного commit Step 6 следующим будет:
+
+**CORE-004 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit.**
 
 CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

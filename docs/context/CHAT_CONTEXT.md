@@ -231,7 +231,15 @@ Step 3 зафиксировал `project-manager.v1`, create/list/get/update con
 
 Step 4 зафиксировал `/projects`, typed Project Manager adapter и list/create/edit UI через существующий shared `ServiceHubClient`.
 
-Текущий шаг — `CORE-004 / Step 5 — Project context в Web Shell`. Добавляется общий React context с selected Project либо явным global mode, browser-session persistence, remote validation через `get-project`, выбор из реального списка проектов и compact Header indication. Временная недоступность Project Manager не должна стирать выбор; подтверждённый `project.not_found` очищает context. Real browser/backend restart acceptance остаётся Step 6.
+`CORE-004 / Step 5` завершён commit:
+
+`1b4017526789e32e5e4ece90a63fa287cddb57c8`
+
+Step 5 зафиксировал общий React project context с явным global mode, browser-session persistence, remote `get-project` validation, выбором из реального списка и compact Header indication.
+
+Текущий шаг — `CORE-004 / Step 6 — Реальная integration и restart recovery`. Отдельный Web runner должен проверить production browser → Service Hub → Project Manager → SQLite path, create/edit/context, parallel requests, временную недоступность Project Manager, restart на той же database, повторную provider registration и сохранность project/context. Production contracts не меняются.
+
+После успешного Step 6 commit следующее действие — `CORE-004 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit`.
 
 ## Рабочий процесс
 

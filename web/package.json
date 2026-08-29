@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:service-hub": "node ./e2e/run-service-hub-integration.mjs",
+    "test:e2e:project-manager": "node ./e2e/run-project-manager-integration.mjs",
     "check": "npm run test && npm run build"
   },
   "dependencies": {
