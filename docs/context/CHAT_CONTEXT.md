@@ -141,11 +141,21 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 - `CORE-001 — Data Hub`;
 - `CORE-002 — Service Hub`.
 
-Service Hub имеет подтверждённый WebSocket + JSON v1 contract, provider routing, parallel correlation, timeout/cancel, disconnect/reconnect, browser-facing boundary и Linux lifecycle.
+Финальный baseline CORE-002:
 
-Следующий спринт — `CORE-003 — Web Shell`.
+`7df47f234f6e0638e0f41ef81706d05244d7d2ea`
 
-Перед началом его реализации нужно отдельно зафиксировать подробные шаги и критерии завершения. Web Shell должен использовать уже подтверждённую browser-facing Service Hub boundary, не придумывая второй backend gateway без новой необходимости.
+Текущий спринт — `CORE-003 — Web Shell`.
+
+Его подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-003.md`.
+
+Web Shell должен дать React + TypeScript shell, глобальный Header/navigation/workspace и общую browser-side Service Hub connection. Он не реализует предметные Web-интерфейсы следующих сервисов.
+
+Frontend state manager и UI-библиотека не выбираются заранее в плане.
+
+Следующее действие после подтверждения plan commit:
+
+`CORE-003 / Step 1 — Frontend-каркас и build/test toolchain`.
 
 ## Рабочий процесс
 

@@ -173,9 +173,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-003 — Web Shell
 
+**Статус:** в разработке.
+
 **Цель:** создать базовую Web-оболочку платформы на React + TypeScript.
 
-**Результат:** существует самостоятельное Web-приложение с глобальным Header, навигацией, рабочей областью и основой взаимодействия с backend через Service Hub.
+**Результат:** существует самостоятельное Web-приложение с компактным глобальным Header, глобальной навигацией, рабочей областью и проверенной основой взаимодействия с backend через browser-facing Service Hub.
+
+План спринта: [`sprints/CORE-003.md`](sprints/CORE-003.md).
 
 ### CORE-004 — Project Manager
 
@@ -412,14 +416,18 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 - `CORE-001 — Data Hub`;
 - `CORE-002 — Service Hub`.
 
-`CORE-002` прошёл отдельный sprint acceptance, lifecycle/error regression-проверки и финальную ревизию документации.
+Финальный подтверждённый baseline `CORE-002`:
 
-Последний подтверждённый implementation baseline перед Step 8:
+`7df47f234f6e0638e0f41ef81706d05244d7d2ea`
 
-`ba66ff6c3625c61adf5d6b2c1a4d89fd7a1a8e72`
-
-Следующий спринт:
+Текущий спринт:
 
 **CORE-003 — Web Shell.**
 
-Перед началом реализации CORE-003 нужно определить и согласовать его подробные шаги и критерии завершения, опираясь на существующую концепцию Web UI и подтверждённую browser-facing границу Service Hub.
+Подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-003.md`.
+
+Следующее действие после фиксации плана в репозитории:
+
+**CORE-003 / Step 1 — Frontend-каркас и build/test toolchain.**
+
+Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.
