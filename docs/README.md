@@ -49,7 +49,7 @@
 
 - [`ROADMAP.md`](development/ROADMAP.md) — этапы, спринты и текущая точка разработки.
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
-- [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план текущего спринта Service Hub.
+- [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 
 ### `docs/context/`
 

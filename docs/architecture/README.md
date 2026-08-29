@@ -163,7 +163,7 @@ Service Hub используется там, где сервисам требу�
 
 Через этот же контролируемый слой Web UI взаимодействует с backend.
 
-В `CORE-002 / Step 2` для Service Hub зафиксированы:
+В `CORE-002` для Service Hub зафиксированы и подтверждены реализацией:
 
 - WebSocket как единый двусторонний транспорт для backend-клиентов, providers и будущего Web Shell;
 - UTF-8 JSON как формат сообщений;
@@ -173,7 +173,15 @@ Service Hub используется там, где сервисам требу�
 - явная адресация `service` + `operation`;
 - correlation через request ID;
 - timeout и cancellation semantics;
-- JSON Schema внешнего envelope-контракта.
+- JSON Schema внешнего envelope-контракта;
+- provider registration и удаление route при disconnect;
+- параллельная correlation с Hub-scoped request IDs;
+- `hub.unknown_service`, `hub.timeout`, `hub.cancelled` и `hub.provider_unavailable` как базовые runtime-ошибки;
+- provider reconnect с повторной регистрацией service;
+- прямая browser-compatible WebSocket boundary без обязательного отдельного gateway;
+- самостоятельный Linux lifecycle с SIGINT/SIGTERM.
+
+Текущая C++ implementation использует Boost.Asio + Boost.Beast для WebSocket/networking и `json-c` для внутреннего JSON parsing/serialization. Эти библиотеки не являются частью межсервисного v1-контракта.
 
 Подробный контракт: [`service-hub-contract.md`](service-hub-contract.md).
 

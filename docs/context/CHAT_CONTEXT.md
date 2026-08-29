@@ -87,7 +87,7 @@ Realtime-значения находятся в Data Hub.
 Отдельный Hub для событий и аварий. Не смешивается с Data Hub.
 
 ### Service Hub
-- текущий спринт `CORE-002`;
+- реализован и завершён в `CORE-002`;
 - внешний transport v1: WebSocket;
 - serialization: UTF-8 JSON;
 - endpoint path: `/v1/ws`;
@@ -136,27 +136,16 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 
 ## Текущая точка разработки
 
-`CORE-001 — Data Hub` завершён.
+Завершены:
 
-Текущий спринт — `CORE-002 — Service Hub`.
+- `CORE-001 — Data Hub`;
+- `CORE-002 — Service Hub`.
 
-Step 1 создал отдельный Service Hub skeleton.
+Service Hub имеет подтверждённый WebSocket + JSON v1 contract, provider routing, parallel correlation, timeout/cancel, disconnect/reconnect, browser-facing boundary и Linux lifecycle.
 
-Step 2 зафиксировал WebSocket + JSON transport и внешний v1 contract.
+Следующий спринт — `CORE-003 — Web Shell`.
 
-Step 3 реализовал `ProviderRegistry` и routing table.
-
-Step 4 реализовал реальный WebSocket request/response путь через test provider. Внутренняя JSON implementation использует `json-c`.
-
-Step 5 реализовал несколько одновременно активных requests, out-of-order responses, client-local request ID namespaces и единый timeout/correlation механизм без отдельного thread на каждый request.
-
-Step 6 подтвердил прямую browser-facing WebSocket boundary: `Origin` + стандартный browser WebSocket handshake + subprotocol `dispatcher.service-hub.v1`, без отдельного gateway и custom application headers.
-
-Текущий Step 7 завершает lifecycle/error behavior: process SIGINT/SIGTERM, client cancel, timeout/provider cancel, provider disconnect/reconnect, client disconnect cleanup и bounded shutdown.
-
-После успешного commit Step 7 следующее действие:
-
-`CORE-002 / Step 8 — sprint acceptance, итоговый отчёт и documentation audit`.
+Перед началом его реализации нужно отдельно зафиксировать подробные шаги и критерии завершения. Web Shell должен использовать уже подтверждённую browser-facing Service Hub boundary, не придумывая второй backend gateway без новой необходимости.
 
 ## Рабочий процесс
 

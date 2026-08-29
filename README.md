@@ -10,7 +10,9 @@
 
 `CORE-001 — Data Hub` завершён: существует отдельный C++20-сервис с gRPC + Protocol Buffers proto3 контрактом, хранением текущих значений, retained/live подписками, общей моделью state-метрик, базовым путём `WriteMetric` и Linux lifecycle-поведением.
 
-Следующий спринт — `CORE-002 — Service Hub`. Его конкретный транспорт и RPC-модель пока не выбраны. Технологии Event Hub, постоянное хранение, deployment и другие ещё не проработанные части остаются открытыми до соответствующих спринтов.
+`CORE-002 — Service Hub` завершён: существует отдельный C++20-сервис с WebSocket + UTF-8 JSON v1 контрактом, provider registration, адресным request/response routing, параллельной correlation, timeout/cancel, disconnect/reconnect semantics и напрямую browser-compatible клиентской границей для будущего Web Shell.
+
+Следующий спринт — `CORE-003 — Web Shell`. Перед реализацией для него должен быть зафиксирован подробный sprint plan. Технологии Event Hub, постоянное хранение, deployment, authentication/authorization и другие ещё не проработанные части остаются открытыми до соответствующих спринтов.
 
 ## Документация
 
@@ -20,8 +22,12 @@
 
 Контракт Data Hub: [`docs/architecture/data-hub-contract.md`](docs/architecture/data-hub-contract.md).
 
+Контракт Service Hub: [`docs/architecture/service-hub-contract.md`](docs/architecture/service-hub-contract.md).
+
 Дорожная карта: [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md).
 
 Итог `CORE-001`: [`docs/development/sprints/CORE-001.md`](docs/development/sprints/CORE-001.md).
+
+Итог `CORE-002`: [`docs/development/sprints/CORE-002.md`](docs/development/sprints/CORE-002.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

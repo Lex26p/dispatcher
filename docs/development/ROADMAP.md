@@ -163,13 +163,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-002 — Service Hub
 
-**Статус:** в разработке.
+**Статус:** завершён.
 
 **Цель:** создать адресное взаимодействие и request/response между сервисами.
 
 **Результат:** сервисы обращаются друг к другу через общий системный механизм без прямых C++ зависимостей между внутренними реализациями. Service Hub предоставляет реальную межпроцессную границу, а минимальный клиентский путь пригоден для использования следующим спринтом Web Shell.
 
-План спринта: [`sprints/CORE-002.md`](sprints/CORE-002.md).
+План и итоговый отчёт: [`sprints/CORE-002.md`](sprints/CORE-002.md).
 
 ### CORE-003 — Web Shell
 
@@ -407,59 +407,19 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 Спринты `L1-01 — Ядро платформы` определены.
 
-`CORE-001 — Data Hub` завершён.
+Завершены:
 
-Текущий спринт:
+- `CORE-001 — Data Hub`;
+- `CORE-002 — Service Hub`.
 
-**CORE-002 — Service Hub.**
+`CORE-002` прошёл отдельный sprint acceptance, lifecycle/error regression-проверки и финальную ревизию документации.
 
-Подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-002.md`.
+Последний подтверждённый implementation baseline перед Step 8:
 
-`CORE-002 / Step 1` завершён commit:
+`ba66ff6c3625c61adf5d6b2c1a4d89fd7a1a8e72`
 
-`a06d9cdd7a6c52197b6657c282ed89b745a799da`
+Следующий спринт:
 
-`CORE-002 / Step 2` завершён commit:
+**CORE-003 — Web Shell.**
 
-`8ae232fbebd8051213594aa42a03b22d16596e06`
-
-В Step 2 зафиксирован внешний Service Hub v1 contract:
-
-- WebSocket;
-- UTF-8 JSON;
-- endpoint `/v1/ws`;
-- subprotocol `dispatcher.service-hub.v1`;
-- provider/client connection roles;
-- request correlation, timeout и cancellation semantics.
-
-`CORE-002 / Step 3` завершён commit:
-
-`e04227b2f05d2ceb42a42ae2e6851d14905602f0`
-
-Step 3 реализовал provider registry и внутреннюю таблицу маршрутизации.
-
-`CORE-002 / Step 4` завершён commit:
-
-`53ffaa830dcd4aa9908a43ab2b6d2f83cb940c8e`
-
-Step 4 реализовал реальный WebSocket request/response маршрут через независимые client и provider connections.
-
-`CORE-002 / Step 5` завершён commit:
-
-`67010fcff69e243f18c21d7909979580cb4d82dc`
-
-Step 5 реализовал параллельные requests, out-of-order correlation, client-local request ID namespaces и общий deadline monitor.
-
-`CORE-002 / Step 6` завершён commit:
-
-`494b1f55f9570993241006ef379f3de519696747`
-
-Step 6 подтвердил прямую browser-facing WebSocket boundary без отдельного gateway.
-
-Текущий шаг:
-
-**CORE-002 / Step 7 — Lifecycle, ошибки и переподключение.**
-
-После успешной проверки и фиксации Step 7 следующим будет:
-
-**CORE-002 / Step 8 — Проверка спринта, итоговый отчёт и documentation audit.**
+Перед началом реализации CORE-003 нужно определить и согласовать его подробные шаги и критерии завершения, опираясь на существующую концепцию Web UI и подтверждённую browser-facing границу Service Hub.

@@ -47,9 +47,9 @@ WebSocket даёт один двусторонний protocol для обеих 
 
 Межсервисный контракт не зависит от C++ библиотеки.
 
-Для реализации Service Hub планируется использовать Boost.Asio + Boost.Beast как C++ WebSocket/networking foundation.
+Текущая реализация Service Hub использует Boost.Asio + Boost.Beast как C++ WebSocket/networking foundation.
 
-Конкретная JSON parsing library является внутренней деталью реализации и не является частью внешнего контракта.
+Для внутреннего JSON parsing/serialization используется `json-c`. Это implementation detail и не является частью внешнего контракта.
 
 ## Versioning
 
@@ -364,7 +364,9 @@ Provider не может продлить client deadline своим response.
 
 Hub отправляет `protocol_error` и завершает такое client connection.
 
-Provider response с неизвестным или уже завершённым provider-scoped ID также является protocol error.
+Provider response с ID, который Hub никогда не выдавал либо который не относится к допустимому active/recently-finished request, является protocol error.
+
+Поздний provider response для request, уже завершённого timeout или cancellation, является отдельным ожидаемым случаем: он игнорируется согласно разделам `Cancellation` и `Timeout` и не должен разрушать здоровое provider connection.
 
 ## Protocol error
 
@@ -409,11 +411,9 @@ Application request errors обычно возвращаются через `res
 
 ## Ping/pong
 
-WebSocket ping/pong используется как transport-level liveness mechanism.
+Стандартные WebSocket ping/pong frames относятся к transport layer и не представлены отдельными JSON messages.
 
-Он не представлен отдельными JSON messages.
-
-Точные heartbeat intervals относятся к реализации lifecycle и уточняются в Step 7.
+`CORE-002` не вводит собственный активный heartbeat interval или application-level heartbeat protocol. Production heartbeat/reconnect policy может быть добавлена позднее по реальной эксплуатационной необходимости без изменения текущих request/response envelopes.
 
 ## Web Shell boundary
 
@@ -492,3 +492,24 @@ Schema проверяет структуру отдельных messages.
 - что message direction соответствует connection role.
 
 Эти правила проверяет реализация Service Hub и интеграционные тесты.
+
+## Реализация CORE-002
+
+К завершению `CORE-002` внешний v1-контракт подтверждён реальными loopback WebSocket integration tests.
+
+Проверены:
+
+- provider registration и routing по `service`;
+- успешный request/response с восстановлением исходного client request ID;
+- несколько одновременно активных requests и out-of-order responses;
+- независимые client-local request ID namespaces;
+- `hub.unknown_service` и `hub.invalid_request`;
+- timeout и best-effort provider cancel;
+- client cancel;
+- provider disconnect с `hub.provider_unavailable`;
+- route removal и повторная регистрация provider после reconnect;
+- игнорирование позднего response после timeout/cancel;
+- browser-shaped WebSocket handshake с `Origin` и согласованием subprotocol;
+- bounded shutdown и остановка процесса по SIGINT/SIGTERM.
+
+Authentication/authorization, production Origin/TLS policy, persistent registry, load balancing и high availability остаются за границами `CORE-002`.

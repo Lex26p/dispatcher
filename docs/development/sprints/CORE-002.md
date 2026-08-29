@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке.**
+**Завершён после успешной проверки Step 8.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -381,6 +381,10 @@ Transport дополнен уже определённой v1-семантико
 
 Lifecycle/error test дополнительно проверяет unknown service, invalid request, timeout, reconnect, client disconnect и bounded shutdown с активным request.
 
+Step 7 завершён commit:
+
+`ba66ff6c3625c61adf5d6b2c1a4d89fd7a1a8e72`
+
 ## Step 8 — Проверка спринта, итоговый отчёт и documentation audit
 
 ### Что делаем
@@ -413,6 +417,25 @@ Lifecycle/error test дополнительно проверяет unknown servi
 
 Все критерии `CORE-002` подтверждены, документация синхронизирована, следующий спринт может опираться на реальный Service Hub.
 
+### Реализация Step 8
+
+Добавлен отдельный CTest `service-hub.sprint-acceptance` через реальную loopback WebSocket boundary.
+
+Один acceptance scenario подтверждает цепочку:
+
+1. Service Hub стартует на ephemeral loopback port.
+2. Test provider регистрирует `test.acceptance`.
+3. Browser-shaped client подключается к `/v1/ws` с `Origin` и subprotocol `dispatcher.service-hub.v1`.
+4. Выполняется успешный request/response.
+5. Два requests одновременно находятся в работе, provider отвечает в обратном порядке, а client получает правильные responses.
+6. Unknown service возвращает `hub.unknown_service`.
+7. Provider отключается во время active request, client получает `hub.provider_unavailable`.
+8. Новый provider регистрирует тот же service после reconnect.
+9. После reconnect request/response снова работает.
+10. Shutdown с активным long-running request остаётся bounded.
+
+Step 8 не добавляет новую production-функциональность и не меняет Service Hub v1 contract.
+
 # Что сознательно не входит в CORE-002
 
 - React/Web Shell;
@@ -442,28 +465,120 @@ Lifecycle/error test дополнительно проверяет unknown servi
 
 # Итоговый отчёт
 
-Заполняется после завершения спринта.
-
 ## Фактически реализовано
 
-Пока не заполнено.
+В `CORE-002` реализован самостоятельный Service Hub на C++20.
+
+Внешняя граница v1:
+
+- WebSocket;
+- UTF-8 JSON text messages;
+- endpoint `/v1/ws`;
+- subprotocol `dispatcher.service-hub.v1`;
+- machine-readable JSON Schema общего envelope.
+
+Runtime-механизмы:
+
+- provider registration по непрозрачному service address;
+- один active provider на service и один service на provider connection;
+- route removal после provider disconnect;
+- request addressing через `service` + `operation`;
+- opaque JSON payload без предметной интерпретации Hub;
+- Hub-scoped provider request IDs и client-local request ID namespaces;
+- несколько одновременно активных requests;
+- корректная correlation при out-of-order responses;
+- единая pending table и общий deadline monitor без отдельного OS thread на request;
+- timeout;
+- client cancellation;
+- best-effort provider cancellation при client cancel/disconnect и timeout;
+- `hub.unknown_service`, `hub.invalid_request`, `hub.timeout`, `hub.cancelled`, `hub.provider_unavailable` и базовые protocol errors;
+- provider disconnect/reconnect;
+- игнорирование поздних responses после timeout/cancel;
+- напрямую browser-compatible client boundary без обязательного дополнительного gateway;
+- самостоятельный executable с optional listen address;
+- SIGINT/SIGTERM через blocked signals + synchronous `sigwait()`;
+- bounded shutdown и базовые lifecycle diagnostics.
+
+Текущая C++ implementation использует Boost.Asio + Boost.Beast и внутренний `json-c`. Межсервисный контракт от этих библиотек не зависит.
 
 ## Выполненные проверки
 
-Пока не заполнено.
+Финальная clean WSL-проверка выполняется перед commit Step 8 и включает сборку Service Hub и восемь CTest:
+
+- `service-hub.application`;
+- `service-hub.provider-registry`;
+- `service-hub.request-response`;
+- `service-hub.browser-boundary`;
+- `service-hub.lifecycle-and-errors`;
+- `service-hub.signal-term`;
+- `service-hub.signal-int`;
+- `service-hub.sprint-acceptance`.
+
+`service-hub.sprint-acceptance` отдельно проверяет полный путь registration → browser-shaped client request → provider response → parallel correlation → unknown service → provider disconnect → reconnect → повторный request/response → bounded shutdown.
+
+Regression-проверки дополнительно покрывают invalid request, timeout, client cancel, provider cancel, поздний response после timeout/cancel, client disconnect cleanup и реальные SIGINT/SIGTERM процесса.
 
 ## Отклонения от плана
 
-Пока не заполнено.
+Существенного расширения scope не было.
+
+Конкретный transport намеренно не был выбран до Step 2. После сравнения требований выбран WebSocket + JSON, а не автоматическое повторение gRPC Data Hub.
+
+Отдельный browser gateway не понадобился: выбранный v1 WebSocket protocol напрямую совместим с browser WebSocket API, что было подтверждено Step 6.
+
+В Step 5 первоначальная последовательная модель client session была заменена на общую pending-correlation table и outbound queues, чтобы выполнить требование параллельных requests без создания отдельного worker thread на каждый request.
+
+В Step 7 Linux signal lifecycle повторно использует уже подтверждённый в Data Hub pattern вместо создания второго несовместимого механизма.
 
 ## Известные ограничения
 
-Пока не заполнено.
+После `CORE-002` сознательно остаются:
+
+- нет authentication и authorization;
+- нет user/project/control-mode context;
+- нет production Origin policy;
+- нет TLS termination / обязательного `wss://` deployment решения;
+- provider registry хранится только в памяти и не восстанавливается после restart;
+- один active provider на service, без load balancing;
+- один service на provider connection;
+- нет clustering/high availability;
+- нет service discovery через Package Manager;
+- нет каталога operations или централизованной предметной schema registry;
+- нет production-final observability/log aggregation;
+- connection/session threading и очереди не проходили production-scale нагрузочные тесты;
+- outbound queue/backpressure policy пока не является production-final;
+- нет специально настроенного active heartbeat interval поверх стандартного WebSocket transport;
+- browser boundary подтверждена protocol-level integration test, но реальный React Web Shell создаётся только в `CORE-003`.
 
 ## Проверка актуальности документации
 
-Пока не выполнена.
+В Step 8 проведена целевая ревизия документов, которые могли устареть после реализации Service Hub.
+
+Синхронизированы:
+
+- корневой `README.md`;
+- `docs/README.md`;
+- `docs/architecture/README.md`;
+- `docs/architecture/service-hub-contract.md`;
+- `docs/development/ROADMAP.md`;
+- этот sprint report;
+- `services/service-hub/README.md`;
+- `docs/context/CHAT_CONTEXT.md`.
+
+Дополнительно устранена неоднозначность контракта для позднего provider response: timeout/cancel semantics требуют его игнорировать, поэтому общий текст про unknown/completed provider IDs уточнён и больше не противоречит этим правилам.
+
+`AGENTS.md` проверен: правила source-of-truth, ZIP overlay, запрета `git diff` и обязательного documentation audit уже актуальны, поэтому изменение файла не требуется.
+
+Concept-документы проверены по области влияния. `docs/concept/10-web-ui.md` не требует изменения: `CORE-002` определил транспортную границу Web Shell, но не изменил согласованную продуктовую модель Web UI.
 
 ## Итоговый baseline
 
-Пока не определён.
+Последний подтверждённый implementation baseline перед Step 8:
+
+`ba66ff6c3625c61adf5d6b2c1a4d89fd7a1a8e72`
+
+Финальным baseline `CORE-002` является Step 8 documentation-closure commit, содержащий sprint acceptance test, этот итоговый отчёт и синхронизированные документы.
+
+Его SHA пользователь возвращает после успешной clean WSL-проверки, после чего SHA проверяется в GitHub перед началом `CORE-003`.
+
+Отдельный рекурсивный commit только ради записи SHA самого closure commit внутрь этого файла не создаётся.
