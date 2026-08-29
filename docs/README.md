@@ -53,8 +53,9 @@
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
+- [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план текущего спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён. Следующий планируемый спринт — `CORE-005 — Users & Access`; перед реализацией для него должен быть зафиксирован отдельный sprint plan на проверенном closure baseline CORE-004.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится на стадии отдельного sprint plan; реализация не начинается до фиксации и проверки plan commit.
 
 ### `docs/context/`
 

@@ -16,7 +16,7 @@
 
 `CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery. Authentication/authorization по-прежнему относится к `CORE-005 — Users & Access`.
 
-Следующий спринт — `CORE-005 — Users & Access`. Его реализация начинается только после отдельного sprint plan commit на проверенном closure baseline `CORE-004`.
+`CORE-005 — Users & Access` — текущий планируемый спринт. План находится в `docs/development/sprints/CORE-005.md`; реализация начинается только после отдельного plan commit и проверки его SHA на baseline `29b1f0ea750633cc53cc4e023585835d2b06ad8b`.
 
 ## Документация
 
@@ -39,5 +39,7 @@
 Итог `CORE-003`: [`docs/development/sprints/CORE-003.md`](docs/development/sprints/CORE-003.md).
 
 Итог `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
+
+План `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

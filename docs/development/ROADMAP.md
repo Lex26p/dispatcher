@@ -193,9 +193,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-005 — Users & Access
 
+**Статус:** планирование.
+
 **Цель:** добавить пользовательский контекст и контроль доступа.
 
 **Результат:** backend и Web выполняют действия в контексте пользователя и проверяют права просмотра, управления, редактирования и администрирования, включая режим управления.
+
+План спринта: [`sprints/CORE-005.md`](sprints/CORE-005.md).
 
 ### CORE-006 — Device Manager
 
@@ -419,114 +423,25 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 - `CORE-001 — Data Hub`;
 - `CORE-002 — Service Hub`;
-- `CORE-003 — Web Shell`.
+- `CORE-003 — Web Shell`;
+- `CORE-004 — Project Manager`.
 
-Финальный подтверждённый baseline `CORE-002`:
+Финальный documentation closure `CORE-004`:
 
-`7df47f234f6e0638e0f41ef81706d05244d7d2ea`
+`29b1f0ea750633cc53cc4e023585835d2b06ad8b`
 
-Текущий спринт:
+`CORE-004` дал отдельный C++ Project Manager, durable local SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared browser-session project context и реальную browser → Service Hub → Project Manager → SQLite restart-recovery integration.
 
-**CORE-003 — Web Shell.**
+Текущий планируемый спринт:
 
-Подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-003.md`.
+**CORE-005 — Users & Access.**
 
-Plan `CORE-003` зафиксирован commit:
+Цель roadmap для CORE-005: backend и Web выполняют действия в authenticated user context и проверяют права просмотра, управления, редактирования и администрирования, включая режим управления.
 
-`12f0fd374e515d47aa8289f476ff233cc69d201c`
+Подробный план и критерии завершения:
 
-`CORE-003 / Step 1` завершён commit:
+`docs/development/sprints/CORE-005.md`
 
-`f974baa578ad310cbcd3403836d47fc2a32ec7d8`
+Plan commit должен быть зафиксирован отдельным SHA поверх closure baseline `29b1f0ea750633cc53cc4e023585835d2b06ad8b` и проверен в репозитории до начала Step 1.
 
-Step 1 зафиксировал `web/`, React + TypeScript toolchain, reproducible npm lockfile, component test и Playwright browser smoke.
-
-`CORE-003 / Step 2` завершён commit:
-
-`a8f7b91a8b0c23385ce349c55ca6e6a70e9685c8`
-
-Step 2 зафиксировал компактный global Header, структурный резерв global actions, рабочую область, responsive smoke и исключение generated `*.tsbuildinfo` из version control.
-
-`CORE-003 / Step 3` завершён commit:
-
-`81264746c0948b664c30b91418b8cc477b6b2f82`
-
-Step 3 зафиксировал global menu, shell-level route `/`, unknown-route fallback и keyboard-friendly navigation без router dependency.
-
-`CORE-003 / Step 4` завершён commit:
-
-`02002f48a08cae6697b28be5e06b73864c2d9384`
-
-Step 4 зафиксировал самостоятельный TypeScript client Service Hub v1 с configurable WebSocket URL, connection state, request correlation, cancel и разделением Hub request errors / transport failures.
-
-`CORE-003 / Step 5` завершён commit:
-
-`d612dcfec40c6447c35bc59993514fbb05e20e73`
-
-Step 5 зафиксировал shared React Service Hub Provider/context, configurable URL и ненавязчивый connection status при сохранении работоспособности shell без backend.
-
-`CORE-003 / Step 6` завершён commit:
-
-`f128c55748a5e2957151ba29b0c1d872614ccadf`
-
-Step 6 подтвердил реальный browser → Service Hub → test provider path, parallel correlation, cancel, unavailable state и явный reconnect.
-
-`CORE-003 — Web Shell` окончательно закрыт documentation commit:
-
-`88c5bb30f182f7d9898ad4c95b210a045060c94f`
-
-Текущий спринт:
-
-**CORE-004 — Project Manager.**
-
-Подробный план и критерии завершения находятся в `docs/development/sprints/CORE-004.md`.
-
-Базовая точка CORE-004 перед реализацией:
-
-`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
-
-Sprint plan CORE-004 зафиксирован commit:
-
-`d36aaa5cdcbdfc0a2d95490d08fd46ab01c1db41`
-
-`CORE-004 / Step 1` завершён commit:
-
-`172e40887fde3b5b963264904e0c4fa73225a34a`
-
-Step 1 зафиксировал отдельный C++ Project Manager target, минимальную Project model (`id`, `name`, `description`), application boundary, storage port, unit tests и Linux lifecycle.
-
-`CORE-004 / Step 2` завершён commit:
-
-`1d90091ee7804d1bb8c49618a1780a226488c671`
-
-Step 2 зафиксировал локальный SQLite schema v1 и durable restart/reopen behavior без выбора общей БД платформы.
-
-`CORE-004 / Step 3` завершён commit:
-
-`7eb7c89e3f5d9b975dc10b71f4a1bbff8e00ed29`
-
-Step 3 зафиксировал `project-manager.v1`, create/list/get/update payload/errors и реальную provider registration/reconnect boundary через существующий Service Hub v1.
-
-`CORE-004 / Step 4` завершён commit:
-
-`7527e2758f77e40cb6b86795e2b2a21896e55224`
-
-Step 4 зафиксировал `/projects`, typed Project Manager client adapter и реальный list/create/edit UI поверх shared `ServiceHubClient`.
-
-`CORE-004 / Step 5` завершён commit:
-
-`1b4017526789e32e5e4ece90a63fa287cddb57c8`
-
-Step 5 зафиксировал общий React project context, browser-session persistence, remote `get-project` validation, выбор из реального списка и compact Header indication без изменения backend contracts.
-
-`CORE-004 / Step 6` завершён commit:
-
-`9818254650fdf26ba8a2708dacca16433989d8fe`
-
-Step 6 подтвердил production browser → Service Hub → Project Manager → SQLite path: create/edit/context, parallel project requests, локальное состояние при недоступном Project Manager, restart на той же database, повторную provider registration, stable project ID и сохранность данных/context.
-
-`CORE-004 / Step 7` завершает спринт acceptance/report/documentation closure без новых product features.
-
-`CORE-004 — Project Manager` завершён. Проекты остаются самостоятельными плоскими точками консолидации/контекста и не становятся владельцами Dashboard/Device/других будущих ресурсов. Users & Access/authentication не имитировались.
-
-Следующее действие после проверки documentation closure commit — подготовить отдельный план `CORE-005 — Users & Access`. Реализация CORE-005 не начинается до фиксации и проверки этого плана.
+План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

@@ -143,7 +143,7 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 - внешний Driver Runtime API и межпроцессный путь write-provider;
 - механизм восстановления runtime state;
 - точный state enum;
-- аутентификация/токены;
+- exact authentication/session representation для CORE-005 до contract step;
 - production TLS/origin policy Service Hub;
 - frontend state manager и UI-библиотеки.
 
@@ -173,9 +173,21 @@ Sprint plan CORE-004:
 - Step 5 — `1b4017526789e32e5e4ece90a63fa287cddb57c8`;
 - Step 6 — `9818254650fdf26ba8a2708dacca16433989d8fe`.
 
-CORE-004 даёт отдельный C++ Project Manager, local durable SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared frontend project context и реальный browser/backend restart-recovery acceptance path. Проект не владеет будущими Dashboard/Device/resources; auth/ACL не имитируются.
+Closure CORE-004:
 
-Следующий планируемый спринт — `CORE-005 — Users & Access`. Сначала должен быть подготовлен и отдельным commit зафиксирован sprint plan на проверенном CORE-004 closure baseline; только после проверки SHA начинается реализация.
+`29b1f0ea750633cc53cc4e023585835d2b06ad8b`
+
+CORE-004 даёт отдельный C++ Project Manager, local durable SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared frontend project context и реальный browser/backend restart-recovery acceptance path. Проект не владеет будущими Dashboard/Device/resources; auth/ACL не имитировались.
+
+Текущий планируемый спринт — `CORE-005 — Users & Access`.
+
+План: `docs/development/sprints/CORE-005.md`.
+
+CORE-005 должен дать stable user identity, durable users/access configuration, local authentication/session boundary, согласованный authenticated Service Hub request path, backend-authoritative Project Manager access, Web login/current-user/access administration и control-mode baseline. Первый sprint реально применяет global + project scope; Device/Dashboard-specific ACL, external IdP/MFA и Event Hub audit publication не имитируются.
+
+Exact credential hashing dependency, session/token representation и Service Hub auth representation выбираются только на соответствующих шагах плана.
+
+До проверки отдельного CORE-005 plan commit реализация Step 1 не начинается.
 
 ## Рабочий процесс
 
