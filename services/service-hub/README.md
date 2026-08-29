@@ -4,97 +4,102 @@ Service Hub is the addressable request/response service of Dispatcher.
 
 ## Current implementation stage
 
-`CORE-002 / Step 6` confirms the direct browser-facing boundary required by the future Web Shell.
+`CORE-002 / Step 7` completes the planned lifecycle, error and reconnect behavior before final sprint acceptance.
 
-The external v1 WebSocket + UTF-8 JSON contract remains unchanged. No HTTP/gRPC-Web gateway is added.
+The external Service Hub v1 WebSocket + UTF-8 JSON contract remains unchanged.
 
 ## Implemented
 
 Current implementation includes:
 
-- independent C++20 Service Hub skeleton;
-- external Service Hub v1 contract and JSON Schema;
-- thread-safe `ProviderRegistry`;
-- Boost.Asio + Boost.Beast WebSocket transport;
-- endpoint `/v1/ws`;
-- required WebSocket subprotocol `dispatcher.service-hub.v1`;
-- UTF-8 JSON text messages;
-- provider registration over a real WebSocket connection;
-- request/response routing through independent client/provider connections;
-- parallel request correlation and out-of-order responses;
-- client-local request ID namespaces;
-- timeout handling through one shared deadline monitor;
-- direct browser-compatible WebSocket entry point verified by a dedicated integration test.
+- independent C++20 Service Hub process;
+- WebSocket endpoint `/v1/ws`;
+- subprotocol `dispatcher.service-hub.v1`;
+- provider registration and routing by `service`;
+- parallel request correlation;
+- client-local request IDs and Hub-scoped provider IDs;
+- timeout handling;
+- direct browser-compatible client boundary;
+- client `cancel`;
+- best-effort provider `cancel` after client cancellation, client disconnect or timeout;
+- `hub.provider_unavailable` for active requests when a provider disconnects;
+- provider route removal and re-registration after reconnect;
+- ignored late provider responses for already timed-out/cancelled requests;
+- bounded server shutdown with active connections;
+- real process shutdown on SIGINT and SIGTERM;
+- basic lifecycle diagnostics.
 
-## Browser/Web Shell boundary
+## Lifecycle executable
 
-The future Web Shell connects directly with the standard browser WebSocket API:
+The executable accepts an optional listen address:
+
+    dispatcher-service-hub [listen-address]
+
+Default:
+
+    0.0.0.0:50052
+
+Example for an ephemeral loopback port:
+
+    dispatcher-service-hub 127.0.0.1:0
+
+On successful start it reports:
+
+    Dispatcher Service Hub listening on <listen-address> (bound port <port>)
+
+SIGINT and SIGTERM are blocked before Service Hub worker threads are created and are synchronously consumed by the application thread through `sigwait()`.
+
+Shutdown diagnostics include the signal name and final stopped message.
+
+## Error and reconnect behavior
+
+The Step 7 integration test verifies:
+
+- unknown service -> `hub.unknown_service`;
+- invalid request -> `hub.invalid_request`;
+- request timeout -> `hub.timeout`;
+- timeout sends `cancel` to the provider;
+- a late provider response after timeout is ignored and the provider connection remains usable;
+- client `cancel` -> `hub.cancelled` and provider receives `cancel`;
+- a client connection remains usable after cancelling one request;
+- provider disconnect during an active request -> `hub.provider_unavailable`;
+- the disconnected provider route is removed;
+- a new provider connection can register the same service and routing works again;
+- client disconnect sends provider cancellation for active work;
+- `ServiceHubServer::shutdown()` remains bounded with an active long-running request.
+
+## Browser boundary
+
+The future Web Shell continues to use the same direct WebSocket boundary:
 
     const socket = new WebSocket(
-      "ws://host:port/v1/ws",
+      serviceHubUrl,
       "dispatcher.service-hub.v1"
     );
 
-No custom HTTP request headers are required by CORE-002.
+No additional browser gateway is introduced in Step 7.
 
-The Step 6 integration test uses a browser-shaped handshake:
+## Internal implementation notes
 
-- standard WebSocket Upgrade request;
-- `Origin` header like a development Web application;
-- `Sec-WebSocket-Protocol: dispatcher.service-hub.v1`;
-- no custom authentication or application HTTP headers;
-- normal masked WebSocket client frames;
-- UTF-8 JSON application messages.
+Boost.Asio + Boost.Beast provide the WebSocket/networking layer.
 
-The test verifies that Service Hub:
+`json-c` is used internally for JSON parsing/serialization and is not part of the public protocol.
 
-1. accepts the connection;
-2. returns `101 Switching Protocols`;
-3. explicitly negotiates `dispatcher.service-hub.v1`;
-4. accepts a JSON request from that connection;
-5. routes it through a registered provider;
-6. returns the response with the original browser-client request ID.
+Recent timed-out/cancelled Hub request IDs are retained in a bounded internal set so a late provider response can be ignored as required by the v1 contract instead of being mistaken for an unknown request.
 
-This proves the concrete transport boundary required by `CORE-003 — Web Shell` without creating the React application early.
+## Still outside CORE-002 Step 7
 
-## Security note
-
-CORE-002 does not define production Origin policy, authentication tokens or TLS.
-
-A development-style `Origin` is accepted because those policies belong to future security/deployment work. The application protocol does not require browser-incompatible custom headers.
-
-Production deployment may use `wss://` and a reverse proxy without changing the Service Hub v1 application messages.
-
-## Internal JSON implementation
-
-The external protocol is JSON and does not depend on a C++ JSON library.
-
-The current implementation uses `json-c` internally for parsing and serialization. This remains an implementation detail.
-
-## Not implemented yet
-
-Step 6 intentionally does not complete:
-
-- client `cancel`;
-- best-effort provider cancel;
-- complete provider-disconnect handling for active requests;
-- provider reconnect integration tests;
-- final lifecycle/signal handling;
-- authentication or authorization;
+- authentication and authorization;
 - production Origin/TLS policy;
+- production observability/log aggregation;
+- clustering/high availability;
 - the React Web Shell itself.
 
-The next step is `CORE-002 / Step 7 — Lifecycle, ошибки и переподключение`.
+The next step is `CORE-002 / Step 8 — sprint acceptance, final report and documentation audit`.
 
 ## Dependencies
 
-In addition to the existing C++ toolchain, Service Hub transport currently needs:
-
-- Boost headers with Boost.Asio/Boost.Beast;
-- `json-c` development files;
-- pthread support through CMake `Threads`.
-
-On Ubuntu/WSL the development packages are typically:
+On Ubuntu/WSL the Service Hub development dependencies include:
 
     libboost-dev
     libjson-c-dev
@@ -103,7 +108,7 @@ On Ubuntu/WSL the development packages are typically:
 
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests dispatcher_service_hub_request_response_tests dispatcher_service_hub_browser_boundary_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests dispatcher_service_hub_request_response_tests dispatcher_service_hub_browser_boundary_tests dispatcher_service_hub_lifecycle_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^service-hub\."
 
 Current CTest checks:
@@ -111,4 +116,7 @@ Current CTest checks:
 - `service-hub.application`;
 - `service-hub.provider-registry`;
 - `service-hub.request-response`;
-- `service-hub.browser-boundary`.
+- `service-hub.browser-boundary`;
+- `service-hub.lifecycle-and-errors`;
+- `service-hub.signal-term`;
+- `service-hub.signal-int`.

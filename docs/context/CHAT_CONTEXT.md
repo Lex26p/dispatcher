@@ -150,11 +150,13 @@ Step 4 реализовал реальный WebSocket request/response путь
 
 Step 5 реализовал несколько одновременно активных requests, out-of-order responses, client-local request ID namespaces и единый timeout/correlation механизм без отдельного thread на каждый request.
 
-Текущий Step 6 подтверждает прямую browser-facing WebSocket boundary: `Origin` + стандартный browser WebSocket handshake + subprotocol `dispatcher.service-hub.v1`, без отдельного gateway и custom application headers.
+Step 6 подтвердил прямую browser-facing WebSocket boundary: `Origin` + стандартный browser WebSocket handshake + subprotocol `dispatcher.service-hub.v1`, без отдельного gateway и custom application headers.
 
-После успешного commit Step 6 следующее действие:
+Текущий Step 7 завершает lifecycle/error behavior: process SIGINT/SIGTERM, client cancel, timeout/provider cancel, provider disconnect/reconnect, client disconnect cleanup и bounded shutdown.
 
-`CORE-002 / Step 7 — Lifecycle, ошибки и переподключение`.
+После успешного commit Step 7 следующее действие:
+
+`CORE-002 / Step 8 — sprint acceptance, итоговый отчёт и documentation audit`.
 
 ## Рабочий процесс
 

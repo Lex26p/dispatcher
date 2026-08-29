@@ -333,6 +333,10 @@ const socket = new WebSocket(
 
 React-приложение, authentication, production Origin policy и TLS в Step 6 не добавляются.
 
+Step 6 завершён commit:
+
+`494b1f55f9570993241006ef379f3de519696747`
+
 ## Step 7 — Lifecycle, ошибки и переподключение
 
 ### Что делаем
@@ -353,6 +357,29 @@ React-приложение, authentication, production Origin policy и TLS в S
 ### Результат
 
 Service Hub предсказуемо работает не только в happy-path сценарии.
+
+### Реализация Step 7
+
+Самостоятельный executable теперь запускает реальный `ServiceHubServer`, принимает необязательный listen address и остаётся активным до SIGINT/SIGTERM.
+
+Используется тот же проверенный Linux signal pattern, что и в Data Hub: SIGINT/SIGTERM блокируются до создания worker threads и обрабатываются синхронно через `sigwait()`.
+
+Transport дополнен уже определённой v1-семантикой:
+
+- client `cancel` завершает request как `hub.cancelled`;
+- Hub best-effort передаёт provider `cancel` при client cancel, client disconnect и timeout;
+- provider disconnect завершает связанные active requests как `hub.provider_unavailable`;
+- route удаляется после provider disconnect;
+- новый provider connection может зарегистрировать тот же service;
+- поздний provider response после timeout/cancel игнорируется и не разрушает provider connection.
+
+Добавляются CTest-проверки:
+
+- `service-hub.lifecycle-and-errors`;
+- `service-hub.signal-term`;
+- `service-hub.signal-int`.
+
+Lifecycle/error test дополнительно проверяет unknown service, invalid request, timeout, reconnect, client disconnect и bounded shutdown с активным request.
 
 ## Step 8 — Проверка спринта, итоговый отчёт и documentation audit
 

@@ -450,10 +450,16 @@ Step 4 реализовал реальный WebSocket request/response марш
 
 Step 5 реализовал параллельные requests, out-of-order correlation, client-local request ID namespaces и общий deadline monitor.
 
+`CORE-002 / Step 6` завершён commit:
+
+`494b1f55f9570993241006ef379f3de519696747`
+
+Step 6 подтвердил прямую browser-facing WebSocket boundary без отдельного gateway.
+
 Текущий шаг:
 
-**CORE-002 / Step 6 — Клиентская граница для Web Shell.**
-
-После успешной проверки и фиксации Step 6 следующим будет:
-
 **CORE-002 / Step 7 — Lifecycle, ошибки и переподключение.**
+
+После успешной проверки и фиксации Step 7 следующим будет:
+
+**CORE-002 / Step 8 — Проверка спринта, итоговый отчёт и documentation audit.**

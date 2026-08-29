@@ -39,6 +39,7 @@ constexpr std::string_view kSubprotocol = "dispatcher.service-hub.v1";
 constexpr std::size_t kMaximumMessageSize = 1024 * 1024;
 constexpr int kDefaultTimeoutMs = 5000;
 constexpr int kMaximumTimeoutMs = 60000;
+constexpr std::size_t kIgnoredRequestLimit = 4096;
 
 using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
 
@@ -254,14 +255,35 @@ parse_listen_address(const std::string_view address) {
     return serialize_json(root.get());
 }
 
+[[nodiscard]] std::string make_cancel_message(
+    const std::string_view request_id) {
+    auto root = adopt_json(json_object_new_object());
+    json_object_object_add(root.get(), "type", json_object_new_string("cancel"));
+    json_object_object_add(
+        root.get(),
+        "id",
+        json_object_new_string_len(
+            request_id.data(),
+            static_cast<int>(request_id.size())));
+    return serialize_json(root.get());
+}
+
 }  // namespace
 
 class ServiceHubServer::Impl final {
 public:
     class Session;
 
+    enum class CompletePendingResult {
+        completed,
+        ignored,
+        unknown,
+    };
+
     struct PendingRequest final {
         std::weak_ptr<Session> client_session;
+        ProviderConnectionId client_connection_id{0};
+        ProviderConnectionId provider_connection_id{0};
         std::string client_request_id;
         std::chrono::steady_clock::time_point deadline;
         bool timeout_armed{false};
@@ -611,20 +633,23 @@ public:
                 }
             }
 
-            if (!owner_.complete_pending_request(
-                    request_id,
-                    serialize_json(parsed->get()))) {
-                send_text(make_protocol_error(
-                    "hub.protocol_error",
-                    "Provider response refers to an unknown request"));
-                return false;
+            const auto completion = owner_.complete_pending_request(
+                request_id,
+                serialize_json(parsed->get()));
+
+            if (completion == CompletePendingResult::completed ||
+                completion == CompletePendingResult::ignored) {
+                return true;
             }
 
-            return true;
+            send_text(make_protocol_error(
+                "hub.protocol_error",
+                "Provider response refers to an unknown request"));
+            return false;
         }
 
         void run_client(const std::string& first_message) {
-            if (!handle_client_request(first_message)) {
+            if (!handle_client_message(first_message)) {
                 return;
             }
 
@@ -665,14 +690,14 @@ public:
                     return;
                 }
 
-                if (!handle_client_request(message)) {
+                if (!handle_client_message(message)) {
                     active_.store(false);
                     return;
                 }
             }
         }
 
-        [[nodiscard]] bool handle_client_request(
+        [[nodiscard]] bool handle_client_message(
             const std::string_view message) {
             const auto parsed = parse_json(message);
 
@@ -685,17 +710,61 @@ public:
             }
 
             std::string type;
+
+            if (!get_string(parsed->get(), "type", type)) {
+                send_text(make_protocol_error(
+                    "hub.protocol_error",
+                    "Client message is missing type"));
+                return false;
+            }
+
+            if (type == "request") {
+                return handle_client_request(parsed->get());
+            }
+
+            if (type == "cancel") {
+                return handle_client_cancel(parsed->get());
+            }
+
+            send_text(make_protocol_error(
+                "hub.protocol_error",
+                "Client sent an unsupported message type"));
+            return false;
+        }
+
+        [[nodiscard]] bool handle_client_cancel(json_object* message) {
+            std::string client_request_id;
+
+            if (!get_string(message, "id", client_request_id) ||
+                !is_valid_request_id(client_request_id)) {
+                send_text(make_protocol_error(
+                    "hub.protocol_error",
+                    "Client cancel envelope is invalid"));
+                return false;
+            }
+
+            if (!owner_.cancel_client_request(
+                    connection_id_,
+                    client_request_id)) {
+                return send_text(make_request_error(
+                    client_request_id,
+                    "hub.invalid_request",
+                    "No active request matches the cancel identifier"));
+            }
+
+            return true;
+        }
+
+        [[nodiscard]] bool handle_client_request(json_object* message) {
             std::string client_request_id;
             std::string service;
             std::string operation;
 
-            if (!get_string(parsed->get(), "type", type) ||
-                type != "request" ||
-                !get_string(parsed->get(), "id", client_request_id) ||
+            if (!get_string(message, "id", client_request_id) ||
                 !is_valid_request_id(client_request_id) ||
-                !get_string(parsed->get(), "service", service) ||
+                !get_string(message, "service", service) ||
                 !ProviderRegistry::is_valid_service_address(service) ||
-                !get_string(parsed->get(), "operation", operation) ||
+                !get_string(message, "operation", operation) ||
                 !ProviderRegistry::is_valid_service_address(operation)) {
                 return send_text(make_request_error(
                     client_request_id.empty() ? "invalid" : client_request_id,
@@ -706,7 +775,7 @@ public:
             json_object* payload = nullptr;
 
             if (!json_object_object_get_ex(
-                    parsed->get(),
+                    message,
                     "payload",
                     &payload)) {
                 return send_text(make_request_error(
@@ -719,7 +788,7 @@ public:
             json_object* timeout = nullptr;
 
             if (json_object_object_get_ex(
-                    parsed->get(),
+                    message,
                     "timeout_ms",
                     &timeout)) {
                 if (!json_object_is_type(timeout, json_type_int)) {
@@ -782,6 +851,8 @@ public:
 
             auto pending = std::make_shared<PendingRequest>();
             pending->client_session = shared_from_this();
+            pending->client_connection_id = connection_id_;
+            pending->provider_connection_id = *provider_id;
             pending->client_request_id = client_request_id;
             pending->deadline =
                 std::chrono::steady_clock::now() +
@@ -1059,7 +1130,12 @@ private:
     }
 
     void expire_pending_requests() {
-        std::vector<std::shared_ptr<PendingRequest>> expired;
+        struct ExpiredRequest final {
+            std::string provider_request_id;
+            std::shared_ptr<PendingRequest> pending;
+        };
+
+        std::vector<ExpiredRequest> expired;
         const auto now = std::chrono::steady_clock::now();
 
         {
@@ -1071,7 +1147,9 @@ private:
 
                 if (pending->timeout_armed &&
                     pending->deadline <= now) {
-                    expired.push_back(pending);
+                    mark_ignored_provider_request_locked(iterator->first);
+                    expired.push_back(
+                        {iterator->first, pending});
                     iterator = pending_requests_.erase(iterator);
                 } else {
                     ++iterator;
@@ -1079,12 +1157,16 @@ private:
             }
         }
 
-        for (const auto& pending : expired) {
-            if (const auto client = pending->client_session.lock()) {
+        for (const auto& item : expired) {
+            send_provider_cancel(
+                item.pending->provider_connection_id,
+                item.provider_request_id);
+
+            if (const auto client = item.pending->client_session.lock()) {
                 (void)client->complete_client_request(
-                    pending->client_request_id,
+                    item.pending->client_request_id,
                     make_request_error(
-                        pending->client_request_id,
+                        item.pending->client_request_id,
                         "hub.timeout",
                         "Provider did not respond before the request deadline"));
             }
@@ -1093,10 +1175,140 @@ private:
 
     void on_session_closed(
         const ProviderConnectionId connection_id) {
+        const bool was_provider =
+            provider_registry_.find_service(connection_id).has_value();
+
+        if (was_provider) {
+            fail_pending_for_provider(connection_id);
+        }
+
+        cancel_pending_for_client(connection_id);
         (void)provider_registry_.unregister_provider(connection_id);
 
         std::lock_guard lock(sessions_mutex_);
         sessions_.erase(connection_id);
+    }
+
+    void send_provider_cancel(
+        const ProviderConnectionId provider_connection_id,
+        const std::string_view provider_request_id) {
+        const auto provider = find_session(provider_connection_id);
+
+        if (provider) {
+            (void)provider->enqueue_provider_message(
+                make_cancel_message(provider_request_id));
+        }
+    }
+
+    [[nodiscard]] bool cancel_client_request(
+        const ProviderConnectionId client_connection_id,
+        const std::string_view client_request_id) {
+        std::string provider_request_id;
+        std::shared_ptr<PendingRequest> pending;
+
+        {
+            std::lock_guard lock(pending_mutex_);
+
+            for (auto iterator = pending_requests_.begin();
+                 iterator != pending_requests_.end();
+                 ++iterator) {
+                if (iterator->second->client_connection_id ==
+                        client_connection_id &&
+                    iterator->second->client_request_id ==
+                        client_request_id) {
+                    provider_request_id = iterator->first;
+                    pending = iterator->second;
+                    mark_ignored_provider_request_locked(iterator->first);
+                    pending_requests_.erase(iterator);
+                    break;
+                }
+            }
+        }
+
+        if (!pending) {
+            return false;
+        }
+
+        send_provider_cancel(
+            pending->provider_connection_id,
+            provider_request_id);
+
+        if (const auto client = pending->client_session.lock()) {
+            (void)client->complete_client_request(
+                pending->client_request_id,
+                make_request_error(
+                    pending->client_request_id,
+                    "hub.cancelled",
+                    "Request was cancelled by the client"));
+        }
+
+        return true;
+    }
+
+    void cancel_pending_for_client(
+        const ProviderConnectionId client_connection_id) {
+        struct CancelledRequest final {
+            std::string provider_request_id;
+            ProviderConnectionId provider_connection_id;
+        };
+
+        std::vector<CancelledRequest> cancelled;
+
+        {
+            std::lock_guard lock(pending_mutex_);
+
+            for (auto iterator = pending_requests_.begin();
+                 iterator != pending_requests_.end();) {
+                if (iterator->second->client_connection_id ==
+                    client_connection_id) {
+                    mark_ignored_provider_request_locked(iterator->first);
+                    cancelled.push_back(
+                        {iterator->first,
+                         iterator->second->provider_connection_id});
+                    iterator = pending_requests_.erase(iterator);
+                } else {
+                    ++iterator;
+                }
+            }
+        }
+
+        for (const auto& item : cancelled) {
+            send_provider_cancel(
+                item.provider_connection_id,
+                item.provider_request_id);
+        }
+    }
+
+    void fail_pending_for_provider(
+        const ProviderConnectionId provider_connection_id) {
+        std::vector<std::shared_ptr<PendingRequest>> failed;
+
+        {
+            std::lock_guard lock(pending_mutex_);
+
+            for (auto iterator = pending_requests_.begin();
+                 iterator != pending_requests_.end();) {
+                if (iterator->second->provider_connection_id ==
+                    provider_connection_id) {
+                    mark_ignored_provider_request_locked(iterator->first);
+                    failed.push_back(iterator->second);
+                    iterator = pending_requests_.erase(iterator);
+                } else {
+                    ++iterator;
+                }
+            }
+        }
+
+        for (const auto& pending : failed) {
+            if (const auto client = pending->client_session.lock()) {
+                (void)client->complete_client_request(
+                    pending->client_request_id,
+                    make_request_error(
+                        pending->client_request_id,
+                        "hub.provider_unavailable",
+                        "Provider disconnected before completing the request"));
+            }
+        }
     }
 
     [[nodiscard]] std::shared_ptr<Session> find_session(
@@ -1143,19 +1355,41 @@ private:
         pending_requests_.erase(request_id);
     }
 
-    [[nodiscard]] bool complete_pending_request(
+    void mark_ignored_provider_request_locked(
+        const std::string& request_id) {
+        if (!ignored_provider_request_ids_.insert(request_id).second) {
+            return;
+        }
+
+        ignored_provider_request_order_.push_back(request_id);
+
+        while (ignored_provider_request_order_.size() >
+               kIgnoredRequestLimit) {
+            const std::string oldest =
+                std::move(ignored_provider_request_order_.front());
+            ignored_provider_request_order_.pop_front();
+            ignored_provider_request_ids_.erase(oldest);
+        }
+    }
+
+    [[nodiscard]] CompletePendingResult complete_pending_request(
         const std::string_view request_id,
         std::string response) {
         std::shared_ptr<PendingRequest> pending;
 
         {
             std::lock_guard lock(pending_mutex_);
+            const std::string request_key(request_id);
 
             const auto iterator =
-                pending_requests_.find(std::string(request_id));
+                pending_requests_.find(request_key);
 
             if (iterator == pending_requests_.end()) {
-                return false;
+                if (ignored_provider_request_ids_.erase(request_key) != 0) {
+                    return CompletePendingResult::ignored;
+                }
+
+                return CompletePendingResult::unknown;
             }
 
             pending = iterator->second;
@@ -1165,7 +1399,7 @@ private:
         const auto client = pending->client_session.lock();
 
         if (!client) {
-            return true;
+            return CompletePendingResult::completed;
         }
 
         const auto parsed = parse_json(response);
@@ -1178,7 +1412,7 @@ private:
                     pending->client_request_id,
                     "hub.protocol_error",
                     "Provider response could not be routed"));
-            return true;
+            return CompletePendingResult::completed;
         }
 
         json_object_object_del(parsed->get(), "id");
@@ -1190,7 +1424,7 @@ private:
         (void)client->complete_client_request(
             pending->client_request_id,
             serialize_json(parsed->get()));
-        return true;
+        return CompletePendingResult::completed;
     }
 
     std::string listen_address_;
@@ -1215,6 +1449,8 @@ private:
     std::unordered_map<
         std::string,
         std::shared_ptr<PendingRequest>> pending_requests_;
+    std::unordered_set<std::string> ignored_provider_request_ids_;
+    std::deque<std::string> ignored_provider_request_order_;
 
     std::atomic<ProviderConnectionId> next_connection_id_{1};
     std::atomic<std::uint64_t> next_provider_request_id_{1};

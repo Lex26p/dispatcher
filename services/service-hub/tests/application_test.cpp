@@ -21,16 +21,17 @@ int test_service_name() {
     return 0;
 }
 
-int test_application_run() {
+int test_invalid_listen_address() {
     const dispatcher::service_hub::Application application;
     std::ostringstream output;
 
-    if (application.run(output) != 0) {
-        return fail("application returned a non-zero result");
+    if (application.run(output, "invalid-address") != 1) {
+        return fail("invalid listen address did not fail");
     }
 
-    if (output.str() != "Dispatcher Service Hub\n") {
-        return fail("unexpected application output");
+    if (output.str() !=
+        "Failed to start Dispatcher Service Hub on invalid-address\n") {
+        return fail("unexpected invalid-address diagnostic");
     }
 
     return 0;
@@ -43,7 +44,7 @@ int main() {
         return result;
     }
 
-    if (const auto result = test_application_run(); result != 0) {
+    if (const auto result = test_invalid_listen_address(); result != 0) {
         return result;
     }
 

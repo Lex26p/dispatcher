@@ -206,6 +206,45 @@ if(DISPATCHER_BUILD_TESTS)
         )
     endif()
 
+    add_executable(dispatcher_service_hub_lifecycle_tests
+        tests/lifecycle_and_errors_test.cpp
+    )
+
+    target_include_directories(
+        dispatcher_service_hub_lifecycle_tests
+        PRIVATE
+            ${SERVICE_HUB_BOOST_INCLUDE_DIR}
+    )
+
+    target_link_libraries(
+        dispatcher_service_hub_lifecycle_tests
+        PRIVATE
+            dispatcher_service_hub_core
+            Threads::Threads
+            PkgConfig::SERVICE_HUB_JSONC
+    )
+
+    target_compile_definitions(
+        dispatcher_service_hub_lifecycle_tests
+        PRIVATE
+            BOOST_ERROR_CODE_HEADER_ONLY
+    )
+
+    set_target_properties(
+        dispatcher_service_hub_lifecycle_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-service-hub-lifecycle-tests"
+    )
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            dispatcher_service_hub_lifecycle_tests
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+        )
+    endif()
+
     add_test(
         NAME service-hub.application
         COMMAND dispatcher_service_hub_tests
@@ -226,11 +265,39 @@ if(DISPATCHER_BUILD_TESTS)
         COMMAND dispatcher_service_hub_browser_boundary_tests
     )
 
+    add_test(
+        NAME service-hub.lifecycle-and-errors
+        COMMAND dispatcher_service_hub_lifecycle_tests
+    )
+
+    add_test(
+        NAME service-hub.signal-term
+        COMMAND
+            bash
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/lifecycle_signal_test.sh
+            $<TARGET_FILE:dispatcher_service_hub>
+            TERM
+            SIGTERM
+    )
+
+    add_test(
+        NAME service-hub.signal-int
+        COMMAND
+            bash
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/lifecycle_signal_test.sh
+            $<TARGET_FILE:dispatcher_service_hub>
+            INT
+            SIGINT
+    )
+
     set_tests_properties(
         service-hub.application
         service-hub.provider-registry
         service-hub.request-response
         service-hub.browser-boundary
+        service-hub.lifecycle-and-errors
+        service-hub.signal-term
+        service-hub.signal-int
         PROPERTIES TIMEOUT 15
     )
 endif()
