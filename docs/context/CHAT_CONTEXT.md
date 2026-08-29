@@ -163,11 +163,17 @@ Plan `CORE-003` зафиксирован commit:
 
 Step 1 создал `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Testing Library, reproducible `package-lock.json` и Playwright browser smoke.
 
-Текущий Step 2 создаёт базовый App Shell: компактный global Header, menu trigger, резерв будущих global actions и рабочую область. Реальная навигация, Service Hub client и предметные service screens на этом шаге не добавляются.
+`CORE-003 / Step 2` завершён commit:
 
-После успешного commit Step 2 следующее действие:
+`a8f7b91a8b0c23385ce349c55ca6e6a70e9685c8`
 
-`CORE-003 / Step 3 — Глобальная навигация`.
+Step 2 создал базовый App Shell: компактный global Header, menu trigger, резерв будущих global actions и рабочую область. Generated `*.tsbuildinfo` исключены из version control.
+
+Текущий Step 3 добавляет только глобальное меню и shell-level navigation: текущий `/` workspace, unknown-route fallback и keyboard-friendly open/close behavior. Future-service links, Project context и Service Hub client на этом шаге не добавляются.
+
+После успешного commit Step 3 следующее действие:
+
+`CORE-003 / Step 4 — TypeScript client Service Hub`.
 
 ## Рабочий процесс
 

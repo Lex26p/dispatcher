@@ -219,6 +219,10 @@ Component test подтверждает структуру Header/workspace и �
 
 Дополнительно `*.tsbuildinfo` фиксируется как generated build artifact и исключается из дальнейшего version control.
 
+Step 2 завершён commit:
+
+`a8f7b91a8b0c23385ce349c55ca6e6a70e9685c8`
+
 ## Step 3 — Глобальная навигация
 
 ### Что делаем
@@ -242,6 +246,23 @@ Project context не реализуем до `CORE-004 — Project Manager`.
 ### Результат
 
 Web Shell имеет рабочую навигационную основу, не зависящую от ещё не реализованных предметных сервисов.
+
+### Реализация Step 3
+
+Навигация остаётся частью Web Shell и не требует отдельной router-библиотеки:
+
+- menu trigger из Step 2 становится рабочим и управляет глобальной navigation panel;
+- единственный реальный destination текущего shell — `Рабочая область` по пути `/`;
+- будущие сервисы не добавляются в меню до появления их реальных Web-интерфейсов;
+- текущий route определяется через browser `location.pathname`, переходы shell выполняются через History API;
+- `popstate` синхронизирует shell при browser history navigation;
+- неизвестный pathname показывает shell-level fallback `Страница не найдена` с возвратом в рабочую область;
+- trigger использует `aria-expanded`/`aria-controls`, активный пункт — `aria-current`;
+- после открытия focus переходит на первый navigation item, `Escape` закрывает меню и возвращает focus на trigger;
+- menu также закрывается повторным нажатием trigger, выбором пункта и кликом по backdrop;
+- component и Playwright tests проверяют route/fallback, keyboard behavior, desktop/narrow viewport и отсутствие ложных future-service links.
+
+Project context, service-specific routes, plugin UI registry и Service Hub client в Step 3 не добавляются.
 
 ## Step 4 — TypeScript client Service Hub
 

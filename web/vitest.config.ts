@@ -6,5 +6,8 @@ export default defineConfig({
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     setupFiles: ['./src/test/setup.ts'],
+    pool: 'threads',
+    maxWorkers: 1,
+    fileParallelism: false,
   },
 });

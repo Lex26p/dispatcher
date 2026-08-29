@@ -6,9 +6,11 @@
 
 `CORE-003 / Step 1` established the frontend build/test skeleton.
 
-`CORE-003 / Step 2` adds the first App Shell layout: a compact global Header, a reserved global-actions area and a workspace that keeps most of the viewport available to future service UIs.
+`CORE-003 / Step 2` established the compact global Header and workspace layout.
 
-The main-menu trigger is intentionally disabled until Step 3 adds real navigation. Notifications, messages, user actions, Service Hub client, authentication, Dashboard and future service screens are not implemented yet.
+`CORE-003 / Step 3` adds the first real global navigation behavior without adding a router dependency. The menu exposes only the current Web Shell workspace, uses the browser History API, provides an unknown-route fallback and supports predictable keyboard interaction.
+
+Notifications, messages, user actions, Service Hub client, authentication, Dashboard and future service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -19,27 +21,19 @@ The main-menu trigger is intentionally disabled until Step 3 adds real navigatio
 - TypeScript 6.0.3;
 - Vitest 4.1.10;
 - React Testing Library;
-- Playwright 1.62.1 with Chromium for the initial browser smoke test.
+- Playwright 1.62.1 with Chromium for browser smoke/integration tests.
 
 Direct package versions are pinned exactly in `package.json`.
 
-## First dependency bootstrap
+## Dependency install
 
-The first install creates the repository lockfile:
-
-    cd /mnt/c/Projects/dispatcher/web
-    npm install --package-lock-only
-    npm ci
-
-`package-lock.json` must be committed with Step 1.
-
-After the lockfile exists, normal clean installs use only:
+Clean installs use the committed lockfile:
 
     npm ci
 
 ## Browser test dependency
 
-Install the Chromium binary and Linux dependencies used by the smoke test:
+Install the Chromium binary and Linux dependencies used by the browser tests:
 
     npx playwright install --with-deps chromium
 
@@ -63,7 +57,7 @@ Production build:
 
     npm run build
 
-Browser smoke against the production preview:
+Browser smoke/integration against a fresh production build:
 
     npm run test:e2e
 
@@ -71,8 +65,16 @@ Combined unit + production build check:
 
     npm run check
 
-## Current page
+## Current navigation
 
-The current UI is the base Dispatcher App Shell. It contains only the structural Header and workspace required by Step 2.
+The current shell route is `/`.
 
-Navigation behavior starts in `CORE-003 / Step 3`; the current menu trigger is visible but disabled so the shell does not expose a false working action.
+The global menu currently contains exactly one real destination:
+
+- `Рабочая область` → `/`.
+
+The menu opens from the compact global Header, marks the active route with `aria-current`, moves keyboard focus into navigation, closes with `Escape`, and closes after navigation.
+
+Unknown paths render a Web Shell fallback with a way back to `/`.
+
+Future service links are intentionally absent until those services exist. `CORE-003 / Step 4` adds the reusable TypeScript Service Hub client; it does not add new navigation destinations by itself.

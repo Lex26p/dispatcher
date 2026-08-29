@@ -32,7 +32,8 @@ textarea {
   font: inherit;
 }
 
-button {
+button,
+a {
   color: inherit;
 }
 
@@ -45,6 +46,8 @@ button {
 }
 
 .global-header {
+  position: relative;
+  z-index: 30;
   display: flex;
   min-height: 48px;
   flex: 0 0 48px;
@@ -77,6 +80,7 @@ button {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
+  cursor: pointer;
   place-items: center;
   padding: 0;
   border: 0;
@@ -84,9 +88,16 @@ button {
   background: transparent;
 }
 
-.menu-trigger:disabled {
-  cursor: default;
-  opacity: 1;
+.menu-trigger:hover,
+.menu-trigger[aria-expanded="true"] {
+  background: #eef1f4;
+}
+
+.menu-trigger:focus-visible,
+.global-navigation__link:focus-visible,
+.workspace__return-link:focus-visible {
+  outline: 2px solid #315f9f;
+  outline-offset: 2px;
 }
 
 .menu-trigger__icon {
@@ -105,6 +116,70 @@ button {
 .global-actions-slot {
   min-width: 34px;
   min-height: 34px;
+}
+
+.navigation-layer {
+  position: fixed;
+  z-index: 20;
+  inset: 48px 0 0;
+}
+
+.navigation-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  padding: 0;
+  border: 0;
+  background: rgb(28 35 43 / 24%);
+}
+
+.global-navigation {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  width: min(280px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 10px;
+  overflow-y: auto;
+  border-right: 1px solid #d9dee5;
+  background: #ffffff;
+  box-shadow: 8px 0 24px rgb(35 43 52 / 12%);
+}
+
+.global-navigation__title {
+  margin: 0 8px 4px;
+  color: #6a737d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.global-navigation__link {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #27313b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.global-navigation__link:hover {
+  background: #f1f4f7;
+}
+
+.global-navigation__link[aria-current="page"] {
+  background: #e7edf5;
+  color: #244f88;
 }
 
 .workspace {
@@ -144,6 +219,14 @@ button {
   margin: 10px 0 0;
   color: #5b6570;
   line-height: 1.55;
+}
+
+.workspace__return-link {
+  display: inline-flex;
+  margin-top: 18px;
+  color: #244f88;
+  font-weight: 600;
+  text-underline-offset: 3px;
 }
 
 @media (max-width: 520px) {
