@@ -118,6 +118,10 @@ Service Hub маршрутизирует запрос к нужному provider
 
 Service Hub отдельно собирается и имеет минимальный автоматический test target.
 
+Step 1 завершён commit:
+
+`a06d9cdd7a6c52197b6657c282ed89b745a799da`
+
 ## Step 2 — Модель взаимодействия, транспорт и внешний контракт
 
 ### Что делаем
@@ -149,6 +153,30 @@ Service Hub отдельно собирается и имеет минималь
 ### Результат
 
 В репозитории есть формальный контракт Service Hub и документированное решение по transport/serialization, достаточное для практической реализации следующих шагов.
+
+### Решение Step 2
+
+Для Service Hub v1 выбраны:
+
+- WebSocket как единый двусторонний transport;
+- UTF-8 JSON как application serialization;
+- endpoint path `/v1/ws`;
+- WebSocket subprotocol `dispatcher.service-hub.v1`;
+- JSON Schema общего envelope-контракта.
+
+Provider регистрирует один service address на отдельном provider connection. Client connection может иметь несколько одновременных requests. Service Hub маршрутизирует по `service`, передаёт `operation` и opaque JSON `payload`, а correlation выполняет через request IDs.
+
+Timeout, cancellation, provider disconnect/reconnect и Hub error codes определены контрактом сейчас и реализуются в соответствующих следующих шагах.
+
+Контракт:
+
+`docs/architecture/service-hub-contract.md`
+
+Machine-readable schema:
+
+`services/service-hub/protocol/dispatcher/service_hub/v1/service_hub.schema.json`
+
+Для C++ WebSocket implementation выбран Boost.Asio + Boost.Beast как networking foundation. Конкретная JSON parsing library остаётся внутренней деталью реализации и не является частью межсервисного контракта.
 
 ## Step 3 — Регистрация provider и таблица маршрутизации
 

@@ -87,7 +87,19 @@ Realtime-значения находятся в Data Hub.
 Отдельный Hub для событий и аварий. Не смешивается с Data Hub.
 
 ### Service Hub
-Используется для request/response и адресного взаимодействия сервисов. Через контролируемый слой Service Hub Web UI работает с backend; пользовательские запросы проверяются относительно пользователя, проекта, прав и режима управления.
+- текущий спринт `CORE-002`;
+- внешний transport v1: WebSocket;
+- serialization: UTF-8 JSON;
+- endpoint path: `/v1/ws`;
+- subprotocol: `dispatcher.service-hub.v1`;
+- provider регистрирует один service address на connection;
+- client отправляет addressable request по `service` + `operation`;
+- Hub выполняет correlation, timeout/cancel и возвращает response;
+- generic payload остаётся непрозрачным JSON;
+- тот же client protocol напрямую пригоден browser Web Shell;
+- authentication/authorization в CORE-002 не реализуются.
+
+Подробный контракт: `docs/architecture/service-hub-contract.md`.
 
 ### Независимость
 Сервис не должен знать других потребителей своих данных без необходимости. Плагины работают через общие контракты.
@@ -108,18 +120,18 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 
 ## Пока не выбрано
 
-Для Data Hub транспорт и сериализация уже выбраны.
+Для Data Hub и Service Hub transport/serialization уже выбраны.
 
 Пока не утверждены:
 
 - технология Event Hub;
-- технология и RPC-модель Service Hub;
 - БД и постоянное хранение;
 - deployment;
 - внешний Driver Runtime API и межпроцессный путь write-provider;
 - механизм восстановления runtime state;
 - точный state enum;
 - аутентификация/токены;
+- production TLS/origin policy Service Hub;
 - frontend state manager и UI-библиотеки.
 
 ## Текущая точка разработки
@@ -128,9 +140,13 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 
 Текущий спринт — `CORE-002 — Service Hub`.
 
-Его подробные шаги и критерии завершения зафиксированы в `docs/development/sprints/CORE-002.md`.
+Step 1 создал отдельный Service Hub skeleton.
 
-Следующее действие — `CORE-002 / Step 1`: создать отдельный каркас Service Hub и его тестов. Конкретный транспорт Service Hub пока не выбран и определяется отдельным Step 2 с учётом C++-сервисов и будущего Web Shell.
+Step 2 зафиксировал WebSocket + JSON transport и внешний v1 contract.
+
+Следующее действие после подтверждения Step 2 commit:
+
+`CORE-002 / Step 3 — Регистрация provider и таблица маршрутизации`.
 
 ## Рабочий процесс
 

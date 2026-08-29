@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dispatcher:service-hub:v1:message",
+  "title": "Dispatcher Service Hub v1 message",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/register"
+    },
+    {
+      "$ref": "#/$defs/registered"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/responseSuccess"
+    },
+    {
+      "$ref": "#/$defs/responseError"
+    },
+    {
+      "$ref": "#/$defs/cancel"
+    },
+    {
+      "$ref": "#/$defs/protocolError"
+    }
+  ],
+  "$defs": {
+    "serviceName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "operationName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "errorCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/errorCode"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "details": {}
+      }
+    },
+    "register": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "service"
+      ],
+      "properties": {
+        "type": {
+          "const": "register"
+        },
+        "service": {
+          "$ref": "#/$defs/serviceName"
+        }
+      }
+    },
+    "registered": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "service"
+      ],
+      "properties": {
+        "type": {
+          "const": "registered"
+        },
+        "service": {
+          "$ref": "#/$defs/serviceName"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "service",
+        "operation",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "request"
+        },
+        "id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "service": {
+          "$ref": "#/$defs/serviceName"
+        },
+        "operation": {
+          "$ref": "#/$defs/operationName"
+        },
+        "payload": {},
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60000,
+          "default": 5000
+        }
+      }
+    },
+    "responseSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "ok",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "const": "response"
+        },
+        "id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "ok": {
+          "const": true
+        },
+        "payload": {}
+      }
+    },
+    "responseError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "ok",
+        "error"
+      ],
+      "properties": {
+        "type": {
+          "const": "response"
+        },
+        "id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "cancel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "const": "cancel"
+        },
+        "id": {
+          "$ref": "#/$defs/requestId"
+        }
+      }
+    },
+    "protocolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "error"
+      ],
+      "properties": {
+        "type": {
+          "const": "protocol_error"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    }
+  }
+}

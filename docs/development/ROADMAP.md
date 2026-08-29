@@ -415,8 +415,19 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 Подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-002.md`.
 
-Следующее действие после фиксации плана в репозитории:
+`CORE-002 / Step 1` завершён commit:
 
-**CORE-002 / Step 1 — Каркас Service Hub и отдельная сборка.**
+`a06d9cdd7a6c52197b6657c282ed89b745a799da`
 
-Технология Data Hub не переносится на Service Hub автоматически. Конкретный транспорт, сериализация и модель внешнего request/response контракта Service Hub выбираются в Step 2 на основании требований C++-сервисов и следующего Web Shell.
+В `CORE-002 / Step 2` зафиксирован внешний Service Hub v1 contract:
+
+- WebSocket;
+- UTF-8 JSON;
+- endpoint `/v1/ws`;
+- subprotocol `dispatcher.service-hub.v1`;
+- provider/client connection roles;
+- request correlation, timeout и cancellation semantics.
+
+После подтверждения commit Step 2 следующее действие:
+
+**CORE-002 / Step 3 — Регистрация provider и таблица маршрутизации.**

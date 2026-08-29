@@ -39,8 +39,9 @@
 
 - [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, Device Manager, модель метрик и выбранные языки/инструменты.
 - [`data-hub-contract.md`](architecture/data-hub-contract.md) — внешний gRPC + Protocol Buffers контракт Data Hub и его runtime-семантика.
+- [`service-hub-contract.md`](architecture/service-hub-contract.md) — внешний WebSocket + JSON контракт Service Hub, provider registration и request/response semantics.
 
-Технические решения добавляются по мере реальной необходимости. Для Data Hub транспорт и сериализация уже зафиксированы; технологии Event Hub, Service Hub, БД и deployment выбираются в соответствующих будущих спринтах.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт и сериализация уже зафиксированы; технологии Event Hub, БД и deployment выбираются в соответствующих будущих спринтах.
 
 ### `docs/development/`
 
