@@ -18,7 +18,9 @@
 
 `CORE-003 — Web Shell` is complete. `CORE-004 — Project Manager` now uses that frontend foundation.
 
-`CORE-004 / Step 4` adds the first real service UI: the `/projects` destination, typed Project Manager client adapter, project list and create/edit form. Project context is deliberately deferred to Step 5.
+`CORE-004 / Step 4` established the first real service UI: the `/projects` destination, typed Project Manager client adapter, project list and create/edit form.
+
+`CORE-004 / Step 5` adds shared project context for the Web Shell: selected Project or explicit global mode, current-session persistence, remote validation and compact Header indication.
 
 Notifications, messages, user actions, authentication, Dashboard and later service screens are not implemented yet.
 
@@ -90,7 +92,7 @@ The menu opens from the compact global Header, marks the active route with `aria
 
 Unknown paths render a Web Shell fallback with a way back to `/`.
 
-No router dependency is required yet. The project list/editor uses local component state inside `/projects`; project context and future service destinations are added only when their corresponding functionality exists.
+No router dependency is required yet. The project list/editor uses local component state inside `/projects`; selected project context is shared separately through `ProjectContextProvider` and survives ordinary shell navigation.
 
 ## Project Manager Web client
 
@@ -105,7 +107,22 @@ It does not open another WebSocket and it validates successful response payload 
 
 `src/project-manager/ProjectManagerView.tsx` implements the current list/editor UI. It provides loading, empty and local error states, creation and editing of `name`/`description`, and keeps the rest of Web Shell usable if Service Hub or Project Manager is unavailable.
 
-Selected project context is not part of Step 4 and is added in `CORE-004 / Step 5`.
+## Project context
+
+`src/project-context/ProjectContextProvider.tsx` provides the shared frontend project context. The value is either a real Project v1 snapshot (`id`, `name`, `description`) or `null` for explicit global mode.
+
+The context:
+
+- uses the existing shared Service Hub client through `ProjectManagerClient`;
+- persists the selected project in `sessionStorage` for the current browser session only;
+- restores and refreshes a stored project with `get-project` when Service Hub is connected;
+- clears the selection only when Project Manager confirms `project.not_found`;
+- keeps the selection during temporary Hub/provider/timeout failures;
+- can be cleared explicitly from the compact global Header;
+- can be selected from real Project Manager list data in `/projects`;
+- updates its display snapshot if the selected project is renamed in the editor.
+
+No project field is added to the Service Hub envelope, and no user-specific saved preference is introduced before `CORE-005`.
 
 ## Service Hub client
 

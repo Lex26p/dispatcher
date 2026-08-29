@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { App } from './App';
+import {
+  PROJECT_CONTEXT_STORAGE_KEY,
+  ProjectContextProvider,
+} from './project-context/ProjectContextProvider';
 import type {
   ServiceHubConnectionState,
   ServiceHubRequestHandle,
@@ -65,7 +69,9 @@ function renderApp(connectionState: ServiceHubConnectionState = 'disconnected') 
   const client = new TestServiceHubClient(connectionState);
   const view = render(
     <ServiceHubProvider client={client}>
-      <App />
+      <ProjectContextProvider>
+        <App />
+      </ProjectContextProvider>
     </ServiceHubProvider>,
   );
 
@@ -75,6 +81,7 @@ function renderApp(connectionState: ServiceHubConnectionState = 'disconnected') 
 describe('App Shell navigation', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
+    window.sessionStorage.clear();
   });
 
   it('opens and closes the global menu with keyboard-friendly focus behavior', () => {
@@ -156,6 +163,40 @@ describe('App Shell navigation', () => {
     expect(
       within(reopenedNavigation).getByRole('link', { name: 'Рабочая область' }),
     ).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps selected project context across shell navigation and can return to global context', () => {
+    window.sessionStorage.setItem(
+      PROJECT_CONTEXT_STORAGE_KEY,
+      JSON.stringify({
+        id: 'project-1',
+        name: 'Объект 1',
+        description: 'Основной объект',
+      }),
+    );
+
+    renderApp('disconnected');
+
+    const projectContext = screen.getByRole('group', { name: 'Контекст проекта' });
+    expect(projectContext).toHaveTextContent('Объект 1');
+
+    const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
+    fireEvent.click(menuTrigger);
+    fireEvent.click(
+      within(
+        screen.getByRole('navigation', { name: 'Глобальная навигация' }),
+      ).getByRole('link', { name: 'Проекты' }),
+    );
+
+    expect(window.location.pathname).toBe('/projects');
+    expect(projectContext).toHaveTextContent('Объект 1');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Перейти в глобальный контекст' }),
+    );
+
+    expect(projectContext).toHaveTextContent('Глобальный');
+    expect(window.sessionStorage.getItem(PROJECT_CONTEXT_STORAGE_KEY)).toBeNull();
   });
 
   it('shows an unknown-route fallback and returns to the shell workspace', () => {

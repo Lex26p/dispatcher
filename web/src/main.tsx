@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { ProjectContextProvider } from './project-context/ProjectContextProvider';
 import { ServiceHubClient } from './service-hub/ServiceHubClient';
 import { ServiceHubProvider } from './service-hub/ServiceHubProvider';
 import { resolveServiceHubUrl } from './service-hub/serviceHubConfig';
@@ -26,8 +27,10 @@ if (import.meta.env.VITE_SERVICE_HUB_E2E === '1') {
 
 createRoot(rootElement).render(
   <ServiceHubProvider client={serviceHubClient}>
-    <StrictMode>
-      <App />
-    </StrictMode>
+    <ProjectContextProvider>
+      <StrictMode>
+        <App />
+      </StrictMode>
+    </ProjectContextProvider>
   </ServiceHubProvider>,
 );

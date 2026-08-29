@@ -75,6 +75,52 @@ a {
   white-space: nowrap;
 }
 
+.project-context-summary {
+  display: flex;
+  min-width: 0;
+  max-width: min(260px, 32vw);
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid #d9dee5;
+  color: #5b6570;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.project-context-summary__label {
+  color: #7a848e;
+  font-weight: 600;
+}
+
+.project-context-summary__value {
+  min-width: 0;
+  overflow: hidden;
+  color: #34404b;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.project-context-summary__clear {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  cursor: pointer;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #68727c;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.project-context-summary__clear:hover {
+  background: #eef1f4;
+}
+
 .menu-trigger {
   display: inline-grid;
   width: 34px;
@@ -99,7 +145,8 @@ a {
 .project-action:focus-visible,
 .project-list__item:focus-visible,
 .project-field input:focus-visible,
-.project-field textarea:focus-visible {
+.project-field textarea:focus-visible,
+.project-context-summary__clear:focus-visible {
   outline: 2px solid #315f9f;
   outline-offset: 2px;
 }
@@ -329,6 +376,22 @@ a {
   list-style: none;
 }
 
+.project-list__entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.project-list__entry--selected .project-list__item {
+  border-color: #9db4d1;
+  background: #f4f7fb;
+}
+
+.project-action--context {
+  min-width: 132px;
+}
+
 .project-list__item {
   display: grid;
   width: 100%;
@@ -461,6 +524,16 @@ a {
     font-size: 0.7rem;
   }
 
+  .project-context-summary {
+    max-width: 72px;
+    gap: 4px;
+    padding-left: 7px;
+  }
+
+  .project-context-summary__label {
+    display: none;
+  }
+
   .workspace {
     padding: 10px;
   }
@@ -474,6 +547,14 @@ a {
   }
 
   .project-manager__header .project-action {
+    width: 100%;
+  }
+
+  .project-list__entry {
+    grid-template-columns: 1fr;
+  }
+
+  .project-action--context {
     width: 100%;
   }
 

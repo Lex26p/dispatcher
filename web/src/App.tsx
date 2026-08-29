@@ -5,6 +5,7 @@ import {
   useState,
 } from 'react';
 
+import { useProjectContext } from './project-context/ProjectContextProvider';
 import { ProjectManagerView } from './project-manager/ProjectManagerView';
 import type { ServiceHubConnectionState } from './service-hub/ServiceHubClient';
 import { useServiceHub } from './service-hub/ServiceHubProvider';
@@ -21,6 +22,7 @@ const connectionStateLabels: Record<ServiceHubConnectionState, string> = {
 
 export function App() {
   const { connectionState } = useServiceHub();
+  const { selectedProject, clearProject } = useProjectContext();
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -103,6 +105,28 @@ export function App() {
           </button>
 
           <strong className="product-name">Диспетчер</strong>
+
+          <div
+            className="project-context-summary"
+            role="group"
+            aria-label="Контекст проекта"
+            title={selectedProject?.name ?? 'Глобальный контекст'}
+          >
+            <span className="project-context-summary__label">Контекст</span>
+            <strong className="project-context-summary__value">
+              {selectedProject?.name ?? 'Глобальный'}
+            </strong>
+            {selectedProject !== null ? (
+              <button
+                className="project-context-summary__clear"
+                type="button"
+                aria-label="Перейти в глобальный контекст"
+                onClick={clearProject}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div

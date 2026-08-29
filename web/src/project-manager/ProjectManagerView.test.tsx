@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
+import { ProjectContextProvider, useProjectContext } from '../project-context/ProjectContextProvider';
 import type {
   ServiceHubConnectionState,
   ServiceHubRequestHandle,
@@ -100,6 +101,24 @@ class TestServiceHubClient implements ServiceHubClientAccess {
       return this.handle<TResponse>(Promise.resolve({ project }));
     }
 
+    if (operation === 'get-project') {
+      const input = payload as { id: string };
+      const project = this.projects.find((candidate) => candidate.id === input.id);
+
+      if (!project) {
+        return this.handle<TResponse>(
+          Promise.reject(
+            new ServiceHubRequestError('test-get', {
+              code: 'project.not_found',
+              message: 'Project not found',
+            }),
+          ),
+        );
+      }
+
+      return this.handle<TResponse>(Promise.resolve({ project: { ...project } }));
+    }
+
     if (operation === 'update-project') {
       const input = payload as TestProject;
       this.projects = this.projects.map((project) =>
@@ -131,10 +150,18 @@ class TestServiceHubClient implements ServiceHubClientAccess {
   }
 }
 
+function ProjectContextProbe() {
+  const { selectedProject } = useProjectContext();
+  return <span data-testid="selected-project">{selectedProject?.name ?? 'Глобальный'}</span>;
+}
+
 function renderView(client = new TestServiceHubClient()) {
   render(
     <ServiceHubProvider client={client}>
-      <ProjectManagerView />
+      <ProjectContextProvider>
+        <ProjectContextProbe />
+        <ProjectManagerView />
+      </ProjectContextProvider>
     </ServiceHubProvider>,
   );
 
@@ -142,12 +169,18 @@ function renderView(client = new TestServiceHubClient()) {
 }
 
 describe('ProjectManagerView', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
   it('lists, creates and edits projects through the shared Service Hub client', async () => {
     const client = renderView();
 
     const list = await screen.findByRole('list', { name: 'Список проектов' });
     expect(
-      within(list).getByRole('button', { name: /Объект 1/ }),
+      within(list).getByRole('button', {
+        name: 'Объект 1Основной объект',
+      }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать проект' }));
@@ -165,7 +198,7 @@ describe('ProjectManagerView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     const createdButton = await screen.findByRole('button', {
-      name: /Новый проект/,
+      name: 'Новый проектСоздан из Web',
     });
     expect(createdButton).toHaveTextContent('Создан из Web');
 
@@ -181,13 +214,51 @@ describe('ProjectManagerView', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
-    await screen.findByRole('button', { name: /Новый проект 2/ });
+    await screen.findByRole('button', {
+      name: 'Новый проект 2Создан из Web',
+    });
 
     expect(client.operations).toEqual([
       'list-projects',
       'create-project',
       'update-project',
     ]);
+  });
+
+  it('selects a real project as context and keeps its snapshot current after editing', async () => {
+    renderView();
+
+    await screen.findByRole('list', { name: 'Список проектов' });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Выбрать Объект 1 как текущий контекст',
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('selected-project')).toHaveTextContent('Объект 1');
+    expect(
+      screen.getByRole('button', { name: 'Объект 1: текущий контекст' }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Объект 1Основной объект',
+      }),
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Название' }), {
+      target: { value: 'Объект 1 обновлён' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await screen.findByRole('button', {
+      name: 'Объект 1 обновлёнОсновной объект',
+    });
+    expect(screen.getByTestId('selected-project')).toHaveTextContent(
+      'Объект 1 обновлён',
+    );
   });
 
   it('keeps a local error state when Project Manager is unavailable', async () => {

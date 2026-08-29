@@ -5,6 +5,7 @@ import {
   useState,
 } from 'react';
 
+import { useProjectContext } from '../project-context/ProjectContextProvider';
 import {
   ServiceHubRequestError,
   ServiceHubTransportError,
@@ -25,6 +26,7 @@ interface ProjectEditorState {
 
 export function ProjectManagerView() {
   const { client, connectionState } = useServiceHub();
+  const { selectedProject, selectProject } = useProjectContext();
   const projectManager = useMemo(() => new ProjectManagerClient(client), [client]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,6 +140,10 @@ export function ProjectManagerView() {
           project.id === savedProject.id ? savedProject : project,
         );
       });
+
+      if (selectedProject?.id === savedProject.id) {
+        selectProject(savedProject);
+      }
 
       setEditor(null);
     } catch (error) {
@@ -274,18 +280,40 @@ export function ProjectManagerView() {
             </div>
           ) : (
             <ul className="project-list" aria-label="Список проектов">
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <button
-                    className="project-list__item"
-                    type="button"
-                    onClick={() => openEdit(project)}
+              {projects.map((project) => {
+                const selected = selectedProject?.id === project.id;
+
+                return (
+                  <li
+                    key={project.id}
+                    className={`project-list__entry${
+                      selected ? ' project-list__entry--selected' : ''
+                    }`}
                   >
-                    <strong>{project.name}</strong>
-                    <span>{project.description || 'Без описания'}</span>
-                  </button>
-                </li>
-              ))}
+                    <button
+                      className="project-list__item"
+                      type="button"
+                      onClick={() => openEdit(project)}
+                    >
+                      <strong>{project.name}</strong>
+                      <span>{project.description || 'Без описания'}</span>
+                    </button>
+                    <button
+                      className="project-action project-action--context"
+                      type="button"
+                      disabled={selected}
+                      aria-label={
+                        selected
+                          ? `${project.name}: текущий контекст`
+                          : `Выбрать ${project.name} как текущий контекст`
+                      }
+                      onClick={() => selectProject(project)}
+                    >
+                      {selected ? 'Текущий' : 'Выбрать контекст'}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

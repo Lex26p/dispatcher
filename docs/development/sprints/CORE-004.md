@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 3 завершён; текущий шаг — Step 4.**
+**В разработке. Step 4 завершён; текущий шаг — Step 5.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -408,6 +408,10 @@ Unit/component tests используют controllable Service Hub test double; 
 
 Новых npm dependencies не требуется.
 
+Step 4 завершён commit:
+
+`7527e2758f77e40cb6b86795e2b2a21896e55224`
+
 ## Step 5 — Project context в Web Shell
 
 ### Что делаем
@@ -430,6 +434,27 @@ Unit/component tests используют controllable Service Hub test double; 
 ### Результат
 
 Web Shell имеет реальный project context, но остаётся способен работать в глобальном режиме.
+
+### Реализация Step 5
+
+Общий project context реализуется отдельным `ProjectContextProvider`, вложенным в уже существующий `ServiceHubProvider` и расположенным выше `App`. Поэтому выбранный проект сохраняется при обычной shell-навигации между `/` и `/projects`, а будущие service UIs смогут получать его через `useProjectContext()` без нового transport connection.
+
+Context model содержит только реальный Project v1 snapshot (`id`, `name`, `description`) либо `null` для явного глобального режима. Project не становится владельцем будущих ресурсов, и Service Hub envelope не получает project-specific field.
+
+Текущий выбор сохраняется в browser `sessionStorage` под versioned key только на время текущей browser session. User-specific preference/persistence не добавляется до `CORE-005`. Ошибка доступа к `sessionStorage` не разрушает React state.
+
+При восстановлении сохранённого context и при подключённом Service Hub Provider выполняет реальный `get-project` через shared `ServiceHubClient`/`ProjectManagerClient`:
+
+- успешный ответ обновляет snapshot имени/описания;
+- подтверждённый `project.not_found` очищает context до глобального режима;
+- временные transport/provider/timeout errors не стирают выбор;
+- cleanup pending validation использует обычный request cancel boundary.
+
+Compact Header показывает текущий context рядом с названием продукта и даёт явное действие возврата в глобальный режим. В `/projects` реальный project из загруженного списка можно выбрать как текущий context; выбранная строка помечается, а сохранение изменений выбранного project сразу обновляет context snapshot.
+
+Unit/component tests покрывают session restore/persist/clear, remote validation, отсутствие очистки при временной недоступности, shell navigation persistence и выбор/обновление context из Project Manager view. Backend-independent Playwright smoke проверяет наличие глобального context в production shell.
+
+Новых npm dependencies, backend fields, router или отдельного WebSocket Step 5 не добавляет. Реальный browser → Service Hub → Project Manager → SQLite path с restart recovery остаётся Step 6.
 
 ## Step 6 — Реальная integration и restart recovery
 

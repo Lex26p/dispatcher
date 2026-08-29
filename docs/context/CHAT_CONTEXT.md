@@ -225,7 +225,13 @@ Step 2 зафиксировал локальный SQLite schema v1, production 
 
 Step 3 зафиксировал `project-manager.v1`, create/list/get/update contract, provider-specific `project.*` errors, real Service Hub registration/reconnect и межпроцессный integration test.
 
-Текущий шаг — `CORE-004 / Step 4 — Web Project Manager: список и редактор`. Web использует существующий shared `ServiceHubClient`; добавляется `/projects`, typed Project Manager adapter и list/create/edit UI. Общий selected project context остаётся Step 5, real browser/backend acceptance — Step 6.
+`CORE-004 / Step 4` завершён commit:
+
+`7527e2758f77e40cb6b86795e2b2a21896e55224`
+
+Step 4 зафиксировал `/projects`, typed Project Manager adapter и list/create/edit UI через существующий shared `ServiceHubClient`.
+
+Текущий шаг — `CORE-004 / Step 5 — Project context в Web Shell`. Добавляется общий React context с selected Project либо явным global mode, browser-session persistence, remote validation через `get-project`, выбор из реального списка проектов и compact Header indication. Временная недоступность Project Manager не должна стирать выбор; подтверждённый `project.not_found` очищает context. Real browser/backend restart acceptance остаётся Step 6.
 
 ## Рабочий процесс
 
