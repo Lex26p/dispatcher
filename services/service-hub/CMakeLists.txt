@@ -1,5 +1,6 @@
 add_library(dispatcher_service_hub_core STATIC
     src/application.cpp
+    src/provider_registry.cpp
 )
 
 target_include_directories(dispatcher_service_hub_core
@@ -70,8 +71,38 @@ if(DISPATCHER_BUILD_TESTS)
         )
     endif()
 
+    add_executable(dispatcher_service_hub_provider_registry_tests
+        tests/provider_registry_test.cpp
+    )
+
+    target_link_libraries(
+        dispatcher_service_hub_provider_registry_tests
+        PRIVATE
+            dispatcher_service_hub_core
+    )
+
+    set_target_properties(
+        dispatcher_service_hub_provider_registry_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-service-hub-provider-registry-tests"
+    )
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            dispatcher_service_hub_provider_registry_tests
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+        )
+    endif()
+
     add_test(
         NAME service-hub.application
         COMMAND dispatcher_service_hub_tests
+    )
+
+    add_test(
+        NAME service-hub.provider-registry
+        COMMAND dispatcher_service_hub_provider_registry_tests
     )
 endif()
