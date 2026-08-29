@@ -149,6 +149,34 @@ Frontend state manager, большая UI-библиотека и design system 
 
 Web Shell отдельно устанавливается, собирается и запускает минимальную React + TypeScript страницу.
 
+### Решение Step 1
+
+Frontend создаётся в `web/`.
+
+Зафиксирован минимальный toolchain:
+
+- Node.js 24.20.0 LTS;
+- npm 11.19.0;
+- React 19.2.8;
+- Vite 8.1.x;
+- TypeScript 6.0.3;
+- Vitest 4.1.10;
+- React Testing Library;
+- Playwright 1.62.1 с Chromium для browser smoke.
+
+Direct dependency versions фиксируются точно в `package.json`. Первый bootstrap создаёт `package-lock.json`, после чего чистые установки выполняются через `npm ci`.
+
+Step 1 включает:
+
+- минимальный React entry point;
+- TypeScript project references;
+- Vite development/production build;
+- jsdom component test;
+- production-preview browser smoke через Playwright;
+- README с командами frontend-разработки.
+
+State manager, router, UI kit и Service Hub client в Step 1 не добавляются.
+
 ## Step 2 — Базовый App Shell layout
 
 ### Что делаем

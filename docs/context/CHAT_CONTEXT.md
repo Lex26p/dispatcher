@@ -153,9 +153,15 @@ Web Shell должен дать React + TypeScript shell, глобальный H
 
 Frontend state manager и UI-библиотека не выбираются заранее в плане.
 
-Следующее действие после подтверждения plan commit:
+Plan `CORE-003` зафиксирован commit:
 
-`CORE-003 / Step 1 — Frontend-каркас и build/test toolchain`.
+`12f0fd374e515d47aa8289f476ff233cc69d201c`
+
+Текущий Step 1 создаёт `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Testing Library и Playwright browser smoke. Router, state manager, UI kit и Service Hub client на этом шаге не добавляются.
+
+После успешного commit Step 1 следующее действие:
+
+`CORE-003 / Step 2 — Базовый App Shell layout`.
 
 ## Рабочий процесс
 

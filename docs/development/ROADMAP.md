@@ -426,8 +426,18 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 Подробный план и критерии завершения зафиксированы в `docs/development/sprints/CORE-003.md`.
 
-Следующее действие после фиксации плана в репозитории:
+Plan `CORE-003` зафиксирован commit:
+
+`12f0fd374e515d47aa8289f476ff233cc69d201c`
+
+Текущий шаг:
 
 **CORE-003 / Step 1 — Frontend-каркас и build/test toolchain.**
+
+В Step 1 фиксируется `web/` и минимальный React + TypeScript toolchain с production build, component test и browser smoke.
+
+После успешной проверки и фиксации Step 1 следующим будет:
+
+**CORE-003 / Step 2 — Базовый App Shell layout.**
 
 Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.
