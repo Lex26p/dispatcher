@@ -13,3 +13,4 @@ if(DISPATCHER_BUILD_TESTS)
 endif()
 
 add_subdirectory(services/data-hub)
+add_subdirectory(services/service-hub)
