@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "test:e2e": "npm run build && playwright test",
+    "test:e2e:service-hub": "node ./e2e/run-service-hub-integration.mjs",
     "check": "npm run test && npm run build"
   },
   "dependencies": {

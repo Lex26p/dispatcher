@@ -181,11 +181,17 @@ Step 3 добавил global menu и shell-level navigation: текущий `/` 
 
 Step 4 создал самостоятельный TypeScript client Service Hub v1: configurable WebSocket URL, subprotocol, connection state, request correlation, cancel и разделение Hub request errors / transport failures.
 
-Текущий Step 5 связывает этот client с React lifecycle через shared Provider/context, добавляет общую URL-конфигурацию и ненавязчивый connection status в global Header. Реальный backend request/response path остаётся Step 6.
+`CORE-003 / Step 5` завершён commit:
 
-После успешного commit Step 5 следующее действие:
+`d612dcfec40c6447c35bc59993514fbb05e20e73`
 
-`CORE-003 / Step 6 — Реальная browser/backend интеграция`.
+Step 5 связал client с React lifecycle через shared Provider/context, добавил общую URL-конфигурацию и ненавязчивый connection status в global Header.
+
+Текущий Step 6 проверяет реальный browser path через существующий C++ Service Hub и automation-only test provider: success, parallel correlation, cancel, Hub close/disconnected state и явный reconnect. Production service screens и новые backend transports не добавляются.
+
+После успешного commit Step 6 следующее действие:
+
+`CORE-003 / Step 7 — Sprint acceptance, итоговый отчёт и documentation audit`.
 
 ## Рабочий процесс
 

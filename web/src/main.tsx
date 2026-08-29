@@ -17,6 +17,13 @@ const serviceHubClient = new ServiceHubClient({
   url: resolveServiceHubUrl(),
 });
 
+if (import.meta.env.VITE_SERVICE_HUB_E2E === '1') {
+  Object.defineProperty(window, '__dispatcherServiceHubE2EClient', {
+    value: serviceHubClient,
+    configurable: true,
+  });
+}
+
 createRoot(rootElement).render(
   <ServiceHubProvider client={serviceHubClient}>
     <StrictMode>

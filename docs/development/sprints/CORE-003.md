@@ -367,6 +367,10 @@ Unit/component tests проверяют URL resolution, lifecycle Provider, до
 
 Новых frontend dependencies в Step 5 не требуется.
 
+Step 5 завершён commit:
+
+`d612dcfec40c6447c35bc59993514fbb05e20e73`
+
 ## Step 6 — Реальная browser/backend интеграция
 
 ### Что делаем
@@ -397,6 +401,26 @@ Acceptance/integration path должен подтвердить:
 ### Результат
 
 Web Shell использует реальную Service Hub boundary, а не mock-only frontend contract.
+
+### Реализация Step 6
+
+Реальная browser/backend проверка оформляется отдельным automation path и не подменяет обычный backend-independent browser smoke.
+
+- `web/e2e/run-service-hub-integration.mjs` инкрементально конфигурирует/собирает существующий C++ target `dispatcher_service_hub` через WSL и запускает его на временном loopback port;
+- automation-only Node.js provider `web/e2e/support/service-hub-test-provider.mjs` подключается тем же WebSocket v1 protocol, регистрирует `test.web-shell` и существует только во время e2e-проверки;
+- test provider не является production backend service и не добавляет новый transport;
+- production frontend собирается с явным `VITE_SERVICE_HUB_URL` на реальный Hub;
+- `VITE_SERVICE_HUB_E2E=1` включает только test seam, который отдаёт Playwright ссылку на уже существующий shared `ServiceHubClient` из `main.tsx`; обычный production build этот seam не включает;
+- `web/e2e/service-hub.integration.spec.ts` выполняет request/response через реальный Hub и test provider;
+- два одновременно активных `parallel-echo` requests provider возвращает в обратном порядке, подтверждая client-side correlation;
+- unknown service подтверждает реальный Hub error `hub.unknown_service`;
+- `wait-for-cancel` + `cancel-count` подтверждают client cancel, Hub response `hub.cancelled` и доставку provider cancel;
+- integration control останавливает реальный Hub во время открытого browser application, после чего React status переходит в `disconnected`;
+- Hub и provider запускаются снова, но автоматического reconnect нет; тест явно вызывает `client.connect()` и подтверждает новый успешный request;
+- Header/navigation/workspace остаются рабочими после reconnect;
+- обычный `npm.cmd run test:e2e` по-прежнему проверяет production shell при недоступном backend.
+
+Новых frontend dependencies и production backend компонентов Step 6 не добавляет.
 
 ## Step 7 — Sprint acceptance, итоговый отчёт и documentation audit
 

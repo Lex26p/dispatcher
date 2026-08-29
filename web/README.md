@@ -12,7 +12,9 @@
 
 `CORE-003 / Step 4` established a reusable TypeScript Service Hub v1 client. It is independent of React and covers the direct browser WebSocket boundary, connection state, request correlation, cancellation, Hub request errors and transport failures.
 
-`CORE-003 / Step 5` adds shared React ownership of that client: one provider controls connect/disconnect lifecycle, exposes the client and connection state through a hook, and shows a compact Service Hub connection indicator in the global Header. The shell remains usable when Service Hub is unavailable.
+`CORE-003 / Step 5` established shared React ownership of that client: one provider controls connect/disconnect lifecycle, exposes the client and connection state through a hook, and shows a compact Service Hub connection indicator in the global Header. The shell remains usable when Service Hub is unavailable.
+
+`CORE-003 / Step 6` adds the real browser/backend integration path against the existing C++ Service Hub and an automation-only test provider.
 
 Notifications, messages, user actions, authentication, Dashboard and future service screens are not implemented yet.
 
@@ -113,3 +115,28 @@ The shared client uses `VITE_SERVICE_HUB_URL` when it is set. Example for local 
 When `VITE_SERVICE_HUB_URL` is not set, Web Shell derives the URL from the page origin and uses `/v1/ws`, choosing `ws://` for HTTP pages and `wss://` for HTTPS pages.
 
 Step 5 does not add automatic reconnect. A failed or closed connection returns the shared client to its disconnected state while the React application stays usable.
+
+
+## Real Service Hub browser integration
+
+The normal browser smoke remains backend-independent:
+
+    npm.cmd run test:e2e
+
+The real Service Hub integration check is separate:
+
+    npm.cmd run test:e2e:service-hub
+
+This integration command is intended for the Windows + WSL development workflow. It:
+
+- incrementally configures/builds the existing C++ `dispatcher_service_hub` target in WSL;
+- starts the real Service Hub on a temporary loopback port;
+- starts an automation-only Node.js test provider registered as `test.web-shell`;
+- builds the production Web Shell with an explicit `VITE_SERVICE_HUB_URL`;
+- runs Playwright against the real shared `ServiceHubClient`;
+- verifies success, parallel response correlation, unknown-service error, cancel propagation, real Hub shutdown, disconnected state, explicit reconnect and a new request after reconnect;
+- stops the temporary Service Hub after the check.
+
+The Node.js provider is test support only. It is not a production backend service and does not change the platform transport contract.
+
+The integration build enables `VITE_SERVICE_HUB_E2E=1` only to expose the already-created shared client to Playwright. Normal production builds do not expose this test seam.
