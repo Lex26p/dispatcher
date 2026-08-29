@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package dispatcher.data_hub.v1;
+
+// Stable logical identifier of a metric.
+//
+// The value is intentionally opaque to Data Hub. Device names, locations,
+// units and other descriptive metadata belong to services such as
+// Device Manager rather than to the runtime value transport.
+message MetricId {
+  string value = 1;
+}
+
+// Runtime value of a metric.
+//
+// The active oneof field is the value type on the wire. Additional value
+// kinds can be added later without changing the meaning of existing fields.
+message MetricValue {
+  oneof kind {
+    bool bool_value = 1;
+    int64 int64_value = 2;
+    uint64 uint64_value = 3;
+    double double_value = 4;
+    string string_value = 5;
+    bytes bytes_value = 6;
+  }
+}
+
+// Current value sample published to Data Hub.
+//
+// source_timestamp_unix_ms is milliseconds since Unix epoch as reported by
+// the source. A value of 0 means that the source did not provide a timestamp.
+// Data Hub reception time and value quality are intentionally not fixed in
+// Step 2 and can be added as new fields when their semantics are agreed.
+message MetricSample {
+  MetricId metric_id = 1;
+  MetricValue value = 2;
+  int64 source_timestamp_unix_ms = 3;
+}
+
+message PublishMetricRequest {
+  MetricSample sample = 1;
+}
+
+message PublishMetricResponse {}
+
+message GetCurrentRequest {
+  MetricId metric_id = 1;
+}
+
+message GetCurrentResponse {
+  MetricSample sample = 1;
+}
+
+// Step 2 supports explicit metric subscriptions only.
+// An empty list has no defined "subscribe to everything" meaning.
+message SubscribeRequest {
+  repeated MetricId metric_ids = 1;
+}
+
+message MetricUpdate {
+  MetricSample sample = 1;
+}
+
+// A write request is intentionally distinct from publishing the factual
+// current value. The route to the future metric provider/driver is
+// implemented in later CORE-001 steps.
+message WriteMetricRequest {
+  MetricId metric_id = 1;
+  MetricValue value = 2;
+}
+
+message WriteMetricResponse {}
+
+service DataHub {
+  rpc PublishMetric(PublishMetricRequest) returns (PublishMetricResponse);
+  rpc GetCurrent(GetCurrentRequest) returns (GetCurrentResponse);
+  rpc Subscribe(SubscribeRequest) returns (stream MetricUpdate);
+  rpc WriteMetric(WriteMetricRequest) returns (WriteMetricResponse);
+}
