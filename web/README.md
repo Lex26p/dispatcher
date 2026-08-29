@@ -8,9 +8,11 @@
 
 `CORE-003 / Step 2` established the compact global Header and workspace layout.
 
-`CORE-003 / Step 3` adds the first real global navigation behavior without adding a router dependency. The menu exposes only the current Web Shell workspace, uses the browser History API, provides an unknown-route fallback and supports predictable keyboard interaction.
+`CORE-003 / Step 3` established the first real global navigation behavior without adding a router dependency. The menu exposes only the current Web Shell workspace, uses the browser History API, provides an unknown-route fallback and supports predictable keyboard interaction.
 
-Notifications, messages, user actions, Service Hub client, authentication, Dashboard and future service screens are not implemented yet.
+`CORE-003 / Step 4` adds a reusable TypeScript Service Hub v1 client. It is independent of React and covers the direct browser WebSocket boundary, connection state, request correlation, cancellation, Hub request errors and transport failures. React lifecycle integration starts in Step 5.
+
+Notifications, messages, user actions, authentication, Dashboard and future service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -25,21 +27,23 @@ Notifications, messages, user actions, Service Hub client, authentication, Dashb
 
 Direct package versions are pinned exactly in `package.json`.
 
-## Dependency install
+## Local Web workflow
+
+Web development and automated Web checks are run natively on Windows. The C++ backend keeps its Linux/WSL workflow.
+
+Use `npm.cmd` and `npx.cmd` from PowerShell so the workflow does not depend on the PowerShell script execution policy.
 
 Clean installs use the committed lockfile:
 
-    npm ci
+    npm.cmd ci
 
-## Browser test dependency
+Install the Chromium binary used by the browser tests:
 
-Install the Chromium binary and Linux dependencies used by the browser tests:
-
-    npx playwright install --with-deps chromium
+    npx.cmd playwright install chromium
 
 ## Development server
 
-    npm run dev -- --host 0.0.0.0
+    npm.cmd run dev -- --host 0.0.0.0
 
 Vite prints the local development URL.
 
@@ -47,23 +51,25 @@ Vite prints the local development URL.
 
 TypeScript:
 
-    npm run typecheck
+    npm.cmd run typecheck
 
-Unit/component test:
+Unit/component tests:
 
-    npm run test
+    npm.cmd run test
 
 Production build:
 
-    npm run build
+    npm.cmd run build
 
 Browser smoke/integration against a fresh production build:
 
-    npm run test:e2e
+    npm.cmd run test:e2e
+
+`test:e2e` builds the production frontend before starting Playwright.
 
 Combined unit + production build check:
 
-    npm run check
+    npm.cmd run check
 
 ## Current navigation
 
@@ -77,4 +83,20 @@ The menu opens from the compact global Header, marks the active route with `aria
 
 Unknown paths render a Web Shell fallback with a way back to `/`.
 
-Future service links are intentionally absent until those services exist. `CORE-003 / Step 4` adds the reusable TypeScript Service Hub client; it does not add new navigation destinations by itself.
+Future service links are intentionally absent until those services exist.
+
+## Service Hub client
+
+`src/service-hub/ServiceHubClient.ts` implements the browser-facing Service Hub v1 client without React dependencies.
+
+The client:
+
+- accepts an explicit WebSocket URL;
+- requests subprotocol `dispatcher.service-hub.v1`;
+- exposes connection state and state subscription;
+- supports parallel request/response correlation;
+- returns a request handle with `id`, `response` Promise and `cancel()`;
+- distinguishes `ServiceHubRequestError`, `ServiceHubTransportError` and connection-level `ServiceHubProtocolError`;
+- does not implement authentication, automatic reconnect or an application heartbeat.
+
+React ownership of the shared connection is added in `CORE-003 / Step 5`.

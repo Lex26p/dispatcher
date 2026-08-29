@@ -169,15 +169,23 @@ Step 1 создал `web/` с React + TypeScript, Node 24 LTS, Vite, Vitest/Test
 
 Step 2 создал базовый App Shell: компактный global Header, menu trigger, резерв будущих global actions и рабочую область. Generated `*.tsbuildinfo` исключены из version control.
 
-Текущий Step 3 добавляет только глобальное меню и shell-level navigation: текущий `/` workspace, unknown-route fallback и keyboard-friendly open/close behavior. Future-service links, Project context и Service Hub client на этом шаге не добавляются.
+`CORE-003 / Step 3` завершён commit:
 
-После успешного commit Step 3 следующее действие:
+`81264746c0948b664c30b91418b8cc477b6b2f82`
 
-`CORE-003 / Step 4 — TypeScript client Service Hub`.
+Step 3 добавил global menu и shell-level navigation: текущий `/` workspace, unknown-route fallback и keyboard-friendly open/close behavior без router dependency.
+
+Текущий Step 4 создаёт самостоятельный TypeScript client Service Hub v1: configurable WebSocket URL, subprotocol, connection state, request correlation, cancel и разделение Hub request errors / transport failures. React integration остаётся Step 5.
+
+После успешного commit Step 4 следующее действие:
+
+`CORE-003 / Step 5 — React-интеграция Service Hub`.
 
 ## Рабочий процесс
 
 Изменения ChatGPT отдаёт архивом с готовыми файлами проекта. Пользователь распаковывает его поверх `C:\Projects\dispatcher`, выполняет необходимые проверки, коммитит и отправляет SHA. Новый SHA становится базовой точкой истины.
+
+Web frontend проверяется нативно в Windows/PowerShell через `npm.cmd` / `npx.cmd` на зафиксированном Node.js/npm toolchain. C++ backend собирается и тестируется в Linux/WSL.
 
 В конце каждого спринта обязательна целевая проверка актуальности связанной документации. Устаревшие статусы, архитектурные решения, команды, roadmap/current point и README должны быть синхронизированы до перехода к следующему спринту.
 

@@ -264,6 +264,10 @@ Web Shell имеет рабочую навигационную основу, н�
 
 Project context, service-specific routes, plugin UI registry и Service Hub client в Step 3 не добавляются.
 
+Step 3 завершён commit:
+
+`81264746c0948b664c30b91418b8cc477b6b2f82`
+
 ## Step 4 — TypeScript client Service Hub
 
 ### Что делаем
@@ -292,6 +296,31 @@ Client должен:
 ### Результат
 
 Frontend имеет переиспользуемый client Service Hub, не связанный с конкретным React screen или предметным backend service.
+
+### Реализация Step 4
+
+Добавляется самостоятельный browser-oriented client в `web/src/service-hub/ServiceHubClient.ts`.
+
+Client следует существующему Service Hub v1 contract без нового envelope или transport:
+
+- принимает явный WebSocket URL через constructor options;
+- открывает стандартный browser `WebSocket` с subprotocol `dispatcher.service-hub.v1`;
+- имеет состояния `disconnected`, `connecting`, `connected`, `disconnecting` и подписку на их изменения;
+- `connect()` и `disconnect()` не реализуют автоматическую reconnect policy;
+- `request()` генерирует client request ID, отправляет `request` и возвращает handle с `id`, `response` Promise и `cancel()`;
+- несколько pending requests хранятся независимо и завершаются по response `id`, включая ответы вне порядка отправки;
+- optional `timeoutMs` передаётся как contract field `timeout_ms`; фактический request deadline остаётся ответственностью Hub;
+- `cancel()` отправляет contract message `cancel` и ожидает нормальный Hub response `hub.cancelled`;
+- `response { ok: false }` отклоняет request как `ServiceHubRequestError`;
+- WebSocket close отклоняет все pending requests как `ServiceHubTransportError`;
+- connection-level `protocol_error`, invalid JSON, unexpected message type и unknown response ID считаются protocol failure и закрывают socket с code `1002`;
+- injectable WebSocket factory используется только как test seam; production default остаётся browser `WebSocket`.
+
+Unit tests с fake WebSocket проверяют handshake/subprotocol, connection state, parallel correlation, Hub error, cancellation, disconnect и protocol failure. React lifecycle/context и отображение connection state остаются Step 5.
+
+Новых frontend dependencies в Step 4 не требуется.
+
+Локальные Web-проверки выполняются нативно в Windows на зафиксированных Node.js 24.20.0 / npm 11.19.0; C++ backend workflow остаётся Linux/WSL.
 
 ## Step 5 — React-интеграция Service Hub
 

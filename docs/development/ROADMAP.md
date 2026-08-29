@@ -442,12 +442,18 @@ Step 1 зафиксировал `web/`, React + TypeScript toolchain, reproducib
 
 Step 2 зафиксировал компактный global Header, структурный резерв global actions, рабочую область, responsive smoke и исключение generated `*.tsbuildinfo` из version control.
 
+`CORE-003 / Step 3` завершён commit:
+
+`81264746c0948b664c30b91418b8cc477b6b2f82`
+
+Step 3 зафиксировал global menu, shell-level route `/`, unknown-route fallback и keyboard-friendly navigation без router dependency.
+
 Текущий шаг:
 
-**CORE-003 / Step 3 — Глобальная навигация.**
-
-После успешной проверки и фиксации Step 3 следующим будет:
-
 **CORE-003 / Step 4 — TypeScript client Service Hub.**
+
+После успешной проверки и фиксации Step 4 следующим будет:
+
+**CORE-003 / Step 5 — React-интеграция Service Hub.**
 
 Web Shell должен использовать подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication, Event Hub client и предметные экраны будущих сервисов в CORE-003 не добавляются.
