@@ -183,9 +183,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-004 — Project Manager
 
+**Статус:** в разработке.
+
 **Цель:** реализовать проекты как самостоятельные точки консолидации и контекста.
 
 **Результат:** проекты можно создавать, получать, изменять и использовать как контекст платформы без превращения их во владельцев остальных ресурсов.
+
+План спринта: [`sprints/CORE-004.md`](sprints/CORE-004.md).
 
 ### CORE-005 — Users & Access
 
@@ -467,12 +471,20 @@ Step 5 зафиксировал shared React Service Hub Provider/context, confi
 
 Step 6 подтвердил реальный browser → Service Hub → test provider path, parallel correlation, cancel, unavailable state и явный reconnect.
 
-`CORE-003 / Step 7` закрывает спринт итоговым acceptance и целевой ревизией документации без добавления новых функций.
+`CORE-003 — Web Shell` окончательно закрыт documentation commit:
 
-Следующий спринт:
+`88c5bb30f182f7d9898ad4c95b210a045060c94f`
+
+Текущий спринт:
 
 **CORE-004 — Project Manager.**
 
-Перед реализацией `CORE-004` должен быть создан и зафиксирован его подробный sprint plan.
+Подробный план и критерии завершения находятся в `docs/development/sprints/CORE-004.md`.
 
-Web Shell использует подтверждённый Service Hub endpoint `/v1/ws` и subprotocol `dispatcher.service-hub.v1`. Отдельный backend gateway, authentication и Event Hub client в `CORE-003` не добавлялись.
+Базовая точка CORE-004:
+
+`88c5bb30f182f7d9898ad4c95b210a045060c94f`
+
+Текущий шаг — зафиксировать sprint plan отдельным commit. Реализация Project Manager начинается только после проверки SHA этого plan commit.
+
+CORE-004 не добавляет Users & Access/authentication раньше CORE-005 и не превращает проекты во владельцев Dashboard/Device/других будущих ресурсов.

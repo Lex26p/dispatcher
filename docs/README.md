@@ -51,8 +51,9 @@
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
+- [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план текущего спринта Project Manager.
 
-Следующий спринт — `CORE-004 — Project Manager`; его подробный sprint plan создаётся перед началом реализации.
+Текущий спринт — `CORE-004 — Project Manager`. Реализация начинается после фиксации sprint plan отдельным commit.
 
 ### `docs/context/`
 

@@ -14,7 +14,7 @@
 
 `CORE-003 — Web Shell` завершён: существует самостоятельный React + TypeScript Web Shell с компактным global Header, глобальной навигацией, рабочей областью, общим browser-side Service Hub client/React connection boundary и реальной browser → Service Hub → test provider интеграционной проверкой.
 
-Следующий спринт — `CORE-004 — Project Manager`. Перед реализацией для него должен быть зафиксирован подробный sprint plan. Технологии Event Hub, постоянное хранение, deployment, authentication/authorization и другие ещё не проработанные части остаются открытыми до соответствующих спринтов.
+`CORE-004 — Project Manager` — текущий спринт. Его подробный план зафиксирован в `docs/development/sprints/CORE-004.md`; реализация начинается после отдельного plan commit. Конкретная технология durable persistence выбирается внутри спринта после фиксации минимальной Project model, а authentication/authorization остаётся `CORE-005`.
 
 ## Документация
 
@@ -33,5 +33,7 @@
 Итог `CORE-002`: [`docs/development/sprints/CORE-002.md`](docs/development/sprints/CORE-002.md).
 
 Итог `CORE-003`: [`docs/development/sprints/CORE-003.md`](docs/development/sprints/CORE-003.md).
+
+План `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

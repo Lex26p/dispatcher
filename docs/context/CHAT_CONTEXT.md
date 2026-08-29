@@ -193,11 +193,19 @@ Step 5 связал client с React lifecycle через shared Provider/context
 
 Step 6 подтвердил реальный browser path через существующий C++ Service Hub и automation-only test provider: success, parallel correlation, cancel, Hub close/disconnected state и явный reconnect.
 
-`CORE-003 / Step 7` выполняет финальный acceptance и documentation audit без новых функций. После успешного closure commit `CORE-003 — Web Shell` считается завершённым.
+`CORE-003 — Web Shell` окончательно закрыт commit:
 
-Следующее действие после проверки closure SHA:
+`88c5bb30f182f7d9898ad4c95b210a045060c94f`
 
-`CORE-004 — Project Manager`: подготовить подробный sprint plan перед реализацией.
+Текущий спринт:
+
+`CORE-004 — Project Manager`.
+
+Подробный план создаётся в `docs/development/sprints/CORE-004.md` от baseline `88c5bb30f182f7d9898ad4c95b210a045060c94f`.
+
+Границы CORE-004: отдельный C++ Project Manager, durable project persistence, Service Hub contract/provider, Web список/редактор и общий frontend project context. Проект остаётся плоской точкой консолидации и не владеет Dashboard/Device/другими будущими ресурсами. Users & Access/authentication остаётся CORE-005.
+
+Текущее действие — зафиксировать sprint plan отдельным commit и вернуть SHA. Реализация Step 1 начинается только после проверки этого SHA.
 
 ## Рабочий процесс
 
