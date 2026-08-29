@@ -4,7 +4,7 @@ Data Hub is the runtime service responsible for current metric values in Dispatc
 
 ## Current implementation stage
 
-`CORE-001 / Step 5` implements subscriptions.
+`CORE-001 / Step 6` verifies and fixes the runtime model for state metrics.
 
 Implemented at this stage:
 
@@ -14,39 +14,51 @@ Implemented at this stage:
 - working `PublishMetric` RPC;
 - working `GetCurrent` RPC;
 - working server-streaming `Subscribe` RPC;
-- retained-like delivery of an already existing current value;
-- live delivery of later changes for explicitly subscribed metric ids;
-- isolation between subscriptions and unrelated metric updates.
+- retained-like delivery of current values;
+- live delivery of later metric changes;
+- working metrics and their state metrics using the same generic Data Hub mechanisms.
 
 `WriteMetric` remains explicitly unimplemented until `CORE-001 / Step 7`.
+
+## State metric model
+
+A state metric is an ordinary metric from the point of view of Data Hub.
+
+Conceptually:
+
+    AHU01.Temperature       = 26.0
+    AHU01.Temperature.State = Alarm
+
+The `.State` suffix above is only a readable example used in the current documentation and tests. Data Hub does not parse or enforce that naming convention.
+
+Data Hub does not:
+
+- calculate `Normal`, `Warning`, `Alarm`, `NoData`, `Maintenance`, or any other state;
+- define the final set of allowed state values;
+- infer which state metric belongs to which working metric;
+- store device descriptions or other descriptive metric metadata.
+
+The future Event Manager will calculate the current state and publish the corresponding state metric into Data Hub.
+
+The future Device Manager is the appropriate place for descriptive metadata and the relationship between a working metric and its associated state metric.
+
+Data Hub only stores and distributes the resulting runtime values.
 
 ## Subscription behavior
 
 The v1 contract subscribes to an explicit list of metric ids.
 
-An empty list is invalid and does not mean "subscribe to everything".
+For every requested metric that already has a current value, a new subscriber receives that value before later live updates.
 
-For each requested metric that already has a current value, the new subscriber receives that value first.
+A consumer that needs both a working value and its state subscribes to both metric ids.
 
-After retained/current values are queued, later `PublishMetric` calls for those metric ids are delivered as live `MetricUpdate` messages.
-
-Updates for metric ids that are not part of the subscription are not delivered.
-
-The registration of a subscription is coordinated with publication so that a publish operation cannot occur between registering the subscriber and queuing its retained values. This prevents losing an update at the retained/live boundary.
+No special state-specific RPC or subscription type is required.
 
 ## Internal implementation
 
-`SubscriptionManager` tracks active subscriptions.
+`CurrentValueStore` and `SubscriptionManager` do not distinguish state metrics from other metrics.
 
-Each `Subscription` has:
-
-- a set of metric ids;
-- its own pending-update queue;
-- a condition variable used by the synchronous gRPC streaming handler.
-
-Publishing does not write to a client socket directly. It queues the sample for matching subscribers. The individual `Subscribe` RPC handler owns its `ServerWriter` and sends queued updates from its own call thread.
-
-This keeps concurrent publishers from writing to the same gRPC stream.
+That is intentional: the runtime mechanisms remain universal and do not duplicate the domain model.
 
 ## Toolchain
 
@@ -65,12 +77,11 @@ This keeps concurrent publishers from writing to the same gRPC stream.
     cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
 
-The Step 5 transport test:
+The Step 6 transport test verifies:
 
-1. publishes `Temperature = 25`;
-2. starts a subscription to `Temperature`;
-3. verifies that the subscriber immediately receives `25`;
-4. publishes an unrelated `Pressure` value;
-5. publishes `Temperature = 26`;
-6. verifies that the next subscription update is `Temperature = 26`;
-7. cancels the stream and verifies normal cancellation behavior.
+1. publication of a working metric;
+2. publication of a separate state metric;
+3. independent `GetCurrent` for both metrics;
+4. retained delivery of both metrics to one subscriber;
+5. live delivery of a new working value;
+6. live delivery of a new state value.

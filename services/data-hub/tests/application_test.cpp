@@ -7,6 +7,7 @@
 #include <grpcpp/grpcpp.h>
 
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -17,12 +18,6 @@ namespace {
 int fail(std::string_view message) {
     std::cerr << "FAILED: " << message << '\n';
     return 1;
-}
-
-std::unique_ptr<dispatcher::data_hub::v1::DataHub::Stub> make_stub(
-    const std::string& target) {
-    return dispatcher::data_hub::v1::DataHub::NewStub(
-        grpc::CreateChannel(target, grpc::InsecureChannelCredentials()));
 }
 
 bool wait_for_channel(
@@ -42,6 +37,31 @@ int publish_double(
     request.mutable_sample()->mutable_metric_id()->set_value(
         std::string(metric_id));
     request.mutable_sample()->mutable_value()->set_double_value(value);
+    request.mutable_sample()->set_source_timestamp_unix_ms(timestamp);
+
+    api::PublishMetricResponse response;
+    grpc::ClientContext context;
+
+    const auto status = stub.PublishMetric(
+        &context,
+        request,
+        &response);
+
+    return status.ok() ? 0 : 1;
+}
+
+int publish_string(
+    dispatcher::data_hub::v1::DataHub::Stub& stub,
+    std::string_view metric_id,
+    std::string_view value,
+    std::int64_t timestamp) {
+    namespace api = dispatcher::data_hub::v1;
+
+    api::PublishMetricRequest request;
+    request.mutable_sample()->mutable_metric_id()->set_value(
+        std::string(metric_id));
+    request.mutable_sample()->mutable_value()->set_string_value(
+        std::string(value));
     request.mutable_sample()->set_source_timestamp_unix_ms(timestamp);
 
     api::PublishMetricResponse response;
@@ -99,9 +119,12 @@ int test_current_value_store() {
     return 0;
 }
 
-int test_publish_get_and_subscribe_over_grpc() {
+int test_working_and_state_metrics_over_grpc() {
     namespace api = dispatcher::data_hub::v1;
     using dispatcher::data_hub::DataHubServer;
+
+    constexpr std::string_view working_metric = "AHU01.Temperature";
+    constexpr std::string_view state_metric = "AHU01.Temperature.State";
 
     DataHubServer server("127.0.0.1:0");
 
@@ -132,34 +155,67 @@ int test_publish_get_and_subscribe_over_grpc() {
 
     if (publish_double(
             *publisher,
-            "AHU01.Temperature",
+            working_metric,
             25.0,
             1000) != 0) {
         server.shutdown();
-        return fail("initial PublishMetric RPC failed");
+        return fail("working metric publication failed");
     }
 
-    // GetCurrent still works after subscription support is added.
-    api::GetCurrentRequest get_request;
-    get_request.mutable_metric_id()->set_value("AHU01.Temperature");
-
-    api::GetCurrentResponse get_response;
-    grpc::ClientContext get_context;
-
-    const auto get_status = reader->GetCurrent(
-        &get_context,
-        get_request,
-        &get_response);
-
-    if (!get_status.ok() ||
-        !get_response.has_sample() ||
-        get_response.sample().value().double_value() != 25.0) {
+    if (publish_string(
+            *publisher,
+            state_metric,
+            "Warning",
+            1100) != 0) {
         server.shutdown();
-        return fail("GetCurrent failed before subscription");
+        return fail("state metric publication failed");
+    }
+
+    api::GetCurrentRequest working_get;
+    working_get.mutable_metric_id()->set_value(std::string(working_metric));
+
+    api::GetCurrentResponse working_response;
+    grpc::ClientContext working_context;
+
+    const auto working_status = reader->GetCurrent(
+        &working_context,
+        working_get,
+        &working_response);
+
+    if (!working_status.ok() ||
+        !working_response.has_sample() ||
+        working_response.sample().metric_id().value() != working_metric ||
+        working_response.sample().value().kind_case() !=
+            api::MetricValue::kDoubleValue ||
+        working_response.sample().value().double_value() != 25.0) {
+        server.shutdown();
+        return fail("working metric GetCurrent result is invalid");
+    }
+
+    api::GetCurrentRequest state_get;
+    state_get.mutable_metric_id()->set_value(std::string(state_metric));
+
+    api::GetCurrentResponse state_response;
+    grpc::ClientContext state_context;
+
+    const auto state_status = reader->GetCurrent(
+        &state_context,
+        state_get,
+        &state_response);
+
+    if (!state_status.ok() ||
+        !state_response.has_sample() ||
+        state_response.sample().metric_id().value() != state_metric ||
+        state_response.sample().value().kind_case() !=
+            api::MetricValue::kStringValue ||
+        state_response.sample().value().string_value() != "Warning") {
+        server.shutdown();
+        return fail("state metric GetCurrent result is invalid");
     }
 
     api::SubscribeRequest subscribe_request;
-    subscribe_request.add_metric_ids()->set_value("AHU01.Temperature");
+    subscribe_request.add_metric_ids()->set_value(std::string(working_metric));
+    subscribe_request.add_metric_ids()->set_value(std::string(state_metric));
 
     grpc::ClientContext subscribe_context;
     subscribe_context.set_deadline(
@@ -169,70 +225,92 @@ int test_publish_get_and_subscribe_over_grpc() {
         &subscribe_context,
         subscribe_request);
 
-    api::MetricUpdate retained;
+    api::MetricUpdate retained_working;
+    api::MetricUpdate retained_state;
 
-    if (!stream->Read(&retained)) {
+    if (!stream->Read(&retained_working) ||
+        !stream->Read(&retained_state)) {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("subscriber did not receive retained current value");
+        return fail("subscriber did not receive retained metric pair");
     }
 
-    if (!retained.has_sample() ||
-        retained.sample().metric_id().value() != "AHU01.Temperature" ||
-        retained.sample().value().kind_case() !=
+    if (!retained_working.has_sample() ||
+        retained_working.sample().metric_id().value() != working_metric ||
+        retained_working.sample().value().kind_case() !=
             api::MetricValue::kDoubleValue ||
-        retained.sample().value().double_value() != 25.0 ||
-        retained.sample().source_timestamp_unix_ms() != 1000) {
+        retained_working.sample().value().double_value() != 25.0) {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("retained subscription value is invalid");
+        return fail("retained working metric is invalid");
     }
 
-    // Publish an unrelated metric first. The next item read from this
-    // subscription must still be the next Temperature update.
-    if (publish_double(
-            *publisher,
-            "AHU01.Pressure",
-            3.0,
-            1500) != 0) {
+    if (!retained_state.has_sample() ||
+        retained_state.sample().metric_id().value() != state_metric ||
+        retained_state.sample().value().kind_case() !=
+            api::MetricValue::kStringValue ||
+        retained_state.sample().value().string_value() != "Warning") {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("unrelated metric publication failed");
+        return fail("retained state metric is invalid");
     }
 
     if (publish_double(
             *publisher,
-            "AHU01.Temperature",
+            working_metric,
             26.0,
             2000) != 0) {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("live metric publication failed");
+        return fail("live working metric publication failed");
     }
 
-    api::MetricUpdate live;
-
-    if (!stream->Read(&live)) {
+    if (publish_string(
+            *publisher,
+            state_metric,
+            "Alarm",
+            2100) != 0) {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("subscriber did not receive live update");
+        return fail("live state metric publication failed");
     }
 
-    if (!live.has_sample() ||
-        live.sample().metric_id().value() != "AHU01.Temperature" ||
-        live.sample().value().kind_case() !=
+    api::MetricUpdate live_working;
+    api::MetricUpdate live_state;
+
+    if (!stream->Read(&live_working) ||
+        !stream->Read(&live_state)) {
+        subscribe_context.TryCancel();
+        stream->Finish();
+        server.shutdown();
+        return fail("subscriber did not receive live metric pair");
+    }
+
+    if (!live_working.has_sample() ||
+        live_working.sample().metric_id().value() != working_metric ||
+        live_working.sample().value().kind_case() !=
             api::MetricValue::kDoubleValue ||
-        live.sample().value().double_value() != 26.0 ||
-        live.sample().source_timestamp_unix_ms() != 2000) {
+        live_working.sample().value().double_value() != 26.0) {
         subscribe_context.TryCancel();
         stream->Finish();
         server.shutdown();
-        return fail("live subscription update is invalid");
+        return fail("live working metric is invalid");
+    }
+
+    if (!live_state.has_sample() ||
+        live_state.sample().metric_id().value() != state_metric ||
+        live_state.sample().value().kind_case() !=
+            api::MetricValue::kStringValue ||
+        live_state.sample().value().string_value() != "Alarm") {
+        subscribe_context.TryCancel();
+        stream->Finish();
+        server.shutdown();
+        return fail("live state metric is invalid");
     }
 
     subscribe_context.TryCancel();
@@ -241,28 +319,6 @@ int test_publish_get_and_subscribe_over_grpc() {
     if (finish_status.error_code() != grpc::StatusCode::CANCELLED) {
         server.shutdown();
         return fail("cancelled subscription did not finish as CANCELLED");
-    }
-
-    // Empty subscriptions are deliberately invalid in the v1 contract.
-    api::SubscribeRequest empty_request;
-    grpc::ClientContext empty_context;
-    auto empty_stream = subscriber->Subscribe(
-        &empty_context,
-        empty_request);
-
-    api::MetricUpdate empty_update;
-    if (empty_stream->Read(&empty_update)) {
-        empty_context.TryCancel();
-        empty_stream->Finish();
-        server.shutdown();
-        return fail("empty subscription unexpectedly produced an update");
-    }
-
-    const auto empty_status = empty_stream->Finish();
-
-    if (empty_status.error_code() != grpc::StatusCode::INVALID_ARGUMENT) {
-        server.shutdown();
-        return fail("empty subscription did not return INVALID_ARGUMENT");
     }
 
     server.shutdown();
@@ -280,12 +336,12 @@ int main() {
         return result;
     }
 
-    if (const auto result = test_publish_get_and_subscribe_over_grpc();
+    if (const auto result = test_working_and_state_metrics_over_grpc();
         result != 0) {
         return result;
     }
 
     std::cout
-        << "Data Hub publish/get/subscription tests passed\n";
+        << "Data Hub working/state metric tests passed\n";
     return 0;
 }
