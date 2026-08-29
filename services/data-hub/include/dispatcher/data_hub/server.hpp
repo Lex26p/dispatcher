@@ -1,0 +1,39 @@
+#pragma once
+
+#include "dispatcher/data_hub/current_value_store.hpp"
+#include "dispatcher/data_hub/grpc_service.hpp"
+
+#include <grpcpp/grpcpp.h>
+
+#include <memory>
+#include <string>
+#include <string_view>
+
+namespace dispatcher::data_hub {
+
+class DataHubServer final {
+public:
+    explicit DataHubServer(std::string listen_address);
+    ~DataHubServer();
+
+    DataHubServer(const DataHubServer&) = delete;
+    DataHubServer& operator=(const DataHubServer&) = delete;
+    DataHubServer(DataHubServer&&) = delete;
+    DataHubServer& operator=(DataHubServer&&) = delete;
+
+    [[nodiscard]] bool start();
+    void wait();
+    void shutdown();
+
+    [[nodiscard]] int bound_port() const noexcept;
+    [[nodiscard]] std::string_view listen_address() const noexcept;
+
+private:
+    std::string listen_address_;
+    CurrentValueStore current_values_;
+    DataHubGrpcService grpc_service_;
+    std::unique_ptr<grpc::Server> server_;
+    int bound_port_{0};
+};
+
+}  // namespace dispatcher::data_hub

@@ -11,7 +11,9 @@ public:
         return "data-hub";
     }
 
-    int run(std::ostream& output) const;
+    int run(
+        std::ostream& output,
+        std::string_view listen_address = "0.0.0.0:50051") const;
 };
 
 }  // namespace dispatcher::data_hub

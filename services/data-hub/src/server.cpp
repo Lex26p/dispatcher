@@ -1,0 +1,62 @@
+#include "dispatcher/data_hub/server.hpp"
+
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server_builder.h>
+
+#include <utility>
+
+namespace dispatcher::data_hub {
+
+DataHubServer::DataHubServer(std::string listen_address)
+    : listen_address_(std::move(listen_address)),
+      grpc_service_(current_values_) {}
+
+DataHubServer::~DataHubServer() {
+    shutdown();
+}
+
+bool DataHubServer::start() {
+    if (server_ != nullptr || listen_address_.empty()) {
+        return false;
+    }
+
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(
+        listen_address_,
+        grpc::InsecureServerCredentials(),
+        &bound_port_);
+    builder.RegisterService(&grpc_service_);
+
+    server_ = builder.BuildAndStart();
+
+    if (server_ == nullptr || bound_port_ <= 0) {
+        server_.reset();
+        bound_port_ = 0;
+        return false;
+    }
+
+    return true;
+}
+
+void DataHubServer::wait() {
+    if (server_ != nullptr) {
+        server_->Wait();
+    }
+}
+
+void DataHubServer::shutdown() {
+    if (server_ != nullptr) {
+        server_->Shutdown();
+        server_.reset();
+    }
+}
+
+int DataHubServer::bound_port() const noexcept {
+    return bound_port_;
+}
+
+std::string_view DataHubServer::listen_address() const noexcept {
+    return listen_address_;
+}
+
+}  // namespace dispatcher::data_hub

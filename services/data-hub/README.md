@@ -4,19 +4,19 @@ Data Hub is the runtime service responsible for current metric values in Dispatc
 
 ## Current implementation stage
 
-`CORE-001 / Step 3` adds the internal current-value store.
+`CORE-001 / Step 4` connects the current-value store to the real gRPC service boundary.
 
 Implemented at this stage:
 
-- independent C++ service skeleton;
-- Protocol Buffers contract in `proto/dispatcher/data_hub/v1/data_hub.proto`;
-- gRPC service definition;
-- C++ protobuf/gRPC code generation during the build;
+- independent C++ Data Hub executable;
+- Protocol Buffers / gRPC contract;
 - internal thread-safe current-value storage;
-- replacement of the previous current sample when the same metric is published again;
-- tests for contract serialization and current-value storage.
+- working `PublishMetric` RPC;
+- working `GetCurrent` RPC;
+- gRPC server listening on a configurable address;
+- transport-level tests using two independent gRPC client channels.
 
-Real RPC handlers, subscriptions, state-metric behavior and write routing are intentionally implemented in later steps of `CORE-001`.
+`Subscribe` and `WriteMetric` remain explicitly unimplemented until their planned steps.
 
 ## Toolchain baseline
 
@@ -31,51 +31,63 @@ Real RPC handlers, subscriptions, state-metric behavior and write routing are in
 
 ## Ubuntu / WSL dependencies
 
-The current build uses distribution packages instead of building gRPC and Protocol Buffers from source.
-
-Install:
-
     sudo apt-get update
     sudo apt-get install -y build-essential cmake ninja-build pkg-config protobuf-compiler libprotobuf-dev protobuf-compiler-grpc libgrpc++-dev
 
 ## Build in WSL
 
-The recommended build directory is stored on the WSL filesystem instead of `/mnt/c`.
-
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
     cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
+
+## Run
+
+Default endpoint:
+
+    0.0.0.0:50051
+
+Run with the default endpoint:
+
     "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub"
 
-## Current-value storage
+Run on a custom endpoint:
 
-`CurrentValueStore` is an internal Data Hub component.
+    "$HOME/.cache/dispatcher/build/debug/services/data-hub/dispatcher-data-hub" 127.0.0.1:50052
 
-Its responsibility is deliberately narrow:
+The process blocks while serving gRPC requests. Graceful OS-signal handling is intentionally left for `CORE-001 / Step 8`.
 
-- keep one current `MetricSample` per metric id;
-- replace the previous current sample on a new successful `put`;
-- return the current sample by metric id;
-- keep different metrics independent.
+## Step 4 RPC behavior
 
-The store does not keep historical samples.
+### PublishMetric
 
-The store rejects samples that have no non-empty metric id or no concrete `MetricValue`.
+A valid sample is stored as the current value for its metric id.
 
-The store is thread-safe because future gRPC handlers can access the same runtime state concurrently. No network behavior is implemented in the store itself.
+Invalid samples return gRPC `INVALID_ARGUMENT`.
 
-## Contract boundary
+### GetCurrent
 
-The Data Hub protobuf package is versioned as:
+Returns the last stored sample for the requested metric id.
 
-    dispatcher.data_hub.v1
+An unknown metric returns gRPC `NOT_FOUND`.
 
-The initial RPC surface remains:
+### Subscribe
 
-- `PublishMetric`;
-- `GetCurrent`;
-- `Subscribe`;
-- `WriteMetric`.
+Returns gRPC `UNIMPLEMENTED` until `CORE-001 / Step 5`.
 
-The contract does not contain device descriptions, units, project membership or access rights. Those responsibilities belong to other services.
+### WriteMetric
+
+Returns gRPC `UNIMPLEMENTED` until `CORE-001 / Step 7`.
+
+## Test boundary
+
+The Step 4 test starts Data Hub on `127.0.0.1:0`, allowing gRPC to choose a free local TCP port.
+
+It then creates two independent gRPC channels:
+
+- a publisher client;
+- a reader client.
+
+The publisher sends `PublishMetric`, and the reader retrieves the same sample through `GetCurrent`.
+
+This checks the real gRPC/TCP service boundary while avoiding a fixed test port.
