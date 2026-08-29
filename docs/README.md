@@ -37,9 +37,17 @@
 
 Согласованная архитектура системы на текущем уровне детализации.
 
-- [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, Device Manager, модель метрик и выбранные языки.
+- [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, Device Manager, модель метрик и выбранные языки/инструменты.
+- [`data-hub-contract.md`](architecture/data-hub-contract.md) — внешний gRPC + Protocol Buffers контракт Data Hub и его runtime-семантика.
 
-Конкретные технологии транспорта, БД, сериализации, deployment и другие детали добавляются после отдельного обсуждения.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub транспорт и сериализация уже зафиксированы; технологии Event Hub, Service Hub, БД и deployment выбираются в соответствующих будущих спринтах.
+
+### `docs/development/`
+
+Рабочий план разработки и отчёты по завершённым спринтам.
+
+- [`ROADMAP.md`](development/ROADMAP.md) — этапы, спринты и текущая точка разработки.
+- [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 
 ### `docs/context/`
 

@@ -2,9 +2,9 @@
 
 Data Hub is the runtime service responsible for current metric values in Dispatcher.
 
-## Current implementation stage
+## Current implementation status
 
-`CORE-001 / Step 8` completes the basic service lifecycle and error-handling work planned for the sprint.
+`CORE-001 — Data Hub` is complete and verified by a dedicated sprint acceptance test plus lifecycle/error regression tests.
 
 Implemented at this stage:
 
@@ -40,7 +40,7 @@ This bounded shutdown is important for long-lived `Subscribe` streams: an abando
 
 ## Diagnostics
 
-Step 8 deliberately does not introduce a logging framework.
+`CORE-001` deliberately does not introduce a logging framework.
 
 The executable currently reports only lifecycle-level messages:
 
@@ -80,14 +80,17 @@ This does not imply persistence across a Data Hub process restart. Runtime-state
 
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_data_hub dispatcher_data_hub_tests dispatcher_data_hub_sprint_acceptance
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^data-hub\."
 
-Step 8 adds three CTest checks:
+The completed sprint exposes four CTest checks:
 
-- the C++ lifecycle/error/reconnect test;
-- real process shutdown through SIGTERM;
-- real process shutdown through SIGINT.
+- `data-hub.lifecycle-and-errors`;
+- `data-hub.sprint-acceptance`;
+- `data-hub.signal-term`;
+- `data-hub.signal-int`.
+
+The acceptance test covers the full sprint chain: publish/get, retained and live subscription updates, state metric delivery and `WriteMetric` routing to the test provider.
 
 ## Run manually
 
@@ -104,4 +107,4 @@ Ctrl+C sends SIGINT and should result in lifecycle output ending with:
     Dispatcher Data Hub shutdown requested by SIGINT
     Dispatcher Data Hub stopped
 
-The automated CTest signal checks already verify this behavior; a separate manual check is not required for Step 8.
+The automated CTest signal checks already verify this behavior; a separate manual check is not required for the completed sprint.
