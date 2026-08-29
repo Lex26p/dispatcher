@@ -419,7 +419,11 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 `a06d9cdd7a6c52197b6657c282ed89b745a799da`
 
-В `CORE-002 / Step 2` зафиксирован внешний Service Hub v1 contract:
+`CORE-002 / Step 2` завершён commit:
+
+`8ae232fbebd8051213594aa42a03b22d16596e06`
+
+В Step 2 зафиксирован внешний Service Hub v1 contract:
 
 - WebSocket;
 - UTF-8 JSON;
@@ -428,6 +432,16 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 - provider/client connection roles;
 - request correlation, timeout и cancellation semantics.
 
-После подтверждения commit Step 2 следующее действие:
+`CORE-002 / Step 3` завершён commit:
 
-**CORE-002 / Step 3 — Регистрация provider и таблица маршрутизации.**
+`e04227b2f05d2ceb42a42ae2e6851d14905602f0`
+
+Step 3 реализовал provider registry и внутреннюю таблицу маршрутизации.
+
+Текущий шаг:
+
+**CORE-002 / Step 4 — Реальный request/response маршрут.**
+
+После успешной проверки и фиксации Step 4 следующим будет:
+
+**CORE-002 / Step 5 — Correlation и параллельные запросы.**

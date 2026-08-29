@@ -198,6 +198,12 @@ Machine-readable schema:
 
 Service Hub знает, как направить request текущему provider тестового сервиса.
 
+Step 3 завершён commit:
+
+`e04227b2f05d2ceb42a42ae2e6851d14905602f0`
+
+Реализован потокобезопасный `ProviderRegistry` с правилами v1: один active provider на service, один service на connection, удаление route при disconnect и возможность re-register новым connection.
+
 ## Step 4 — Реальный request/response маршрут
 
 ### Что делаем
@@ -215,6 +221,26 @@ Service Hub не интерпретирует предметный payload те�
 ### Результат
 
 Один независимый client получает response от независимого provider через Service Hub.
+
+### Реализация Step 4
+
+Добавляется реальная loopback WebSocket-проверка с двумя независимыми соединениями:
+
+`Client WebSocket → Service Hub → Provider WebSocket → Service Hub → Client WebSocket`
+
+Service Hub:
+
+- принимает provider registration через v1 endpoint/subprotocol;
+- находит provider через `ProviderRegistry`;
+- создаёт Hub-scoped request ID;
+- передаёт `service`, `operation`, opaque JSON `payload` и timeout provider;
+- принимает provider response;
+- восстанавливает исходный client request ID;
+- возвращает response клиенту.
+
+Для C++ transport используются Boost.Asio + Boost.Beast. Для внутреннего JSON parsing/serialization используется `json-c`; это implementation detail и не меняет внешний контракт.
+
+Полная проверка нескольких одновременно активных requests остаётся Step 5.
 
 ## Step 5 — Correlation и параллельные запросы
 

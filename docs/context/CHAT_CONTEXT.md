@@ -144,9 +144,13 @@ Step 1 создал отдельный Service Hub skeleton.
 
 Step 2 зафиксировал WebSocket + JSON transport и внешний v1 contract.
 
-Следующее действие после подтверждения Step 2 commit:
+Step 3 реализовал `ProviderRegistry` и routing table.
 
-`CORE-002 / Step 3 — Регистрация provider и таблица маршрутизации`.
+Текущий Step 4 добавляет реальный WebSocket request/response путь через test provider. Внутренняя JSON implementation использует `json-c`.
+
+После успешного commit Step 4 следующее действие:
+
+`CORE-002 / Step 5 — Correlation и параллельные запросы`.
 
 ## Рабочий процесс
 

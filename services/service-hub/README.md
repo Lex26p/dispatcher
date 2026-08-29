@@ -4,9 +4,9 @@ Service Hub is the addressable request/response service of Dispatcher.
 
 ## Current implementation stage
 
-`CORE-002 / Step 3` adds the in-process provider registry and routing table.
+`CORE-002 / Step 4` adds the first real WebSocket request/response route.
 
-The external v1 contract remains the WebSocket + UTF-8 JSON protocol fixed in Step 2.
+The external v1 contract remains the WebSocket + UTF-8 JSON protocol fixed in Step 2, and the provider routing rules remain those implemented in Step 3.
 
 ## Implemented
 
@@ -14,69 +14,98 @@ Current implementation includes:
 
 - independent C++20 Service Hub skeleton;
 - external Service Hub v1 contract and JSON Schema;
-- `ProviderRegistry`;
-- service-address validation matching the v1 contract;
-- one active provider connection per service address;
-- one registered service per provider connection;
-- exact `service -> connection_id` lookup;
-- reverse `connection_id -> service` lookup;
-- route removal when a provider connection is removed;
-- re-registration of the same service by a new connection after disconnect;
-- rejection of registration conflicts.
+- thread-safe `ProviderRegistry`;
+- Boost.Asio + Boost.Beast WebSocket transport;
+- endpoint `/v1/ws`;
+- required WebSocket subprotocol `dispatcher.service-hub.v1`;
+- UTF-8 JSON text messages;
+- provider registration over a real WebSocket connection;
+- client requests over a separate real WebSocket connection;
+- routing by `service`;
+- Hub-generated provider request IDs (`hub-*`);
+- restoration of the original client request ID in the returned response;
+- opaque JSON payload forwarding;
+- success and provider error response forwarding;
+- basic unknown-service/invalid-request handling required by the route;
+- bounded request waiting using the v1 `timeout_ms` value.
 
-`ProviderRegistry` is thread-safe and does not depend on WebSocket/Boost session types. The future transport layer gives it an internal `ProviderConnectionId`.
+The network test uses independent provider and client WebSocket connections against a real loopback TCP listener.
 
-## Registration rules
+## Internal JSON implementation
 
-A valid v1 service address:
+The external protocol is JSON and does not depend on a C++ JSON library.
 
-- is 1..128 characters long;
-- starts with lowercase ASCII letter or digit;
-- otherwise contains only lowercase ASCII letters, digits, `.`, `_`, `-`.
+The current C++ implementation uses `json-c` internally for parsing and serialization.
 
-Registration results distinguish:
+This is not part of the Service Hub v1 contract and can be changed later without changing clients/providers.
 
-- successful registration;
-- invalid service address;
-- service already owned by another provider;
-- connection already registered for a service.
+## Step 4 routing model
 
-A second registration never silently replaces an active route.
+The current successful path is:
 
-## Contract
+    Client WebSocket
+      -> Service Hub
+      -> ProviderRegistry lookup
+      -> Provider WebSocket
+      -> provider response
+      -> Service Hub
+      -> Client WebSocket
 
-Architecture document:
+The client sends, for example:
 
-`docs/architecture/service-hub-contract.md`
+    {"type":"request","id":"req-42","service":"test.echo","operation":"echo","payload":{"text":"hello"},"timeout_ms":5000}
 
-Machine-readable schema:
+The provider receives the same logical request with a Hub-scoped ID such as:
 
-`services/service-hub/protocol/dispatcher/service_hub/v1/service_hub.schema.json`
+    {"type":"request","id":"hub-1","service":"test.echo","operation":"echo","payload":{"text":"hello"},"timeout_ms":5000}
+
+When the provider responds with `hub-1`, Service Hub returns the response to the client with its original `req-42`.
+
+## Deliberate Step 4 limit
+
+One client session currently processes requests sequentially.
+
+The server already uses Hub-scoped provider IDs and a pending-request table because a real routed response needs correlation, but Step 4 does not claim the full parallel-request behavior required by the v1 contract.
+
+`CORE-002 / Step 5` is responsible for verifying and completing multiple simultaneous requests, including multiple active requests on one client connection.
 
 ## Not implemented yet
 
-Step 3 intentionally does not implement:
+Step 4 intentionally does not complete:
 
-- WebSocket server;
-- JSON message parsing;
-- network provider sessions;
-- forwarding client requests to providers;
-- request correlation state;
-- timeout timers;
-- cancellation;
-- Web client integration;
+- full parallel request processing;
+- client `cancel`;
+- best-effort provider cancel;
+- complete provider-disconnect handling for active requests;
+- reconnect integration tests;
+- browser/Web Shell integration test;
+- final lifecycle/signal handling;
 - authentication or authorization.
 
-The real transport path starts in `CORE-002 / Step 4`.
+Those remain in the following CORE-002 steps.
+
+## Dependencies
+
+In addition to the existing C++ toolchain, Service Hub transport currently needs:
+
+- Boost headers with Boost.Asio/Boost.Beast;
+- `json-c` development files;
+- pthread support through CMake `Threads`.
+
+On Ubuntu/WSL the development packages are typically:
+
+    libboost-dev
+    libjson-c-dev
 
 ## Build and test in WSL
 
     cd /mnt/c/Projects/dispatcher
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_service_hub dispatcher_service_hub_tests dispatcher_service_hub_provider_registry_tests dispatcher_service_hub_request_response_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^service-hub\."
 
 Current CTest checks:
 
 - `service-hub.application`;
-- `service-hub.provider-registry`.
+- `service-hub.provider-registry`;
+- `service-hub.request-response`.
