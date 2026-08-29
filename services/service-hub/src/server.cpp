@@ -11,7 +11,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -22,6 +21,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -258,10 +258,13 @@ parse_listen_address(const std::string_view address) {
 
 class ServiceHubServer::Impl final {
 public:
+    class Session;
+
     struct PendingRequest final {
-        std::mutex mutex;
-        std::condition_variable condition;
-        std::optional<std::string> response;
+        std::weak_ptr<Session> client_session;
+        std::string client_request_id;
+        std::chrono::steady_clock::time_point deadline;
+        bool timeout_armed{false};
     };
 
     class Session final : public std::enable_shared_from_this<Session> {
@@ -322,14 +325,14 @@ public:
         }
 
         [[nodiscard]] bool enqueue_provider_message(std::string message) {
-            std::lock_guard lock(outbound_mutex_);
+            return enqueue_outbound_message(std::move(message));
+        }
 
-            if (!active_.load()) {
-                return false;
-            }
-
-            outbound_.push_back(std::move(message));
-            return true;
+        [[nodiscard]] bool complete_client_request(
+            const std::string& client_request_id,
+            std::string message) {
+            finish_client_request(client_request_id);
+            return enqueue_outbound_message(std::move(message));
         }
 
         void stop() {
@@ -419,6 +422,46 @@ public:
             return !error;
         }
 
+        [[nodiscard]] bool enqueue_outbound_message(std::string message) {
+            std::lock_guard lock(outbound_mutex_);
+
+            if (!active_.load()) {
+                return false;
+            }
+
+            outbound_.push_back(std::move(message));
+            return true;
+        }
+
+        [[nodiscard]] bool flush_outbound_messages() {
+            std::deque<std::string> outbound;
+
+            {
+                std::lock_guard lock(outbound_mutex_);
+                outbound.swap(outbound_);
+            }
+
+            for (const auto& message : outbound) {
+                if (!send_text(message)) {
+                    active_.store(false);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        [[nodiscard]] bool try_begin_client_request(
+            const std::string& request_id) {
+            std::lock_guard lock(active_client_requests_mutex_);
+            return active_client_requests_.insert(request_id).second;
+        }
+
+        void finish_client_request(const std::string& request_id) {
+            std::lock_guard lock(active_client_requests_mutex_);
+            active_client_requests_.erase(request_id);
+        }
+
         void run_provider(json_object* registration) {
             std::string service;
 
@@ -473,18 +516,8 @@ public:
 
         void run_provider_loop() {
             while (active_.load() && owner_.running_.load()) {
-                std::deque<std::string> outbound;
-
-                {
-                    std::lock_guard lock(outbound_mutex_);
-                    outbound.swap(outbound_);
-                }
-
-                for (const auto& message : outbound) {
-                    if (!send_text(message)) {
-                        active_.store(false);
-                        return;
-                    }
+                if (!flush_outbound_messages()) {
+                    return;
                 }
 
                 pollfd descriptor{
@@ -578,25 +611,62 @@ public:
                 }
             }
 
-            return owner_.complete_pending_request(
-                request_id,
-                serialize_json(parsed->get()));
+            if (!owner_.complete_pending_request(
+                    request_id,
+                    serialize_json(parsed->get()))) {
+                send_text(make_protocol_error(
+                    "hub.protocol_error",
+                    "Provider response refers to an unknown request"));
+                return false;
+            }
+
+            return true;
         }
 
         void run_client(const std::string& first_message) {
-            std::optional<std::string> current = first_message;
+            if (!handle_client_request(first_message)) {
+                return;
+            }
 
             while (active_.load() && owner_.running_.load()) {
+                if (!flush_outbound_messages()) {
+                    return;
+                }
+
+                pollfd descriptor{
+                    beast::get_lowest_layer(*websocket_).native_handle(),
+                    POLLIN,
+                    0};
+
+                const int poll_result = ::poll(&descriptor, 1, 10);
+
+                if (poll_result < 0) {
+                    active_.store(false);
+                    return;
+                }
+
+                if (poll_result == 0) {
+                    continue;
+                }
+
+                if ((descriptor.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+                    active_.store(false);
+                    return;
+                }
+
+                if ((descriptor.revents & POLLIN) == 0) {
+                    continue;
+                }
+
                 std::string message;
 
-                if (current.has_value()) {
-                    message = std::move(*current);
-                    current.reset();
-                } else if (!read_text(message)) {
+                if (!read_text(message)) {
+                    active_.store(false);
                     return;
                 }
 
                 if (!handle_client_request(message)) {
+                    active_.store(false);
                     return;
                 }
             }
@@ -608,9 +678,10 @@ public:
 
             if (!parsed.has_value() ||
                 !json_object_is_type(parsed->get(), json_type_object)) {
-                return send_text(make_protocol_error(
+                send_text(make_protocol_error(
                     "hub.protocol_error",
                     "Client message must be a JSON object"));
+                return false;
             }
 
             std::string type;
@@ -670,38 +741,58 @@ public:
                 timeout_ms = static_cast<int>(timeout_value);
             }
 
+            if (!try_begin_client_request(client_request_id)) {
+                send_text(make_protocol_error(
+                    "hub.protocol_error",
+                    "Client reused an active request identifier"));
+                return false;
+            }
+
+            const auto fail_request =
+                [this, &client_request_id](
+                    const std::string_view code,
+                    const std::string_view error_message) {
+                    finish_client_request(client_request_id);
+                    return send_text(make_request_error(
+                        client_request_id,
+                        code,
+                        error_message));
+                };
+
             const auto provider_id =
                 owner_.provider_registry_.find_provider(service);
 
             if (!provider_id.has_value()) {
-                return send_text(make_request_error(
-                    client_request_id,
+                return fail_request(
                     "hub.unknown_service",
-                    "No active provider is registered for the requested service"));
+                    "No active provider is registered for the requested service");
             }
 
             const auto provider_session =
                 owner_.find_session(*provider_id);
 
             if (!provider_session) {
-                return send_text(make_request_error(
-                    client_request_id,
+                return fail_request(
                     "hub.unknown_service",
-                    "No active provider is registered for the requested service"));
+                    "No active provider is registered for the requested service");
             }
 
             const std::string provider_request_id =
                 owner_.next_provider_request_id();
 
             auto pending = std::make_shared<PendingRequest>();
+            pending->client_session = shared_from_this();
+            pending->client_request_id = client_request_id;
+            pending->deadline =
+                std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(timeout_ms);
 
             if (!owner_.add_pending_request(
                     provider_request_id,
                     pending)) {
-                return send_text(make_request_error(
-                    client_request_id,
+                return fail_request(
                     "hub.protocol_error",
-                    "Could not allocate provider request identifier"));
+                    "Could not allocate provider request identifier");
             }
 
             auto forwarded = adopt_json(json_object_new_object());
@@ -733,50 +824,13 @@ public:
             if (!provider_session->enqueue_provider_message(
                     serialize_json(forwarded.get()))) {
                 owner_.remove_pending_request(provider_request_id);
-                return send_text(make_request_error(
-                    client_request_id,
+                return fail_request(
                     "hub.provider_unavailable",
-                    "Provider connection is unavailable"));
+                    "Provider connection is unavailable");
             }
 
-            std::unique_lock pending_lock(pending->mutex);
-            const bool completed = pending->condition.wait_for(
-                pending_lock,
-                std::chrono::milliseconds(timeout_ms),
-                [&pending] {
-                    return pending->response.has_value();
-                });
-            if (!completed) {
-                pending_lock.unlock();
-                owner_.remove_pending_request(provider_request_id);
-                return send_text(make_request_error(
-                    client_request_id,
-                    "hub.timeout",
-                    "Provider did not respond before the request deadline"));
-            }
-
-            const std::string provider_response =
-                std::move(*pending->response);
-            pending_lock.unlock();
-            owner_.remove_pending_request(provider_request_id);
-
-            const auto response = parse_json(provider_response);
-
-            if (!response.has_value() ||
-                !json_object_is_type(response->get(), json_type_object)) {
-                return send_text(make_request_error(
-                    client_request_id,
-                    "hub.protocol_error",
-                    "Provider response could not be routed"));
-            }
-
-            json_object_object_del(response->get(), "id");
-            json_object_object_add(
-                response->get(),
-                "id",
-                json_object_new_string(client_request_id.c_str()));
-
-            return send_text(serialize_json(response->get()));
+            owner_.arm_pending_request(provider_request_id);
+            return true;
         }
 
         Impl& owner_;
@@ -786,6 +840,8 @@ public:
         std::atomic<bool> active_{false};
         std::mutex outbound_mutex_;
         std::deque<std::string> outbound_;
+        std::mutex active_client_requests_mutex_;
+        std::unordered_set<std::string> active_client_requests_;
     };
 
     explicit Impl(std::string listen_address)
@@ -867,6 +923,9 @@ public:
         listener_thread_ = std::thread([this] {
             accept_loop();
         });
+        timeout_thread_ = std::thread([this] {
+            timeout_loop();
+        });
 
         return true;
     }
@@ -901,6 +960,10 @@ public:
 
         if (listener_thread_.joinable()) {
             listener_thread_.join();
+        }
+
+        if (timeout_thread_.joinable()) {
+            timeout_thread_.join();
         }
 
         std::vector<std::thread> threads;
@@ -988,6 +1051,46 @@ private:
         }
     }
 
+    void timeout_loop() {
+        while (running_.load()) {
+            expire_pending_requests();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    }
+
+    void expire_pending_requests() {
+        std::vector<std::shared_ptr<PendingRequest>> expired;
+        const auto now = std::chrono::steady_clock::now();
+
+        {
+            std::lock_guard lock(pending_mutex_);
+
+            for (auto iterator = pending_requests_.begin();
+                 iterator != pending_requests_.end();) {
+                const auto& pending = iterator->second;
+
+                if (pending->timeout_armed &&
+                    pending->deadline <= now) {
+                    expired.push_back(pending);
+                    iterator = pending_requests_.erase(iterator);
+                } else {
+                    ++iterator;
+                }
+            }
+        }
+
+        for (const auto& pending : expired) {
+            if (const auto client = pending->client_session.lock()) {
+                (void)client->complete_client_request(
+                    pending->client_request_id,
+                    make_request_error(
+                        pending->client_request_id,
+                        "hub.timeout",
+                        "Provider did not respond before the request deadline"));
+            }
+        }
+    }
+
     void on_session_closed(
         const ProviderConnectionId connection_id) {
         (void)provider_registry_.unregister_provider(connection_id);
@@ -1024,6 +1127,16 @@ private:
             std::move(pending)).second;
     }
 
+    void arm_pending_request(const std::string& request_id) {
+        std::lock_guard lock(pending_mutex_);
+
+        const auto iterator = pending_requests_.find(request_id);
+
+        if (iterator != pending_requests_.end()) {
+            iterator->second->timeout_armed = true;
+        }
+    }
+
     void remove_pending_request(
         const std::string& request_id) {
         std::lock_guard lock(pending_mutex_);
@@ -1046,19 +1159,37 @@ private:
             }
 
             pending = iterator->second;
+            pending_requests_.erase(iterator);
         }
 
-        {
-            std::lock_guard lock(pending->mutex);
+        const auto client = pending->client_session.lock();
 
-            if (pending->response.has_value()) {
-                return false;
-            }
-
-            pending->response = std::move(response);
+        if (!client) {
+            return true;
         }
 
-        pending->condition.notify_one();
+        const auto parsed = parse_json(response);
+
+        if (!parsed.has_value() ||
+            !json_object_is_type(parsed->get(), json_type_object)) {
+            (void)client->complete_client_request(
+                pending->client_request_id,
+                make_request_error(
+                    pending->client_request_id,
+                    "hub.protocol_error",
+                    "Provider response could not be routed"));
+            return true;
+        }
+
+        json_object_object_del(parsed->get(), "id");
+        json_object_object_add(
+            parsed->get(),
+            "id",
+            json_object_new_string(pending->client_request_id.c_str()));
+
+        (void)client->complete_client_request(
+            pending->client_request_id,
+            serialize_json(parsed->get()));
         return true;
     }
 
@@ -1068,6 +1199,7 @@ private:
     std::atomic<bool> running_{false};
     int bound_port_{0};
     std::thread listener_thread_;
+    std::thread timeout_thread_;
 
     ProviderRegistry provider_registry_;
 

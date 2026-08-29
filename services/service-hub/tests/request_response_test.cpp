@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 
 namespace {
 
@@ -70,11 +71,7 @@ public:
             "/v1/ws",
             error);
 
-        if (error) {
-            return false;
-        }
-
-        return true;
+        return !error;
     }
 
     [[nodiscard]] bool write(const std::string_view message) {
@@ -100,9 +97,7 @@ public:
 
     void close() {
         beast::error_code error;
-        websocket_.close(
-            websocket::close_code::normal,
-            error);
+        websocket_.close(websocket::close_code::normal, error);
     }
 
 private:
@@ -125,6 +120,162 @@ private:
     return std::string_view(json_object_get_string(value)) == expected;
 }
 
+[[nodiscard]] bool register_provider(
+    TestWebSocket& provider,
+    const int port) {
+    if (!provider.connect("127.0.0.1", port) ||
+        !provider.write(
+            R"({"type":"register","service":"test.echo"})")) {
+        return false;
+    }
+
+    std::string registered_message;
+
+    if (!provider.read(registered_message)) {
+        return false;
+    }
+
+    json_object* registered =
+        json_tokener_parse(registered_message.c_str());
+
+    const bool valid =
+        registered != nullptr &&
+        json_string_field_equals(registered, "type", "registered") &&
+        json_string_field_equals(registered, "service", "test.echo");
+
+    if (registered != nullptr) {
+        json_object_put(registered);
+    }
+
+    return valid;
+}
+
+[[nodiscard]] bool parse_provider_request(
+    const std::string& message,
+    std::string& hub_id,
+    std::string& marker) {
+    json_object* request = json_tokener_parse(message.c_str());
+
+    if (request == nullptr ||
+        !json_string_field_equals(request, "type", "request") ||
+        !json_string_field_equals(request, "service", "test.echo") ||
+        !json_string_field_equals(request, "operation", "echo")) {
+        if (request != nullptr) {
+            json_object_put(request);
+        }
+        return false;
+    }
+
+    json_object* id = nullptr;
+    json_object* payload = nullptr;
+    json_object* marker_value = nullptr;
+
+    const bool valid =
+        json_object_object_get_ex(request, "id", &id) &&
+        json_object_is_type(id, json_type_string) &&
+        std::string_view(json_object_get_string(id)).find("hub-") == 0 &&
+        json_object_object_get_ex(request, "payload", &payload) &&
+        json_object_is_type(payload, json_type_object) &&
+        json_object_object_get_ex(payload, "marker", &marker_value) &&
+        json_object_is_type(marker_value, json_type_string);
+
+    if (valid) {
+        hub_id = json_object_get_string(id);
+        marker = json_object_get_string(marker_value);
+    }
+
+    json_object_put(request);
+    return valid;
+}
+
+[[nodiscard]] bool parse_client_success(
+    const std::string& message,
+    std::string& request_id,
+    std::string& marker) {
+    json_object* response = json_tokener_parse(message.c_str());
+
+    if (response == nullptr ||
+        !json_string_field_equals(response, "type", "response")) {
+        if (response != nullptr) {
+            json_object_put(response);
+        }
+        return false;
+    }
+
+    json_object* id = nullptr;
+    json_object* ok = nullptr;
+    json_object* payload = nullptr;
+    json_object* marker_value = nullptr;
+
+    const bool valid =
+        json_object_object_get_ex(response, "id", &id) &&
+        json_object_is_type(id, json_type_string) &&
+        json_object_object_get_ex(response, "ok", &ok) &&
+        json_object_is_type(ok, json_type_boolean) &&
+        json_object_get_boolean(ok) != 0 &&
+        json_object_object_get_ex(response, "payload", &payload) &&
+        json_object_is_type(payload, json_type_object) &&
+        json_object_object_get_ex(payload, "marker", &marker_value) &&
+        json_object_is_type(marker_value, json_type_string);
+
+    if (valid) {
+        request_id = json_object_get_string(id);
+        marker = json_object_get_string(marker_value);
+    }
+
+    json_object_put(response);
+    return valid;
+}
+
+[[nodiscard]] bool parse_client_error(
+    const std::string& message,
+    std::string& request_id,
+    std::string& error_code) {
+    json_object* response = json_tokener_parse(message.c_str());
+
+    if (response == nullptr ||
+        !json_string_field_equals(response, "type", "response")) {
+        if (response != nullptr) {
+            json_object_put(response);
+        }
+        return false;
+    }
+
+    json_object* id = nullptr;
+    json_object* ok = nullptr;
+    json_object* error = nullptr;
+    json_object* code = nullptr;
+
+    const bool valid =
+        json_object_object_get_ex(response, "id", &id) &&
+        json_object_is_type(id, json_type_string) &&
+        json_object_object_get_ex(response, "ok", &ok) &&
+        json_object_is_type(ok, json_type_boolean) &&
+        json_object_get_boolean(ok) == 0 &&
+        json_object_object_get_ex(response, "error", &error) &&
+        json_object_is_type(error, json_type_object) &&
+        json_object_object_get_ex(error, "code", &code) &&
+        json_object_is_type(code, json_type_string);
+
+    if (valid) {
+        request_id = json_object_get_string(id);
+        error_code = json_object_get_string(code);
+    }
+
+    json_object_put(response);
+    return valid;
+}
+
+[[nodiscard]] std::string make_provider_response(
+    const std::string& hub_id,
+    const std::string& marker) {
+    return R"({"type":"response","id":")" +
+           hub_id +
+           R"(","ok":true,"payload":{"marker":")" +
+           marker +
+           R"("}})";
+}
+
 int test_request_response_route() {
     dispatcher::service_hub::ServiceHubServer server("127.0.0.1:0");
 
@@ -132,115 +283,24 @@ int test_request_response_route() {
         return fail("Service Hub server failed to start");
     }
 
-    const int port = server.bound_port();
-
-    if (port <= 0) {
-        server.shutdown();
-        return fail("Service Hub did not expose a bound port");
-    }
-
     TestWebSocket provider;
 
-    if (!provider.connect("127.0.0.1", port)) {
+    if (!register_provider(provider, server.bound_port())) {
         server.shutdown();
-        return fail("provider failed to connect");
+        return fail("provider registration failed");
     }
-
-    if (!provider.write(
-            R"({"type":"register","service":"test.echo"})")) {
-        provider.close();
-        server.shutdown();
-        return fail("provider registration write failed");
-    }
-
-    std::string registered_message;
-
-    if (!provider.read(registered_message)) {
-        provider.close();
-        server.shutdown();
-        return fail("provider registration response was not received");
-    }
-
-    json_object* registered =
-        json_tokener_parse(registered_message.c_str());
-
-    if (registered == nullptr ||
-        !json_string_field_equals(
-            registered,
-            "type",
-            "registered") ||
-        !json_string_field_equals(
-            registered,
-            "service",
-            "test.echo")) {
-        if (registered != nullptr) {
-            json_object_put(registered);
-        }
-        provider.close();
-        server.shutdown();
-        return fail("provider registration response is invalid");
-    }
-
-    json_object_put(registered);
 
     std::atomic<bool> provider_ok{false};
 
     std::thread provider_thread([&provider, &provider_ok] {
         std::string request_message;
+        std::string hub_id;
+        std::string marker;
 
-        if (!provider.read(request_message)) {
-            return;
-        }
-
-        json_object* request =
-            json_tokener_parse(request_message.c_str());
-
-        if (request == nullptr ||
-            !json_string_field_equals(
-                request,
-                "type",
-                "request") ||
-            !json_string_field_equals(
-                request,
-                "service",
-                "test.echo") ||
-            !json_string_field_equals(
-                request,
-                "operation",
-                "echo")) {
-            if (request != nullptr) {
-                json_object_put(request);
-            }
-            return;
-        }
-
-        json_object* id = nullptr;
-        json_object* payload = nullptr;
-        json_object* text = nullptr;
-
-        if (!json_object_object_get_ex(request, "id", &id) ||
-            !json_object_is_type(id, json_type_string) ||
-            std::string_view(json_object_get_string(id)).find("hub-") != 0 ||
-            !json_object_object_get_ex(request, "payload", &payload) ||
-            !json_object_is_type(payload, json_type_object) ||
-            !json_object_object_get_ex(payload, "text", &text) ||
-            !json_object_is_type(text, json_type_string) ||
-            std::string_view(json_object_get_string(text)) != "hello") {
-            json_object_put(request);
-            return;
-        }
-
-        const std::string provider_request_id =
-            json_object_get_string(id);
-
-        json_object_put(request);
-
-        const std::string response =
-            R"({"type":"response","id":")" +
-            provider_request_id +
-            R"(","ok":true,"payload":{"text":"hello","provider":"test.echo"}})";
-
-        if (!provider.write(response)) {
+        if (!provider.read(request_message) ||
+            !parse_provider_request(request_message, hub_id, marker) ||
+            marker != "hello" ||
+            !provider.write(make_provider_response(hub_id, marker))) {
             return;
         }
 
@@ -249,68 +309,25 @@ int test_request_response_route() {
 
     TestWebSocket client;
 
-    if (!client.connect("127.0.0.1", port)) {
-        provider.close();
-        provider_thread.join();
-        server.shutdown();
-        return fail("client failed to connect");
-    }
-
-    if (!client.write(
-            R"({"type":"request","id":"req-42","service":"test.echo","operation":"echo","payload":{"text":"hello"},"timeout_ms":5000})")) {
+    if (!client.connect("127.0.0.1", server.bound_port()) ||
+        !client.write(
+            R"({"type":"request","id":"req-42","service":"test.echo","operation":"echo","payload":{"marker":"hello"},"timeout_ms":5000})")) {
         client.close();
         provider.close();
         provider_thread.join();
         server.shutdown();
-        return fail("client request write failed");
+        return fail("client request failed");
     }
 
     std::string response_message;
-
-    if (!client.read(response_message)) {
-        client.close();
-        provider.close();
-        provider_thread.join();
-        server.shutdown();
-        return fail("client response was not received");
-    }
-
-    json_object* response =
-        json_tokener_parse(response_message.c_str());
-
-    if (response == nullptr) {
-        client.close();
-        provider.close();
-        provider_thread.join();
-        server.shutdown();
-        return fail("client response is not valid JSON");
-    }
-
-    json_object* ok = nullptr;
-    json_object* payload = nullptr;
-    json_object* text = nullptr;
-    json_object* provider_name = nullptr;
+    std::string request_id;
+    std::string marker;
 
     const bool response_valid =
-        json_string_field_equals(response, "type", "response") &&
-        json_string_field_equals(response, "id", "req-42") &&
-        json_object_object_get_ex(response, "ok", &ok) &&
-        json_object_is_type(ok, json_type_boolean) &&
-        json_object_get_boolean(ok) != 0 &&
-        json_object_object_get_ex(response, "payload", &payload) &&
-        json_object_is_type(payload, json_type_object) &&
-        json_object_object_get_ex(payload, "text", &text) &&
-        json_object_is_type(text, json_type_string) &&
-        std::string_view(json_object_get_string(text)) == "hello" &&
-        json_object_object_get_ex(
-            payload,
-            "provider",
-            &provider_name) &&
-        json_object_is_type(provider_name, json_type_string) &&
-        std::string_view(
-            json_object_get_string(provider_name)) == "test.echo";
-
-    json_object_put(response);
+        client.read(response_message) &&
+        parse_client_success(response_message, request_id, marker) &&
+        request_id == "req-42" &&
+        marker == "hello";
 
     client.close();
     provider_thread.join();
@@ -328,6 +345,294 @@ int test_request_response_route() {
     return 0;
 }
 
+int test_parallel_requests_on_one_client() {
+    dispatcher::service_hub::ServiceHubServer server("127.0.0.1:0");
+
+    if (!server.start()) {
+        return fail("parallel test server failed to start");
+    }
+
+    TestWebSocket provider;
+
+    if (!register_provider(provider, server.bound_port())) {
+        server.shutdown();
+        return fail("parallel test provider registration failed");
+    }
+
+    std::atomic<bool> provider_ok{false};
+
+    std::thread provider_thread([&provider, &provider_ok] {
+        std::unordered_map<std::string, std::string> ids_by_marker;
+
+        for (int index = 0; index < 2; ++index) {
+            std::string message;
+            std::string hub_id;
+            std::string marker;
+
+            if (!provider.read(message) ||
+                !parse_provider_request(message, hub_id, marker)) {
+                return;
+            }
+
+            ids_by_marker.emplace(marker, hub_id);
+        }
+
+        if (!ids_by_marker.contains("slow") ||
+            !ids_by_marker.contains("fast") ||
+            ids_by_marker.at("slow") == ids_by_marker.at("fast")) {
+            return;
+        }
+
+        if (!provider.write(make_provider_response(
+                ids_by_marker.at("fast"),
+                "fast")) ||
+            !provider.write(make_provider_response(
+                ids_by_marker.at("slow"),
+                "slow"))) {
+            return;
+        }
+
+        provider_ok.store(true);
+    });
+
+    TestWebSocket client;
+
+    if (!client.connect("127.0.0.1", server.bound_port()) ||
+        !client.write(
+            R"({"type":"request","id":"req-slow","service":"test.echo","operation":"echo","payload":{"marker":"slow"},"timeout_ms":5000})") ||
+        !client.write(
+            R"({"type":"request","id":"req-fast","service":"test.echo","operation":"echo","payload":{"marker":"fast"},"timeout_ms":5000})")) {
+        client.close();
+        provider.close();
+        provider_thread.join();
+        server.shutdown();
+        return fail("parallel client writes failed");
+    }
+
+    std::string first_response;
+    std::string second_response;
+    std::string first_id;
+    std::string first_marker;
+    std::string second_id;
+    std::string second_marker;
+
+    const bool responses_valid =
+        client.read(first_response) &&
+        parse_client_success(first_response, first_id, first_marker) &&
+        client.read(second_response) &&
+        parse_client_success(second_response, second_id, second_marker) &&
+        first_id == "req-fast" &&
+        first_marker == "fast" &&
+        second_id == "req-slow" &&
+        second_marker == "slow";
+
+    client.close();
+    provider_thread.join();
+    provider.close();
+    server.shutdown();
+
+    if (!provider_ok.load()) {
+        return fail("provider did not process both parallel requests");
+    }
+
+    if (!responses_valid) {
+        return fail("parallel responses were not correlated out of order");
+    }
+
+    return 0;
+}
+
+int test_slow_request_does_not_block_fast_request() {
+    dispatcher::service_hub::ServiceHubServer server("127.0.0.1:0");
+
+    if (!server.start()) {
+        return fail("slow/fast test server failed to start");
+    }
+
+    TestWebSocket provider;
+
+    if (!register_provider(provider, server.bound_port())) {
+        server.shutdown();
+        return fail("slow/fast provider registration failed");
+    }
+
+    std::atomic<bool> provider_ok{false};
+
+    std::thread provider_thread([&provider, &provider_ok] {
+        std::unordered_map<std::string, std::string> ids_by_marker;
+
+        for (int index = 0; index < 2; ++index) {
+            std::string message;
+            std::string hub_id;
+            std::string marker_value;
+
+            if (!provider.read(message) ||
+                !parse_provider_request(message, hub_id, marker_value)) {
+                return;
+            }
+
+            ids_by_marker.emplace(marker_value, hub_id);
+        }
+
+        if (!ids_by_marker.contains("slow-timeout") ||
+            !ids_by_marker.contains("fast-success") ||
+            !provider.write(make_provider_response(
+                ids_by_marker.at("fast-success"),
+                "fast-success"))) {
+            return;
+        }
+
+        provider_ok.store(true);
+    });
+
+    TestWebSocket client;
+
+    if (!client.connect("127.0.0.1", server.bound_port()) ||
+        !client.write(
+            R"({"type":"request","id":"req-timeout","service":"test.echo","operation":"echo","payload":{"marker":"slow-timeout"},"timeout_ms":100})") ||
+        !client.write(
+            R"({"type":"request","id":"req-fast","service":"test.echo","operation":"echo","payload":{"marker":"fast-success"},"timeout_ms":5000})")) {
+        client.close();
+        provider.close();
+        provider_thread.join();
+        server.shutdown();
+        return fail("slow/fast client writes failed");
+    }
+
+    std::string first_response;
+    std::string first_id;
+    std::string first_marker;
+    std::string second_response;
+    std::string second_id;
+    std::string second_error;
+
+    const bool responses_valid =
+        client.read(first_response) &&
+        parse_client_success(first_response, first_id, first_marker) &&
+        first_id == "req-fast" &&
+        first_marker == "fast-success" &&
+        client.read(second_response) &&
+        parse_client_error(second_response, second_id, second_error) &&
+        second_id == "req-timeout" &&
+        second_error == "hub.timeout";
+
+    client.close();
+    provider_thread.join();
+    provider.close();
+    server.shutdown();
+
+    if (!provider_ok.load()) {
+        return fail("provider did not receive both slow/fast requests");
+    }
+
+    if (!responses_valid) {
+        return fail("slow request blocked or corrupted fast request correlation");
+    }
+
+    return 0;
+}
+
+int test_same_request_id_on_different_clients() {
+    dispatcher::service_hub::ServiceHubServer server("127.0.0.1:0");
+
+    if (!server.start()) {
+        return fail("multi-client test server failed to start");
+    }
+
+    TestWebSocket provider;
+
+    if (!register_provider(provider, server.bound_port())) {
+        server.shutdown();
+        return fail("multi-client provider registration failed");
+    }
+
+    std::atomic<bool> provider_ok{false};
+
+    std::thread provider_thread([&provider, &provider_ok] {
+        std::unordered_map<std::string, std::string> ids_by_marker;
+
+        for (int index = 0; index < 2; ++index) {
+            std::string message;
+            std::string hub_id;
+            std::string marker;
+
+            if (!provider.read(message) ||
+                !parse_provider_request(message, hub_id, marker)) {
+                return;
+            }
+
+            ids_by_marker.emplace(marker, hub_id);
+        }
+
+        if (!ids_by_marker.contains("client-a") ||
+            !ids_by_marker.contains("client-b") ||
+            ids_by_marker.at("client-a") == ids_by_marker.at("client-b")) {
+            return;
+        }
+
+        if (!provider.write(make_provider_response(
+                ids_by_marker.at("client-b"),
+                "client-b")) ||
+            !provider.write(make_provider_response(
+                ids_by_marker.at("client-a"),
+                "client-a"))) {
+            return;
+        }
+
+        provider_ok.store(true);
+    });
+
+    TestWebSocket client_a;
+    TestWebSocket client_b;
+
+    if (!client_a.connect("127.0.0.1", server.bound_port()) ||
+        !client_b.connect("127.0.0.1", server.bound_port()) ||
+        !client_a.write(
+            R"({"type":"request","id":"same-id","service":"test.echo","operation":"echo","payload":{"marker":"client-a"},"timeout_ms":5000})") ||
+        !client_b.write(
+            R"({"type":"request","id":"same-id","service":"test.echo","operation":"echo","payload":{"marker":"client-b"},"timeout_ms":5000})")) {
+        client_a.close();
+        client_b.close();
+        provider.close();
+        provider_thread.join();
+        server.shutdown();
+        return fail("multi-client request writes failed");
+    }
+
+    std::string response_a;
+    std::string response_b;
+    std::string id_a;
+    std::string marker_a;
+    std::string id_b;
+    std::string marker_b;
+
+    const bool responses_valid =
+        client_a.read(response_a) &&
+        parse_client_success(response_a, id_a, marker_a) &&
+        client_b.read(response_b) &&
+        parse_client_success(response_b, id_b, marker_b) &&
+        id_a == "same-id" &&
+        marker_a == "client-a" &&
+        id_b == "same-id" &&
+        marker_b == "client-b";
+
+    client_a.close();
+    client_b.close();
+    provider_thread.join();
+    provider.close();
+    server.shutdown();
+
+    if (!provider_ok.load()) {
+        return fail("provider did not receive distinct Hub IDs for two clients");
+    }
+
+    if (!responses_valid) {
+        return fail("same client request IDs conflicted across connections");
+    }
+
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -335,6 +640,18 @@ int main() {
         return result;
     }
 
-    std::cout << "Service Hub WebSocket request/response test passed\n";
+    if (const auto result = test_parallel_requests_on_one_client(); result != 0) {
+        return result;
+    }
+
+    if (const auto result = test_slow_request_does_not_block_fast_request(); result != 0) {
+        return result;
+    }
+
+    if (const auto result = test_same_request_id_on_different_clients(); result != 0) {
+        return result;
+    }
+
+    std::cout << "Service Hub parallel correlation tests passed\n";
     return 0;
 }

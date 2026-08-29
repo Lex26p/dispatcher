@@ -242,6 +242,10 @@ Service Hub:
 
 Полная проверка нескольких одновременно активных requests остаётся Step 5.
 
+Step 4 завершён commit:
+
+`53ffaa830dcd4aa9908a43ab2b6d2f83cb940c8e`
+
 ## Step 5 — Correlation и параллельные запросы
 
 ### Что делаем
@@ -260,6 +264,27 @@ Service Hub:
 ### Результат
 
 Параллельные request/response корректно сопоставляются.
+
+### Реализация Step 5
+
+Client session больше не блокируется в ожидании одного provider response. Она продолжает принимать следующие WebSocket messages, а завершённые responses возвращаются через сериализованную outbound queue этой же session.
+
+Для correlation используется единая pending table:
+
+`provider-scoped request ID -> client session + client request ID + deadline`
+
+Service Hub не создаёт отдельный worker thread на каждый request. Один timeout-monitor обслуживает deadlines всех активных requests.
+
+Автоматическая loopback WebSocket-проверка подтверждает:
+
+- два одновременно активных requests на одном client connection;
+- ответы provider в обратном порядке;
+- правильное восстановление исходных client request IDs;
+- быстрый request не блокируется медленным request, который завершается `hub.timeout`;
+- одинаковый client request ID разрешён одновременно на двух разных client connections;
+- таким requests назначаются разные Hub-scoped IDs и responses не смешиваются.
+
+Полный client cancellation и provider-disconnect/reconnect lifecycle остаются Step 7.
 
 ## Step 6 — Клиентская граница для Web Shell
 

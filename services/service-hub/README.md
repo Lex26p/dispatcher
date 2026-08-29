@@ -4,9 +4,9 @@ Service Hub is the addressable request/response service of Dispatcher.
 
 ## Current implementation stage
 
-`CORE-002 / Step 4` adds the first real WebSocket request/response route.
+`CORE-002 / Step 5` completes the first parallel request-correlation model.
 
-The external v1 contract remains the WebSocket + UTF-8 JSON protocol fixed in Step 2, and the provider routing rules remain those implemented in Step 3.
+The external v1 WebSocket + UTF-8 JSON contract remains unchanged.
 
 ## Implemented
 
@@ -20,69 +20,79 @@ Current implementation includes:
 - required WebSocket subprotocol `dispatcher.service-hub.v1`;
 - UTF-8 JSON text messages;
 - provider registration over a real WebSocket connection;
-- client requests over a separate real WebSocket connection;
+- client requests over independent WebSocket connections;
 - routing by `service`;
 - Hub-generated provider request IDs (`hub-*`);
-- restoration of the original client request ID in the returned response;
+- restoration of the original client request ID in returned responses;
 - opaque JSON payload forwarding;
 - success and provider error response forwarding;
-- basic unknown-service/invalid-request handling required by the route;
-- bounded request waiting using the v1 `timeout_ms` value.
+- multiple simultaneously active requests on one client connection;
+- out-of-order provider responses without response mix-ups;
+- independent client request-ID namespaces per client connection;
+- a global pending-correlation table instead of one worker thread per request;
+- one timeout monitor for active request deadlines;
+- basic unknown-service/invalid-request handling required by the route.
 
-The network test uses independent provider and client WebSocket connections against a real loopback TCP listener.
+## Correlation model
+
+A client request ID is unique only among active requests of that client connection.
+
+Service Hub creates a separate provider-scoped ID:
+
+    client connection A + req-42 -> hub-1
+    client connection B + req-42 -> hub-2
+
+The provider therefore never sees conflicting client-local IDs.
+
+When a provider response arrives, Service Hub:
+
+1. resolves its `hub-*` ID in the global pending table;
+2. identifies the original client session;
+3. restores the original client request ID;
+4. queues the response to that client session.
+
+Each client session owns its WebSocket reads and writes. Completion from another thread does not write directly to the WebSocket; it only appends to the session outbound queue. This keeps WebSocket I/O serialized.
+
+## Parallel behavior verified in Step 5
+
+The network test now covers:
+
+1. normal single request/response routing;
+2. two requests active at the same time on one client connection;
+3. provider replies in reverse order and each response returns to the correct request ID;
+4. one request reaches `hub.timeout` while another request on the same connection succeeds first;
+5. two different client connections use the same client request ID simultaneously and receive their own responses;
+6. provider-scoped IDs remain different in that case.
+
+This is the required Step 5 correlation behavior.
+
+## Timeout model
+
+Requests are stored in one global pending table.
+
+A single timeout-monitor thread expires armed entries and queues `hub.timeout` back to the corresponding client. Service Hub does not create one operating-system thread per request.
+
+Provider-side best-effort `cancel` for expired requests is still deferred to Step 7 as planned.
 
 ## Internal JSON implementation
 
 The external protocol is JSON and does not depend on a C++ JSON library.
 
-The current C++ implementation uses `json-c` internally for parsing and serialization.
-
-This is not part of the Service Hub v1 contract and can be changed later without changing clients/providers.
-
-## Step 4 routing model
-
-The current successful path is:
-
-    Client WebSocket
-      -> Service Hub
-      -> ProviderRegistry lookup
-      -> Provider WebSocket
-      -> provider response
-      -> Service Hub
-      -> Client WebSocket
-
-The client sends, for example:
-
-    {"type":"request","id":"req-42","service":"test.echo","operation":"echo","payload":{"text":"hello"},"timeout_ms":5000}
-
-The provider receives the same logical request with a Hub-scoped ID such as:
-
-    {"type":"request","id":"hub-1","service":"test.echo","operation":"echo","payload":{"text":"hello"},"timeout_ms":5000}
-
-When the provider responds with `hub-1`, Service Hub returns the response to the client with its original `req-42`.
-
-## Deliberate Step 4 limit
-
-One client session currently processes requests sequentially.
-
-The server already uses Hub-scoped provider IDs and a pending-request table because a real routed response needs correlation, but Step 4 does not claim the full parallel-request behavior required by the v1 contract.
-
-`CORE-002 / Step 5` is responsible for verifying and completing multiple simultaneous requests, including multiple active requests on one client connection.
+The current implementation uses `json-c` internally for parsing and serialization. This remains an implementation detail.
 
 ## Not implemented yet
 
-Step 4 intentionally does not complete:
+Step 5 intentionally does not complete:
 
-- full parallel request processing;
 - client `cancel`;
 - best-effort provider cancel;
 - complete provider-disconnect handling for active requests;
-- reconnect integration tests;
+- provider reconnect integration tests;
 - browser/Web Shell integration test;
 - final lifecycle/signal handling;
 - authentication or authorization.
 
-Those remain in the following CORE-002 steps.
+The next step is `CORE-002 / Step 6 — Клиентская граница для Web Shell`.
 
 ## Dependencies
 
@@ -109,3 +119,5 @@ Current CTest checks:
 - `service-hub.application`;
 - `service-hub.provider-registry`;
 - `service-hub.request-response`.
+
+The last test includes both the basic route and the Step 5 parallel-correlation scenarios.

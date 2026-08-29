@@ -438,10 +438,16 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 Step 3 реализовал provider registry и внутреннюю таблицу маршрутизации.
 
+`CORE-002 / Step 4` завершён commit:
+
+`53ffaa830dcd4aa9908a43ab2b6d2f83cb940c8e`
+
+Step 4 реализовал реальный WebSocket request/response маршрут через независимые client и provider connections.
+
 Текущий шаг:
 
-**CORE-002 / Step 4 — Реальный request/response маршрут.**
-
-После успешной проверки и фиксации Step 4 следующим будет:
-
 **CORE-002 / Step 5 — Correlation и параллельные запросы.**
+
+После успешной проверки и фиксации Step 5 следующим будет:
+
+**CORE-002 / Step 6 — Клиентская граница для Web Shell.**

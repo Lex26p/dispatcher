@@ -146,11 +146,13 @@ Step 2 зафиксировал WebSocket + JSON transport и внешний v1 
 
 Step 3 реализовал `ProviderRegistry` и routing table.
 
-Текущий Step 4 добавляет реальный WebSocket request/response путь через test provider. Внутренняя JSON implementation использует `json-c`.
+Step 4 реализовал реальный WebSocket request/response путь через test provider. Внутренняя JSON implementation использует `json-c`.
 
-После успешного commit Step 4 следующее действие:
+Текущий Step 5 добавляет несколько одновременно активных requests, out-of-order responses, client-local request ID namespaces и единый timeout/correlation механизм без отдельного thread на каждый request.
 
-`CORE-002 / Step 5 — Correlation и параллельные запросы`.
+После успешного commit Step 5 следующее действие:
+
+`CORE-002 / Step 6 — Клиентская граница для Web Shell`.
 
 ## Рабочий процесс
 
