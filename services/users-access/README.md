@@ -4,96 +4,136 @@ Users & Access is the core backend responsibility for stable user identity, acce
 
 ## Current implementation stage
 
-`CORE-005 / Step 1` establishes only the domain/application boundary and standalone C++ service skeleton.
+`CORE-005 / Step 1` established the domain/application boundary and standalone C++ service skeleton.
 
-There is intentionally no production credential storage, authentication/session contract, Service Hub provider or Web login in this step. Those are added by later CORE-005 steps after their exact security decisions are made.
+`CORE-005 / Step 2` adds durable local users/access persistence, password-verifier storage and explicit first-administrator bootstrap.
 
-## Step 1 domain model
+There is still no authentication/session external contract, Service Hub provider or Web login. Those begin at Step 3.
 
-### User
+## Domain model
 
-A user currently contains:
+A user contains:
 
 - stable opaque `id` independent of login/display properties;
 - `login` as the local credential identity key;
-- mutable human-readable `display_name` data;
+- mutable human-readable `display_name`;
 - `enabled` state.
 
-No password, verifier, session or token field exists in the Step 1 User model.
-
-### Capabilities
-
-The minimal machine-readable capabilities are:
+The minimal independent capabilities remain:
 
 - `view`;
 - `control`;
 - `edit`;
 - `admin`.
 
-They are independent capabilities. Step 1 does not introduce a hidden hierarchy such as `admin => edit => control => view`; callers must request the capability or accepted capability combination required by their own policy.
+There is no hidden hierarchy such as `admin => edit => control => view`.
 
-### Permission sets and assignments
+A `PermissionSet` is a named assignable set of capabilities with its own stable opaque ID. An assignment links one user and permission set to either global scope or one project scope.
 
-A `PermissionSet` is a named assignable set of capabilities with its own stable opaque ID.
+Effective permissions are the union of matching global/project assignments. Disabled users fail closed with no effective capabilities.
 
-An assignment links:
+## Durable persistence
 
-- one user;
-- one permission set;
-- one explicit scope.
+Step 2 selects SQLite specifically as the local Users & Access storage.
 
-Supported Step 1 scopes are:
+The choice is service-local:
 
-- global;
-- one project identified by opaque project ID.
+- users/access configuration is small transactional metadata;
+- credentials, assignments and bootstrap state must survive restart;
+- SQLite adds no separate database process;
+- the database file remains an internal Users & Access implementation detail;
+- this does not select a common Dispatcher database for other services or future history.
 
-There are no explicit denies, nested roles/groups, tenant hierarchy, arbitrary ABAC expressions or future Device/Dashboard scopes.
+Schema version is tracked with `PRAGMA user_version`.
 
-## Effective permission semantics
+Schema v1 stores:
 
-Evaluation is deterministic and server-side oriented:
+- `users`;
+- `permission_sets`;
+- `access_assignments`;
+- `credential_verifiers`;
+- `security_audit`.
 
-1. a missing user returns a user-not-found evaluation error;
-2. a disabled user is denied with no effective capabilities;
-3. global assignments apply in global and project evaluation;
-4. project assignments apply only to that exact project;
-5. matching assignments are merged by union of capabilities;
-6. duplicate capabilities do not change the result;
-7. a project assignment never grants a global capability;
-8. invalid/inconsistent repository data fails with a storage evaluation error rather than granting access.
+Foreign-key checking is enabled. A database with a schema version newer than the executable supports is rejected.
 
-These semantics are sufficient for the first Project Manager enforcement planned later in CORE-005 without creating a universal ACL engine.
+## Password verifier baseline
 
-## Repository boundary
+Step 2 uses OpenSSL `EVP_PBE_scrypt` rather than custom cryptography.
 
-`UsersAccessRepository` is an internal service storage port for:
+Current stored verifier parameters:
 
-- users;
-- permission sets;
-- access assignments.
+- algorithm: `scrypt`;
+- `N = 2^17`;
+- `r = 8`;
+- `p = 1`;
+- 16-byte cryptographically random salt;
+- 32-byte derived digest.
 
-Unit tests provide an in-memory implementation. Step 1 does not select production persistence technology.
+The database stores only algorithm parameters, salt and derived verifier. Plaintext passwords are never persisted.
+
+The verifier format is internal to Users & Access and can be evolved later. Session/token representation is deliberately not selected until Step 3.
+
+## Secure first-administrator bootstrap
+
+Bootstrap is explicit and separate from normal service startup:
+
+    dispatcher-users-access --bootstrap-admin <login> <display-name> [database-path]
+
+The bootstrap password and confirmation are read from standard input, not command-line arguments or environment variables. Interactive terminal input disables echo while the secret is read.
+
+Bootstrap rules:
+
+- storage must not already contain a user;
+- login follows the existing Users & Access validation;
+- display name is limited to the existing 256-byte domain limit;
+- bootstrap password is 15..1024 bytes and has no composition rule;
+- a new enabled user is created with stable opaque ID;
+- a `Bootstrap administrators` permission set is created with explicit `view`, `control`, `edit`, `admin`;
+- a global assignment links the user to that permission set;
+- the scrypt verifier is stored;
+- a `bootstrap_admin_created` security-audit record is stored;
+- all bootstrap writes happen in one SQLite transaction;
+- a second bootstrap is rejected.
+
+Step 2 does not yet expose password login, reset/change-password, sessions or remote administration. Those belong to the Step 3 external contract and later Web work.
 
 ## Lifecycle
 
-The standalone executable is:
+Normal service startup:
 
-    dispatcher-users-access
+    dispatcher-users-access [database-path]
 
-It currently starts only the domain skeleton and waits for SIGINT/SIGTERM using the same Linux synchronous signal lifecycle pattern as existing Dispatcher backend services.
+Default:
 
-No network endpoint or Service Hub registration is created in Step 1.
+    database-path  dispatcher-users-access.db
+
+On normal startup the executable opens/initializes SQLite before entering the SIGINT/SIGTERM lifecycle. Storage initialization failure prevents the service from starting.
+
+No network endpoint or Service Hub registration exists yet.
+
+## Dependencies
+
+Ubuntu/WSL development dependencies added by Step 2:
+
+    libsqlite3-dev
+    libssl-dev
+
+OpenSSL provides the established scrypt implementation and secure random salt generation. No standalone SQLite server is required.
 
 ## Build and test in WSL
 
 From the repository root:
 
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests
-    ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\."
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests
+    ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
 
 Current CTest checks:
 
 - `users-access.domain-and-application`;
+- `users-access.persistence-and-credentials`;
+- `users-access.bootstrap-cli`;
 - `users-access.signal-term`;
 - `users-access.signal-int`.
+
+The tests use temporary database paths and do not write credential databases into the repository.

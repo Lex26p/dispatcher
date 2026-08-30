@@ -60,6 +60,10 @@ public:
     [[nodiscard]] UsersAccessManagerResult<User> create_user(
         const CreateUserInput& input);
 
+    [[nodiscard]] UsersAccessManagerResult<User> set_user_enabled(
+        std::string_view user_id,
+        bool enabled);
+
     [[nodiscard]] UsersAccessManagerResult<PermissionSet> create_permission_set(
         const CreatePermissionSetInput& input);
 

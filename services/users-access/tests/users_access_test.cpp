@@ -40,6 +40,21 @@ public:
         return ua::UsersAccessRepositoryStatus::ok;
     }
 
+    ua::UsersAccessRepositoryStatus update_user(const ua::User& user) override {
+        for (auto& existing : users_) {
+            if (existing.id == user.id) {
+                for (const auto& candidate : users_) {
+                    if (candidate.id != user.id && candidate.login == user.login) {
+                        return ua::UsersAccessRepositoryStatus::conflict;
+                    }
+                }
+                existing = user;
+                return ua::UsersAccessRepositoryStatus::ok;
+            }
+        }
+        return ua::UsersAccessRepositoryStatus::not_found;
+    }
+
     ua::UsersAccessRepositoryStatus find_user_by_id(
         const std::string_view user_id,
         ua::User& user) const override {
@@ -278,6 +293,17 @@ void test_disabled_and_invalid_subjects_fail_closed() {
     expect(disabled.ok(), "disabled user is a valid subject, not a lookup error");
     expect(!disabled.allowed, "disabled user should be denied");
     expect(disabled.effective_capabilities.empty(), "disabled user should expose no effective capabilities");
+
+    const auto enabled = manager.set_user_enabled(user.value->id, true);
+    expect(enabled.ok() && enabled.value->enabled, "user should be enableable");
+    const auto enabled_result = manager.evaluate(
+        user.value->id,
+        ua::AccessScope::project("project-a"),
+        ua::Capability::view);
+    expect(enabled_result.ok() && enabled_result.allowed, "enabled user should regain configured access");
+
+    const auto disabled_again = manager.set_user_enabled(user.value->id, false);
+    expect(disabled_again.ok() && !disabled_again.value->enabled, "user should be disableable");
 
     const auto missing = manager.evaluate(
         "missing-user",

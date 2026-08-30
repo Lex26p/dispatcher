@@ -191,7 +191,13 @@ CORE-005 должен дать stable user identity, durable users/access config
 
 Exact credential hashing dependency, session/token representation и Service Hub auth representation выбираются только на соответствующих шагах плана.
 
-Текущий шаг — `CORE-005 / Step 1 — Users & Access domain и backend skeleton`. Step 1 фиксирует stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC ещё не добавляются. Durable credentials/storage, Service Hub auth и Web не входят в Step 1.
+`CORE-005 / Step 1` завершён commit:
+
+`e8b42e69fecf7079f7b18f5f86fe334308d2579c`
+
+Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
+
+Текущий шаг — `CORE-005 / Step 2 — Durable users/access storage, credentials и bootstrap`. Выбран локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record. Session/token representation, Service Hub auth и Web остаются Step 3+.
 
 ## Рабочий процесс
 

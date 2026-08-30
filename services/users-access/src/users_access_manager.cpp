@@ -118,6 +118,34 @@ UsersAccessManagerResult<User> UsersAccessManager::create_user(
         UsersAccessManagerError::id_generation_failed);
 }
 
+UsersAccessManagerResult<User> UsersAccessManager::set_user_enabled(
+    const std::string_view user_id,
+    const bool enabled) {
+    User user;
+    const auto find_status = repository_.find_user_by_id(user_id, user);
+    if (find_status == UsersAccessRepositoryStatus::not_found) {
+        return UsersAccessManagerResult<User>::failure(
+            UsersAccessManagerError::user_not_found);
+    }
+    if (find_status != UsersAccessRepositoryStatus::ok) {
+        return UsersAccessManagerResult<User>::failure(
+            UsersAccessManagerError::storage_error);
+    }
+
+    user.enabled = enabled;
+    const auto update_status = repository_.update_user(user);
+    if (update_status == UsersAccessRepositoryStatus::not_found) {
+        return UsersAccessManagerResult<User>::failure(
+            UsersAccessManagerError::user_not_found);
+    }
+    if (update_status != UsersAccessRepositoryStatus::ok) {
+        return UsersAccessManagerResult<User>::failure(
+            UsersAccessManagerError::storage_error);
+    }
+
+    return UsersAccessManagerResult<User>::success(std::move(user));
+}
+
 UsersAccessManagerResult<PermissionSet> UsersAccessManager::create_permission_set(
     const CreatePermissionSetInput& input) {
     if (!has_non_whitespace(input.name)) {

@@ -20,6 +20,7 @@ public:
     virtual ~UsersAccessRepository() = default;
 
     virtual UsersAccessRepositoryStatus insert_user(const User& user) = 0;
+    virtual UsersAccessRepositoryStatus update_user(const User& user) = 0;
 
     virtual UsersAccessRepositoryStatus find_user_by_id(
         std::string_view user_id,

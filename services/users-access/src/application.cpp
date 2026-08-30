@@ -63,7 +63,9 @@ private:
 
 }  // namespace
 
-int Application::run(std::ostream& output) const {
+int Application::run(
+    std::ostream& output,
+    const std::string_view database_path) const {
     const ShutdownSignalWaiter shutdown_signal;
     if (!shutdown_signal.ready()) {
         output << "Failed to configure Dispatcher Users & Access shutdown signals\n";
@@ -71,7 +73,8 @@ int Application::run(std::ostream& output) const {
     }
 
     output << "Dispatcher Users & Access started "
-              "(domain skeleton ready; durable storage and authentication not configured)\n";
+           << "(SQLite " << database_path
+           << "; authentication/session contract not configured)\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();

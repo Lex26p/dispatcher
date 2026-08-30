@@ -11,7 +11,7 @@ public:
         return "users-access";
     }
 
-    int run(std::ostream& output) const;
+    int run(std::ostream& output, std::string_view database_path) const;
 };
 
 }  // namespace dispatcher::users_access

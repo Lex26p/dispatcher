@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Plan commit проверен; текущий шаг — Step 1.**
+**В разработке. Step 1 завершён; текущий шаг — Step 2.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -353,6 +353,10 @@ Effective-permission semantics детерминированы:
 
 Unit tests покрывают stable identity, login conflict/validation, canonical permission sets, global/project union semantics, отсутствие implicit capability hierarchy, disabled-user deny, invalid/missing subject behavior и assignment validation/conflict. Lifecycle tests проверяют clean SIGTERM/SIGINT.
 
+Step 1 завершён commit:
+
+`e8b42e69fecf7079f7b18f5f86fe334308d2579c`
+
 ## Step 2 — Durable users/access storage, credentials и bootstrap
 
 ### Что делаем
@@ -378,6 +382,53 @@ Hardcoded default credentials не допускаются.
 ### Результат
 
 Users & Access configuration переживает restart и имеет безопасный local credential/bootstrap baseline.
+
+### Решение и реализация Step 2
+
+Step 2 выбирает SQLite как **локальное durable storage только Users & Access**. Это не становится общей БД платформы и не меняет storage decision Project Manager/будущих сервисов. SQLite подходит текущему небольшому transactional набору users, permission sets, assignments, credential verifiers и security audit без отдельного database process.
+
+Schema v1 хранит:
+
+- `users`;
+- `permission_sets`;
+- `access_assignments`;
+- `credential_verifiers`;
+- `security_audit`.
+
+Schema version фиксируется через `PRAGMA user_version = 1`, foreign keys включены, новая database создаётся автоматически, а schema version новее поддерживаемой отвергается. Production adapter `SqliteUsersAccessRepository` реализует Step 1 repository port, credential/audit ports и атомарный first-admin bootstrap transaction.
+
+Для password verifier Step 2 использует established OpenSSL `EVP_PBE_scrypt`, а не собственную криптографию. Параметры:
+
+- `N = 2^17`;
+- `r = 8`;
+- `p = 1`;
+- 16-byte CSPRNG salt через OpenSSL;
+- 32-byte derived digest.
+
+Plaintext password не хранится. Stored verifier содержит algorithm/parameters/salt/digest и остаётся внутренним Users & Access representation; session/token format Step 2 не выбирает.
+
+Explicit first-admin bootstrap:
+
+`dispatcher-users-access --bootstrap-admin <login> <display-name> [database-path]`
+
+Password и confirmation читаются из stdin; в interactive terminal echo отключается. Secret не передаётся через argv/env и не печатается в diagnostics. Bootstrap требует пустое users storage, создаёт enabled user, permission set `Bootstrap administrators` с явными `view/control/edit/admin`, global assignment, scrypt verifier и `bootstrap_admin_created` audit record в **одной SQLite transaction**. Повторный bootstrap отклоняется.
+
+Normal startup:
+
+`dispatcher-users-access [database-path]`
+
+Default database path — `dispatcher-users-access.db`. Storage инициализируется до Linux signal lifecycle; storage failure не допускает запуск сервиса.
+
+Step 2 также добавляет durable `enabled/disabled` user update через application boundary. Полный audit для будущих authentication/admin operations расширяется на следующих шагах вместе с реальными operations; Step 2 не симулирует ещё не существующие login/logout/session actions.
+
+Новые WSL development dependencies:
+
+- `libsqlite3-dev`;
+- `libssl-dev`.
+
+Tests покрывают scrypt correct/wrong password verification, SQLite create/reopen, durable users/permission sets/assignments/credentials/audit, disabled fail-closed after reopen, atomic bootstrap, повторный bootstrap refusal, отсутствие plaintext test password в SQLite/output, storage failures и SIGTERM/SIGINT lifecycle.
+
+На Step 2 по-прежнему **нет** Service Hub provider/auth envelope, authentication/session external contract, login operation или Web UI. Это начинается только Step 3.
 
 ## Step 3 — Authentication/session contract
 
