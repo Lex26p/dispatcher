@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 4 завершён; текущий шаг — Step 5.**
+**В разработке. Step 5 завершён; текущий шаг — Step 6.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий шаг — `Step 5 — Project Manager authorization enforcement`.
+Текущий шаг — `Step 6 — Web login, current user и access administration`.
 
 ## Цель
 
@@ -574,6 +574,26 @@ Web project context остаётся frontend context; access определяе
 ### Результат
 
 Первый реальный business service платформы защищён backend-authoritative authorization.
+
+### Решение и реализация Step 5
+
+Project Manager сохраняет существующий `project-manager.v1` business contract и не получает `user_id`, roles, permissions или auth token внутри Project payload. Все v1 operations теперь требуют forwarded Service Hub session auth и выполняют authoritative access evaluation через `users-access.v1/evaluate-access`.
+
+Authorization policy Step 5:
+
+- `create-project` требует global `admin`;
+- `list-projects` отдаёт все проекты при global `view`, иначе backend-side фильтрует список по project-scoped effective `view`;
+- `get-project` требует effective `view` для указанного project ID;
+- `update-project` требует effective `edit` или `admin` для указанного project ID;
+- capabilities остаются независимыми: `admin` не создаёт скрытый `view`/`edit` hierarchy.
+
+Project Manager использует отдельное client-role Service Hub connection для Users & Access и не читает его SQLite напрямую. Authorization connection создаётся лениво, переиспользуется и после transport failure один раз восстанавливается для повторной evaluation. `auth.invalid_session` и `auth.session_expired` возвращаются caller как session errors; deny — как `access.forbidden`; недоступная/неразбираемая security dependency преобразуется в `project.authorization_unavailable`. Business operation при такой ошибке не выполняется.
+
+Integration coverage подтверждает unauthenticated deny, filtered project visibility, allowed/denied get/update/create, project-scoped admin без implicit capability hierarchy, Users & Access outage/recovery, access revocation, disabled/expired session и Service Hub reconnect. Existing Project Manager durable behavior сохраняется.
+
+Step 5 завершён commit:
+
+`ebe98d1f16e55d4024438300c1670ec3a19b1d72`
 
 ## Step 6 — Web login, current user и access administration
 

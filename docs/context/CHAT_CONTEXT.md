@@ -113,7 +113,10 @@ Realtime-значения находятся в Data Hub.
 - Web Shell имеет `/projects`, list/create/edit UI и общий project context с явным global mode;
 - project context сохраняется только в browser `sessionStorage`, проверяется через `get-project` и не является доказательством доступа;
 - реальная browser integration подтверждает durable restart/re-registration path;
-- текущий `CORE-005 / Step 5` должен добавить server-side authorization поверх существующей Project Manager boundary без `user_id`/permissions в Project v1 payload.
+- `CORE-005 / Step 5` добавил server-side authorization поверх той же Project Manager boundary без `user_id`/permissions в Project v1 payload;
+- все Project Manager v1 operations требуют session auth и используют authoritative `users-access.v1/evaluate-access`;
+- create требует global `admin`, list/get используют `view`, update — `edit` либо `admin`;
+- Users & Access outage/invalid response приводит к `project.authorization_unavailable`, business operation не выполняется.
 
 Подробный контракт: `docs/architecture/project-manager-contract.md`.
 
@@ -126,6 +129,7 @@ Realtime-значения находятся в Data Hub.
 - `CORE-005 / Step 4` подключил production `users-access.v1` provider через существующий Service Hub;
 - public `login`; protected session-core operations `logout`, `current-session`, `evaluate-access`;
 - protected operation получает bearer только из Service Hub transport auth context, а не из business payload;
+- `CORE-005 / Step 5` подтвердил Users & Access как authoritative authorization dependency реального Project Manager;
 - local security audit не содержит password/raw bearer token.
 
 Подробный контракт: `docs/architecture/users-access-contract.md`.
@@ -211,7 +215,8 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 1 — `e8b42e69fecf7079f7b18f5f86fe334308d2579c`;
 - Step 2 — `3b140d808638bb0c14a70b2aa1df96eb377af197`;
 - Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
-- Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`.
+- Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
+- Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
@@ -221,9 +226,11 @@ Step 3 зафиксировал `users-access.v1`, opaque 256-bit server-side se
 
 Step 4 совместимо добавил optional Service Hub v1 transport `auth: {type: "session", token}` отдельно от business payload, per-request auth option в browser `ServiceHubClient` и production `users-access.v1` provider с authoritative validation `logout`/`current-session`/`evaluate-access`. `login` остаётся public. Project Manager policy на Step 4 не менялась.
 
-**Текущий шаг — `CORE-005 / Step 5 — Project Manager authorization enforcement`.**
+Step 5 защитил реальный Project Manager через Users & Access: unauthenticated deny, backend filtering `list-projects`, project-scoped `view`/`edit`/`admin`, global `admin` create, disabled/expired/revoked behavior, fail-closed при Users & Access outage и reconnect regression. Project v1 business payload не получил `user_id`, roles, permissions или auth token.
 
-На Step 5 нужно защитить реальный Project Manager через уже созданную boundary: unauthenticated deny, filtered `list-projects`, allowed/denied `get-project`, global capability для create, project-scoped capability для update, disabled/expired/revoked behavior, Users & Access unavailable => fail closed и reconnect regression. Project v1 business payload не получает `user_id`, roles, permissions или auth token.
+**Текущий шаг — `CORE-005 / Step 6 — Web login, current user и access administration`.**
+
+На Step 6 Web Shell должен получить реальный authenticated user context, login/logout/current-user UX, session restoration и invalid/expired-session handling. Минимальный Users & Access administration destination добавляется только для реально разрешённого admin и использует shared Service Hub connection; UI остаётся presentation layer, а не security boundary.
 
 ## Рабочий процесс
 

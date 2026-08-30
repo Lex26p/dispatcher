@@ -469,6 +469,8 @@ Step 1 зафиксировал отдельный C++ Users & Access skeleton, 
 
 `CORE-005 / Step 4` завершён commit `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`: существующий Service Hub v1 совместимо получил optional session `auth` отдельно от business payload, browser `ServiceHubClient` — per-request auth option, а production `users-access.v1` provider — authoritative validation protected session-core operations. Correlation/cancel/timeout semantics и единый browser-compatible transport сохранены.
 
-Текущий шаг — `Step 5 — Project Manager authorization enforcement`: Project Manager должен использовать уже созданную security boundary для unauthenticated/allowed/denied paths, фильтрации `list-projects`, project-scoped update, global create и fail-closed поведения при недоступности Users & Access. Project v1 business payload не получает `user_id`/permissions/auth fields.
+`CORE-005 / Step 5` завершён commit `ebe98d1f16e55d4024438300c1670ec3a19b1d72`: Project Manager теперь требует session authentication, проверяет permissions через `users-access.v1/evaluate-access`, фильтрует `list-projects`, применяет global `admin` для create и project `view`/`edit`/`admin` для read/update и fail-closed возвращает `project.authorization_unavailable`, если authoritative security dependency недоступна.
+
+Текущий шаг — `Step 6 — Web login, current user и access administration`: Web Shell должен получить реальный authenticated user context, login/logout/current-user UX, session restoration/invalid-session handling и минимальный administration UI для users, permission sets и assignments поверх shared Service Hub connection.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

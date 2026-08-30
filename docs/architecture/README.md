@@ -212,7 +212,7 @@ WebSocket выбран как единый транспорт, потому чт
 - права управления, если запрос изменяет записываемую метрику;
 - режима управления, если он включён политикой системы.
 
-`CORE-002` изначально не реализовал эту безопасность. `CORE-005` добавляет её поверх уже стабильной Service Hub boundary: Step 3 зафиксировал server-side session model, Step 4 — transport auth propagation, Step 5 применяет эту boundary к реальному Project Manager. Service Hub при этом не становится authorization engine.
+`CORE-002` изначально не реализовал эту безопасность. `CORE-005` добавляет её поверх уже стабильной Service Hub boundary: Step 3 зафиксировал server-side session model, Step 4 — transport auth propagation, Step 5 применил эту boundary к реальному Project Manager. Service Hub при этом не становится authorization engine.
 
 ## Project Manager
 
@@ -228,7 +228,7 @@ Project Manager — самостоятельный сервис проектов
 - Web-раздел `/projects` и shared frontend project context;
 - browser → Service Hub → Project Manager → SQLite restart/re-registration integration.
 
-Project Manager v1 business payload не содержит `user_id`, roles, permissions или auth token. `CORE-005 / Step 5` должен добавить server-side authorization поверх доверенной authenticated request boundary, не превращая frontend project context в доказательство доступа и не меняя Project entity ради auth.
+`CORE-005 / Step 5` добавил backend-authoritative authorization поверх существующего `project-manager.v1`, не меняя Project entity и business payload. Все Project Manager v1 operations требуют session auth; `create-project` требует global `admin`, `list-projects` фильтруется по effective `view`, `get-project` требует project `view`, а `update-project` — project `edit` или `admin`. Project Manager выполняет authoritative evaluation через отдельное client-role соединение к `users-access.v1/evaluate-access` и при недоступности security dependency работает fail-closed. Frontend project context остаётся навигационным контекстом и не является доказательством доступа.
 
 Подробный контракт: [`project-manager-contract.md`](project-manager-contract.md).
 
@@ -236,7 +236,7 @@ Project Manager v1 business payload не содержит `user_id`, roles, perm
 
 Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
 
-В `CORE-005 / Steps 1–4` уже зафиксированы:
+В `CORE-005 / Steps 1–5` уже зафиксированы:
 
 - stable opaque user ID, независимый от login/display properties;
 - enabled/disabled user state;
@@ -253,6 +253,7 @@ Users & Access — самостоятельная backend responsibility для 
 - production provider через существующий Service Hub v1;
 - public `login` и protected session-core operations `logout`, `current-session`, `evaluate-access`;
 - authoritative validation bearer credential внутри Users & Access, а не в Service Hub;
+- Project Manager authorization использует `users-access.v1/evaluate-access` и не читает Users & Access SQLite напрямую;
 - local security audit baseline без записи password/raw session token.
 
 В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.

@@ -47,7 +47,7 @@
 - [`project-manager-contract.md`](architecture/project-manager-contract.md) — versioned Project Manager v1 operations/payload/errors поверх Service Hub.
 - [`users-access-contract.md`](architecture/users-access-contract.md) — versioned Users & Access v1 authentication/session/access payload contract и session semantics.
 
-Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub transport/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Users & Access использует локальный SQLite storage и versioned `users-access.v1` payload contract. `CORE-005 / Step 4` добавил optional session-auth context в существующий Service Hub v1 и production `users-access.v1` provider без второго transport. Service-local SQLite не является выбором общей БД платформы. Event Hub, persistence-стратегия будущих сервисов и deployment выбираются в соответствующих будущих спринтах.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub transport/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Users & Access использует локальный SQLite storage и versioned `users-access.v1` payload contract. `CORE-005 / Step 4` добавил optional session-auth context в существующий Service Hub v1 и production `users-access.v1` provider без второго transport; `CORE-005 / Step 5` применил эту boundary к Project Manager с backend-authoritative access evaluation и fail-closed semantics. Service-local SQLite не является выбором общей БД платформы. Event Hub, persistence-стратегия будущих сервисов и deployment выбираются в соответствующих будущих спринтах.
 
 ### `docs/development/`
 
@@ -62,7 +62,7 @@ Roadmap использует три уровня: этап → спринт → 
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
 - [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план и живой отчёт текущего спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–4 завершены, текущий шаг — `Step 5 — Project Manager authorization enforcement`.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–5 завершены, текущий шаг — `Step 6 — Web login, current user и access administration`.
 
 ### `docs/context/`
 

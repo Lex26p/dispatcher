@@ -16,7 +16,7 @@
 
 `CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery.
 
-`CORE-005 — Users & Access` находится в разработке. Steps 1–4 завершены: существуют stable user/access domain, локальный durable SQLite storage, OpenSSL scrypt credential baseline, opaque server-side sessions, versioned `users-access.v1` contract и authenticated Service Hub request path с optional session `auth` отдельно от business payload. Текущий шаг — `Step 5 — Project Manager authorization enforcement`.
+`CORE-005 — Users & Access` находится в разработке. Steps 1–5 завершены: существуют stable user/access domain, локальный durable SQLite storage, OpenSSL scrypt credential baseline, opaque server-side sessions, versioned `users-access.v1` contract, authenticated Service Hub request path и backend-authoritative Project Manager authorization с fail-closed поведением. Текущий шаг — `Step 6 — Web login, current user и access administration`.
 
 ## Документация
 
