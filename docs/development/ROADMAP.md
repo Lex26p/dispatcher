@@ -216,13 +216,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-005 — Users & Access
 
-**Статус:** в разработке.
+**Статус:** завершён.
 
 **Цель:** добавить пользовательский контекст и контроль доступа.
 
-**Результат:** backend имеет stable users/access/session foundation, backend-authoritative Project Manager enforcement и project-scoped control mode. Уже committed Web login/current-user/access administration сохраняется как baseline; дальнейшая Web-интеграция control mode и security UX отложена до `CORE-014`.
+**Результат:** backend имеет stable users/access/session foundation, secure bootstrap, durable local security audit, backend-authoritative Project Manager enforcement и project-scoped control mode. Финальный backend acceptance подтвердил Users & Access CTests и реальный Project Manager authorization/fail-closed/restart path. Уже committed Web login/current-user/access administration сохраняется как baseline; дальнейшая Web-интеграция control mode и security UX отложена до `CORE-014`.
 
-План спринта: [`sprints/CORE-005.md`](sprints/CORE-005.md).
+План и итоговый отчёт: [`sprints/CORE-005.md`](sprints/CORE-005.md).
 
 ### CORE-006 — Device Manager
 
@@ -455,46 +455,31 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 - `CORE-001 — Data Hub`;
 - `CORE-002 — Service Hub`;
 - `CORE-003 — Web Shell`;
-- `CORE-004 — Project Manager`.
+- `CORE-004 — Project Manager`;
+- `CORE-005 — Users & Access`.
 
 Финальный documentation closure `CORE-004`:
 
 `29b1f0ea750633cc53cc4e023585835d2b06ad8b`
 
-`CORE-004` дал отдельный C++ Project Manager, durable local SQLite storage, versioned `project-manager.v1` Service Hub provider, Web list/editor, shared browser-session project context и реальную browser → Service Hub → Project Manager → SQLite restart-recovery integration.
+`CORE-005` завершён после backend-focused Step 8 acceptance. Последние подтверждённые implementation/process baselines перед closure:
 
-Текущий спринт:
+- Step 1 — `e8b42e69fecf7079f7b18f5f86fe334308d2579c`;
+- Step 2 — `3b140d808638bb0c14a70b2aa1df96eb377af197`;
+- Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
+- Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
+- Step 5 functional — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
+- Step 5 documentation sync — `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`;
+- Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
+- Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`;
+- Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`;
+- Step 7A — `f25aef1d3ff721f86487662289661409f72d3e57`;
+- backend-first process/documentation staging — `bd52d4a5b651bef6685ed2b3a3292c3af841182b`.
 
-**CORE-005 — Users & Access.**
+Step 8 добавил недостающий durable audit explicit control-mode enable/disable без schema/wire migration и затем подтвердил полный `^users-access\.` CTest набор и `project-manager.service-hub-integration`. Final CORE-005 baseline — documentation-closure commit, содержащий Step 8 fix и итоговый отчёт; его SHA проверяется перед началом следующего спринта и не записывается рекурсивно внутрь самого commit.
 
-Plan commit проверен:
+Незакоммиченный `Step 7B — Web control-mode UX + real browser security integration` не является частью CORE-005 baseline и остаётся backlog `CORE-014`.
 
-`d05cba25981599baaeadd9ad452d1f68dbabd834`
+**Следующий спринт — `CORE-006 — Device Manager`.** До реализации сначала создаётся/актуализируется `docs/development/sprints/CORE-006.md` с локальными шагами. Разработка продолжает идти backend-first через CORE-013; Web feature work в этих спринтах заменяется поддержанием contracts и `docs/development/WEB_IMPLEMENTATION.md`.
 
-`CORE-005 / Step 1` завершён commit:
-
-`e8b42e69fecf7079f7b18f5f86fe334308d2579c`
-
-Step 1 зафиксировал отдельный C++ Users & Access skeleton, stable user identity, independent `view/control/edit/admin` capabilities, permission sets, global/project assignments, deterministic union-based effective permissions, repository port, unit tests и Linux lifecycle.
-
-`CORE-005 / Step 2` завершён commit `3b140d808638bb0c14a70b2aa1df96eb377af197`: локальный SQLite storage Users & Access, OpenSSL scrypt verifier без plaintext, explicit first-admin bootstrap, durable enabled state/security audit baseline и restart/reopen tests.
-
-`CORE-005 / Step 3` завершён commit `02a2d86e730a6c73ee0c33250bb9d4dc14791681`: зафиксированы `users-access.v1`, opaque server-side session, durable session lifecycle, machine-readable payload schema и authentication/session tests.
-
-`CORE-005 / Step 4` завершён commit `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`: существующий Service Hub v1 совместимо получил optional session `auth` отдельно от business payload, browser `ServiceHubClient` — per-request auth option, а production `users-access.v1` provider — authoritative validation protected session-core operations. Correlation/cancel/timeout semantics и единый browser-compatible transport сохранены.
-
-`CORE-005 / Step 5` завершён functional commit `ebe98d1f16e55d4024438300c1670ec3a19b1d72`: Project Manager теперь требует session authentication, проверяет permissions через `users-access.v1/evaluate-access`, фильтрует `list-projects`, применяет global `admin` для create и project `view`/`edit`/`admin` для read/update и fail-closed возвращает `project.authorization_unavailable`, если authoritative security dependency недоступна. Documentation sync Step 5 зафиксирован `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60` и является baseline Step 6A.
-
-`CORE-005 / Step 6A` завершён commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`: все ранее зарезервированные `users-access.v1` administration operations подключены к реальному backend/Service Hub path с global `admin`, atomic user+credential creation и integration coverage.
-
-`CORE-005 / Step 6B` завершён commit `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web получил browser session restoration, login/logout/current-user, authenticated Project Manager path и минимальный Users & Access administration UI поверх shared Service Hub client.
-
-`CORE-005 / Step 6C` завершён commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: administration mutation + audit фиксируются atomically в существующем Users & Access SQLite storage с authoritative authenticated actor и без изменения wire contract.
-
-`CORE-005 / Step 7A` завершён commit `f25aef1d3ff721f86487662289661409f72d3e57`: Users & Access получил authoritative project-scoped ephemeral control mode, fixed 10-minute absolute lifetime, access-revocation fail-closed semantics и reset после Users & Access restart.
-
-Незакоммиченный `Step 7B — Web control-mode UX + real browser security integration` отменён как текущая реализация и перенесён в будущий `CORE-014 — Web Integration & Core Operations UI`. Ни один Step 7B/FIX overlay не является source of truth.
-
-**Текущий локальный подшаг — `CORE-005 / Step 8 — backend acceptance, итоговый отчёт и documentation audit`.** После закрытия CORE-005 разработка идёт backend-first через CORE-013; Web feature work в этих спринтах заменяется поддержанием contracts и `docs/development/WEB_IMPLEMENTATION.md`.
-
-План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.
+Первый real Users & Access enforcement сознательно ограничен global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security остаются будущими задачами по фактической необходимости.

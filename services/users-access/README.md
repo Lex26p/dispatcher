@@ -13,7 +13,8 @@ Users & Access is the core backend responsibility for stable user identity, acce
 - `Step 6B` completed in `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
 - `Step 6C` completed in `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: administration mutations are coupled atomically with durable local security audit.
 - `Step 7A` completed in `f25aef1d3ff721f86487662289661409f72d3e57`: authoritative project-scoped control mode backend/contract.
-- current `Step 8`: backend acceptance and documentation closure. The uncommitted Step 7B Web control-mode/security work was discarded and deferred to `CORE-014 — Web Integration & Core Operations UI`.
+- `Step 8` completed the explicit control-mode security audit and backend acceptance. `CORE-005` is complete; the final baseline is the documentation-closure commit containing this README, verified before `CORE-006`.
+- The uncommitted Step 7B Web control-mode/security work was discarded and deferred to `CORE-014 — Web Integration & Core Operations UI`.
 
 ## Domain and access model
 
@@ -105,6 +106,17 @@ Users & Access now owns an ephemeral session-scoped accidental-write guard throu
 Enable requires authoritative effective `control` for the target project. The mode has a fixed 10-minute absolute lifetime, status reads do not extend it, access revocation resets it, and logout/invalid session makes it unusable. The mode is intentionally in-memory: durable sessions survive service restart, while control mode resets to `inactive`. Only the session-token digest is used as the in-memory key; raw bearer material is not stored.
 
 Control mode is not authorization by itself. Future write-capable services must still evaluate their normal capability/subject policy.
+
+Step 8 closes the local security-audit gap for explicit control-mode mutations. Successful enable/disable actions append `control_mode_enabled` / `control_mode_disabled` using the authoritative session user as actor/subject, without raw bearer material and without a schema migration. Enable rolls back its in-memory entry if durable audit append fails; disable remains off on audit failure because restoring an accidental-write guard would be less safe. Automatic expiry/access revocation and no-op disable are not misreported as explicit user mutations.
+
+## CORE-005 sprint acceptance
+
+The final backend-only acceptance was executed in WSL after the Step 8 audit closure. It passed:
+
+- complete `^users-access\.` CTest selection, covering domain/application, persistence/credentials, bootstrap, authentication/session, control mode, administration, lifecycle and real Service Hub integration;
+- `project-manager.service-hub-integration`, covering authenticated allowed/denied paths, access revocation, disabled/expired sessions, Users & Access outage/recovery, Service Hub restart/re-registration and credential-leak regression.
+
+No new Web code or browser acceptance is part of Step 8; the broader browser/security integration is intentionally deferred to `CORE-014`.
 
 ## Browser session integration — Step 6B
 

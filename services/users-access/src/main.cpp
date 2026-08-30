@@ -219,7 +219,8 @@ int main(int argc, char* argv[]) {
     dispatcher::users_access::ControlModeService control_mode{
         authentication,
         token_codec,
-        access_manager};
+        access_manager,
+        repository};
 
     dispatcher::users_access::UsersAccessAdministrationService administration{
         repository,

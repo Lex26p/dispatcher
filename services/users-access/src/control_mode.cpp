@@ -31,10 +31,12 @@ ControlModeService::ControlModeService(
     AuthenticationSessionService& authentication,
     const SessionTokenCodec& token_codec,
     UsersAccessManager& access_manager,
+    SecurityAuditRepository& audit_repository,
     ControlModeClock clock)
     : authentication_(authentication),
       token_codec_(token_codec),
       access_manager_(access_manager),
+      audit_repository_(audit_repository),
       clock_(clock ? std::move(clock) : ControlModeClock{system_clock_unix_ms}) {}
 
 ControlModeResult ControlModeService::enable(
@@ -88,6 +90,15 @@ ControlModeResult ControlModeService::enable(
         .project_id = std::string(project_id),
         .expires_at_unix_ms = expires_at,
     };
+
+    const auto audit_error = append_audit(
+        SecurityAuditEventType::control_mode_enabled,
+        session.value->user.id,
+        now);
+    if (audit_error != ControlModeError::none) {
+        entries_.erase(key);
+        return ControlModeResult::failure(audit_error);
+    }
 
     return ControlModeResult::success(ControlModeState{
         .enabled = true,
@@ -159,7 +170,25 @@ ControlModeResult ControlModeService::disable(const std::string_view token) {
         return ControlModeResult::failure(map_session_error(session.error));
     }
 
-    entries_.erase(key);
+    const auto iterator = entries_.find(key);
+    if (iterator == entries_.end()) {
+        return ControlModeResult::success(inactive_state());
+    }
+
+    entries_.erase(iterator);
+
+    const std::int64_t now = clock_();
+    if (now < 0) {
+        return ControlModeResult::failure(ControlModeError::storage_error);
+    }
+    const auto audit_error = append_audit(
+        SecurityAuditEventType::control_mode_disabled,
+        session.value->user.id,
+        now);
+    if (audit_error != ControlModeError::none) {
+        return ControlModeResult::failure(audit_error);
+    }
+
     return ControlModeResult::success(inactive_state());
 }
 
@@ -202,6 +231,27 @@ ControlModeError ControlModeService::map_session_error(
         return ControlModeError::crypto_error;
     }
     return ControlModeError::storage_error;
+}
+
+ControlModeError ControlModeService::append_audit(
+    const SecurityAuditEventType event,
+    const std::string_view user_id,
+    const std::int64_t occurred_at_unix_ms) {
+    if (occurred_at_unix_ms < 0) {
+        return ControlModeError::storage_error;
+    }
+
+    const SecurityAuditRecord record{
+        .sequence = 0,
+        .occurred_at_unix_ms = occurred_at_unix_ms,
+        .event = event,
+        .actor_user_id = std::string(user_id),
+        .subject_user_id = std::string(user_id),
+    };
+    return audit_repository_.append_security_audit(record) ==
+            SecurityAuditRepositoryStatus::ok
+        ? ControlModeError::none
+        : ControlModeError::storage_error;
 }
 
 bool ControlModeService::valid_project_id(

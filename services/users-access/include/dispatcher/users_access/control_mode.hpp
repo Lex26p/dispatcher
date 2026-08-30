@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dispatcher/users_access/security_audit.hpp"
 #include "dispatcher/users_access/session.hpp"
 #include "dispatcher/users_access/users_access_manager.hpp"
 
@@ -80,6 +81,7 @@ public:
         AuthenticationSessionService& authentication,
         const SessionTokenCodec& token_codec,
         UsersAccessManager& access_manager,
+        SecurityAuditRepository& audit_repository,
         ControlModeClock clock = {});
 
     [[nodiscard]] ControlModeResult enable(
@@ -105,11 +107,17 @@ private:
     [[nodiscard]] static ControlModeError map_session_error(
         AuthenticationSessionError error) noexcept;
 
+    [[nodiscard]] ControlModeError append_audit(
+        SecurityAuditEventType event,
+        std::string_view user_id,
+        std::int64_t occurred_at_unix_ms);
+
     [[nodiscard]] static bool valid_project_id(std::string_view project_id) noexcept;
 
     AuthenticationSessionService& authentication_;
     const SessionTokenCodec& token_codec_;
     UsersAccessManager& access_manager_;
+    SecurityAuditRepository& audit_repository_;
     ControlModeClock clock_;
     std::map<std::vector<unsigned char>, Entry> entries_;
 };

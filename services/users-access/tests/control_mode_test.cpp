@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <vector>
 #include <string>
 #include <string_view>
 
@@ -24,6 +25,32 @@ void expect(const bool condition, const std::string_view message) {
     if (!condition) {
         fail(message);
     }
+}
+
+class RejectingAuditRepository final : public ua::SecurityAuditRepository {
+public:
+    ua::SecurityAuditRepositoryStatus append_security_audit(
+        const ua::SecurityAuditRecord&) override {
+        return ua::SecurityAuditRepositoryStatus::error;
+    }
+
+    ua::SecurityAuditRepositoryStatus list_security_audit(
+        std::vector<ua::SecurityAuditRecord>& records) const override {
+        records.clear();
+        return ua::SecurityAuditRepositoryStatus::ok;
+    }
+};
+
+[[nodiscard]] std::size_t count_audit_event(
+    const std::vector<ua::SecurityAuditRecord>& records,
+    const ua::SecurityAuditEventType event) {
+    std::size_t count = 0;
+    for (const auto& record : records) {
+        if (record.event == event) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 [[nodiscard]] std::filesystem::path make_temp_dir() {
@@ -125,6 +152,7 @@ void test_control_mode_lifecycle() {
         authentication,
         token_codec,
         manager,
+        repository,
         [&now] { return now; }};
 
     auto state = control_mode.current(token);
@@ -154,6 +182,21 @@ void test_control_mode_lifecycle() {
     expect(
         enabled.value->project_id == "project-a",
         "control mode should bind to the requested project");
+    std::vector<ua::SecurityAuditRecord> audit_records;
+    expect(
+        repository.list_security_audit(audit_records) ==
+            ua::SecurityAuditRepositoryStatus::ok,
+        "control-mode audit should be readable");
+    expect(
+        count_audit_event(
+            audit_records,
+            ua::SecurityAuditEventType::control_mode_enabled) == 1,
+        "successful enable should create one control-mode audit event");
+    expect(
+        audit_records.back().actor_user_id == user.id &&
+            audit_records.back().subject_user_id == user.id,
+        "control-mode enable audit should identify the authoritative session user");
+
     const std::int64_t expected_expiry = now + ua::control_mode_lifetime_ms;
     expect(
         enabled.value->expires_at_unix_ms == expected_expiry,
@@ -208,6 +251,7 @@ void test_control_mode_lifecycle() {
         authentication,
         token_codec,
         manager,
+        repository,
         [&now] { return now; }};
     state = restarted_control_mode.current(token);
     expect(
@@ -223,6 +267,52 @@ void test_control_mode_lifecycle() {
         disabled.ok() && !disabled.value->enabled &&
             disabled.value->reason == ua::ControlModeReason::inactive,
         "explicit disable should return inactive state");
+
+    expect(
+        repository.list_security_audit(audit_records) ==
+            ua::SecurityAuditRepositoryStatus::ok,
+        "control-mode audit should remain readable after disable");
+    expect(
+        count_audit_event(
+            audit_records,
+            ua::SecurityAuditEventType::control_mode_enabled) == 4,
+        "each successful explicit enable should be audited");
+    expect(
+        count_audit_event(
+            audit_records,
+            ua::SecurityAuditEventType::control_mode_disabled) == 1,
+        "successful explicit disable should be audited once");
+
+    const auto disabled_again = restarted_control_mode.disable(token);
+    expect(
+        disabled_again.ok() && !disabled_again.value->enabled,
+        "repeated disable should remain a successful no-op");
+    expect(
+        repository.list_security_audit(audit_records) ==
+            ua::SecurityAuditRepositoryStatus::ok &&
+            count_audit_event(
+                audit_records,
+                ua::SecurityAuditEventType::control_mode_disabled) == 1,
+        "no-op disable should not create a false mutation audit event");
+
+    RejectingAuditRepository rejecting_audit;
+    ua::ControlModeService audit_failure_control_mode{
+        authentication,
+        token_codec,
+        manager,
+        rejecting_audit,
+        [&now] { return now; }};
+    const auto rejected_enable =
+        audit_failure_control_mode.enable(token, "project-a");
+    expect(
+        !rejected_enable.ok() &&
+            rejected_enable.error == ua::ControlModeError::storage_error,
+        "enable should fail closed when durable audit cannot be recorded");
+    state = audit_failure_control_mode.current(token);
+    expect(
+        state.ok() && !state.value->enabled &&
+            state.value->reason == ua::ControlModeReason::inactive,
+        "failed enable audit should roll back the in-memory control mode");
 
     expect(
         authentication.logout(token) == ua::AuthenticationSessionError::none,

@@ -2,7 +2,7 @@
 
 ## Статус
 
-Versioned предметная boundary Users & Access зафиксирована в `CORE-005 / Step 3` и развивается совместимо в рамках `users-access.v1`.
+Versioned предметная boundary Users & Access зафиксирована в `CORE-005 / Step 3` и совместимо завершена в рамках `users-access.v1` к закрытию `CORE-005`. Step 8 не меняет wire contract: он закрывает только локальную durable audit semantics control mode и подтверждает backend acceptance.
 
 Она используется для:
 
@@ -359,6 +359,13 @@ Disabled user при login получает `auth.invalid_credentials`; ране
 
 Каждая успешная administration mutation и её audit row записываются **в одной SQLite transaction**. Если audit insert не может быть выполнен, mutation откатывается и operation fail-closed возвращает storage error. Failed validation/conflict/no-op не создают ложный successful-mutation audit. Plaintext password и raw bearer в audit не попадают.
 
+`CORE-005 / Step 8` закрывает local audit для явных пользовательских control-mode mutations без schema migration и без изменения wire contract:
+
+- `control_mode_enabled`;
+- `control_mode_disabled`.
+
+Оба события получают actor/subject из authoritative validated session user. Текущая локальная `security_audit` schema user-oriented и не содержит отдельного resource/project field, поэтому project ID не маскируется под `subject_user_id`. Успешный enable записывается только если audit append прошёл; при audit failure созданный in-memory mode откатывается и operation fail-closed возвращает storage error. Explicit disable сначала снимает ephemeral mode как более безопасное состояние; если последующий durable audit append не проходит, operation возвращает storage error, но mode не восстанавливается. No-op disable, denied enable, automatic expiry и access-revocation reset не создают ложных `control_mode_enabled`/`control_mode_disabled` records.
+
 Публикация security audit в будущий Event Hub не входит в CORE-005.
 
 ## Control mode
@@ -436,4 +443,4 @@ Web presentation control mode сознательно отложена до бу�
 
 `users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, Step 6C завершил внутренний durable administration audit, а Step 7A совместимо добавил три protected control-mode operations без изменения Service Hub transport. Несовместимое изменение требует нового service version.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, Step 6C завершил внутренний durable administration audit, Step 7A совместимо добавил три protected control-mode operations без изменения Service Hub transport, а Step 8 добавил только внутренние durable control-mode audit events без wire/schema migration. Несовместимое изменение требует нового service version.

@@ -16,9 +16,11 @@
 
 `CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery.
 
-`CORE-005 — Users & Access` находится в разработке. Steps 1–6 и backend `Step 7A` завершены; подтверждённый baseline `f25aef1d3ff721f86487662289661409f72d3e57` включает durable users/access/session foundation, administration + audit, backend-authoritative Project Manager authorization и project-scoped ephemeral control mode. Незакоммиченный `Step 7B` с дальнейшей Web-интеграцией отменён и отложен. Текущий шаг — `Step 8 — backend acceptance и documentation closure`.
+`CORE-005 — Users & Access` завершён: существует stable user/access domain, локальная authentication/session boundary, durable SQLite users/access/session storage, secure first-admin bootstrap, global/project permission assignments, administration + durable security audit, backend-authoritative Project Manager authorization и project-scoped ephemeral control mode. Финальный Step 8 backend acceptance прошёл Users & Access CTests и реальный Project Manager authorization integration; дальнейшая Web control-mode/security UX остаётся отложенной до `CORE-014`.
 
-Внутри `L1-01` принят backend-first порядок: новые Web features заморожены до завершения `CORE-013 — System & Administration`. React + TypeScript остаются выбранным Web-стеком. Каждый backend-спринт документирует будущую Web-интеграцию в `docs/development/WEB_IMPLEMENTATION.md`; после backend foundation отдельный `CORE-014 — Web Integration & Core Operations UI` подключит накопленные стабильные контракты к Web без reverse engineering всего backend-кода.
+Следующая backend-задача — `CORE-006 — Device Manager`. Перед реализацией его шаги должны быть отдельно зафиксированы в sprint-файле.
+
+Внутри `L1-01` действует backend-first порядок: новые Web features заморожены до завершения `CORE-013 — System & Administration`. React + TypeScript остаются выбранным Web-стеком. Каждый backend-спринт документирует будущую Web-интеграцию в `docs/development/WEB_IMPLEMENTATION.md`; после backend foundation отдельный `CORE-014 — Web Integration & Core Operations UI` подключит накопленные стабильные контракты к Web без reverse engineering всего backend-кода.
 
 ## Документация
 
@@ -46,6 +48,6 @@
 
 Итог `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
 
-Текущий спринт `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
+Итог `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

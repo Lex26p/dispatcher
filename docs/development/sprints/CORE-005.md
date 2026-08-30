@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Steps 1–6 и Step 7A завершены; текущий подшаг — Step 8 backend acceptance/documentation closure. Step 7B Web integration отложен до CORE-014.**
+**Завершён. Steps 1–6, Step 7A и backend Step 8 acceptance выполнены; Step 7B Web integration сознательно отложен до CORE-014. Final baseline — documentation-closure commit, содержащий этот отчёт; его SHA проверяется перед CORE-006.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий подшаг — `Step 8 — backend acceptance, итоговый отчёт и documentation audit`.
+`Step 8 — backend acceptance, итоговый отчёт и documentation audit` выполнен.
 
 ## Цель
 
@@ -774,7 +774,9 @@ Control-mode security boundary существует и проверяется н
 
 Новых product features не добавляем, кроме исправлений, необходимых для критериев завершения.
 
-Выполняем backend-focused acceptance:
+Перед acceptance audit обнаружен один backend security-closure gap: Step 7A реализовал authoritative control mode, но explicit enable/disable ещё не записывались в локальный `security_audit`, хотя audit boundary этого спринта требует фиксировать значимые пользовательские control-mode действия. Step 8 закрывает gap без schema/wire migration: добавляет `control_mode_enabled` / `control_mode_disabled`, authoritative session actor/subject semantics, rollback mode on enable-audit failure и safety-first disable semantics. Denied/no-op/automatic expiry/revocation не маскируются под успешную пользовательскую mutation.
+
+После этого выполняем backend-focused acceptance:
 
 - C++ Users & Access build/tests;
 - persistence/credential/session/administration/control-mode tests;
@@ -809,7 +811,118 @@ Closure commit не обязан рекурсивно содержать соб�
 
 ### Результат
 
-`CORE-005 — Users & Access` закрыт проверенным documentation closure commit и даёт security foundation для `CORE-006 — Device Manager`.
+Step 8 backend acceptance выполнен успешно. Полный `^users-access\.` CTest selection и `project-manager.service-hub-integration` прошли после control-mode audit closure. Нового Web-кода в Step 8 нет.
+
+## Итоговый отчёт CORE-005
+
+### Фактически реализовано
+
+`CORE-005` создал reusable security foundation ядра:
+
+- stable opaque user identity и enabled/disabled lifecycle;
+- independent `view`, `control`, `edit`, `admin` capabilities без скрытой иерархии;
+- named permission sets и global/project assignments с union-based effective permissions;
+- service-local durable SQLite schema v2 для users/access/credentials/audit/sessions;
+- OpenSSL scrypt credential verifier без plaintext storage;
+- explicit secure first-admin bootstrap без hardcoded credentials;
+- opaque 256-bit bearer sessions с 30-minute idle / 12-hour absolute lifetime и SHA-256 token digest storage;
+- versioned language-independent `users-access.v1`;
+- compatible Service Hub v1 transport `auth` отдельно от business payload;
+- production Users & Access provider и protected session/access operations;
+- backend-authoritative Project Manager authorization, project filtering и fail-closed security dependency;
+- production administration operations для users, permission sets и assignments с authoritative global `admin`;
+- atomic durable administration security audit;
+- project-scoped ephemeral control mode с fixed 10-minute lifetime, revocation/expiry/logout/restart fail-safe semantics;
+- durable audit explicit control-mode enable/disable без raw bearer/password leakage;
+- committed Step 6B Web login/logout/current-user/minimal access administration baseline;
+- накопительный handoff дальнейшей Web-интеграции в `docs/development/WEB_IMPLEMENTATION.md`.
+
+### Подтверждённые commits
+
+- plan — `d05cba25981599baaeadd9ad452d1f68dbabd834`;
+- Step 1 — `e8b42e69fecf7079f7b18f5f86fe334308d2579c`;
+- Step 2 — `3b140d808638bb0c14a70b2aa1df96eb377af197`;
+- Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
+- Step 4 functional — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
+- Step 4 workflow/docs — `4f9fc8447dc4edc7ba9edd06405cde5d2af6aafe`;
+- Step 5 functional — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
+- Step 5 documentation sync — `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`;
+- Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
+- Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`;
+- Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`;
+- Step 7A — `f25aef1d3ff721f86487662289661409f72d3e57`;
+- backend-first staging — `bd52d4a5b651bef6685ed2b3a3292c3af841182b`.
+
+Step 8 control-mode audit fix и финальная документация входят непосредственно в documentation-closure commit, содержащий этот отчёт. Его собственный SHA намеренно не записывается рекурсивно; пользователь присылает SHA, агент проверяет его в GitHub и только затем начинает CORE-006.
+
+### Acceptance
+
+На пользовательской Linux/WSL среде после Step 8 fix успешно выполнены:
+
+```text
+cmake -S /mnt/c/Projects/dispatcher -B /tmp/dispatcher-core005-step8-build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
+cmake --build /tmp/dispatcher-core005-step8-build --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests dispatcher_users_access_session_tests dispatcher_users_access_control_mode_tests dispatcher_users_access_administration_tests dispatcher_users_access_service_hub_test_client dispatcher_users_access_control_mode_integration_client dispatcher_users_access_administration_integration_client dispatcher_project_manager_service_hub_test_client
+ctest --test-dir /tmp/dispatcher-core005-step8-build --output-on-failure -R "^users-access\."
+ctest --test-dir /tmp/dispatcher-core005-step8-build --output-on-failure -R "^project-manager\.service-hub-integration$"
+```
+
+Acceptance подтверждает:
+
+- domain/application и independent capability semantics;
+- persistence, scrypt credentials, bootstrap и restart/reopen;
+- authentication/session lifecycle, disabled/expired/logout behavior;
+- administration API и atomic audit;
+- control mode deny/enable/disable/expiry/revocation/restart + durable explicit-mutation audit;
+- real `users-access.v1` Service Hub paths;
+- Project Manager allowed/denied filtering and create/update policy;
+- Users & Access unavailable => fail-closed + recovery;
+- access revocation, disabled and expired sessions;
+- Service Hub restart/re-registration;
+- отсутствие test credential leakage в проверяемых service logs/output.
+
+### Отклонения от первоначального плана
+
+- Step 6 был разделён на 6A/6B/6C, чтобы administration backend, Web session/admin UI и security-audit closure имели отдельные проверяемые SHA.
+- Step 7 был разделён на 7A/7B. 7A backend control mode завершён; незакоммиченный 7B Web integration был отменён как текущая реализация после принятия backend-first staging.
+- Web feature-разработка перенесена в отдельный `CORE-014`, чтобы CORE-006…CORE-013 последовательно строили backend foundation и оставляли Web-ready contracts/handoff вместо постоянного переключения frontend/backend.
+- Step 8 обнаружил и закрыл один backend gap: explicit control-mode enable/disable ранее не записывались в durable local security audit.
+- Эти изменения не меняют продуктовую security model и не вводят новый transport/schema version.
+
+### Известные ограничения
+
+- реально поддерживаются только global и project scopes;
+- explicit deny, nested groups, tenant hierarchy и arbitrary ABAC отсутствуют;
+- внешние identity providers, MFA/recovery и service accounts не реализованы;
+- control mode хранится in-memory и намеренно сбрасывается после Users & Access restart;
+- security audit пока локальный Users & Access SQLite; публикация в Event Hub отложена до появления реального Event Hub;
+- production TLS/reverse-proxy/Origin policy и HA/distributed sessions не определены;
+- writable Device/metric authorization ещё не существует и должна строиться в будущих сервисах поверх capability + control-mode policy;
+- full browser control-mode/security integration сознательно отложена до `CORE-014`.
+
+### Documentation audit
+
+Проверены:
+
+- root `README.md`;
+- `docs/README.md`;
+- `docs/architecture/README.md`;
+- `docs/architecture/service-hub-contract.md`;
+- `docs/architecture/project-manager-contract.md`;
+- `docs/architecture/users-access-contract.md`;
+- `docs/concept/07-users-access.md`;
+- `docs/concept/10-web-ui.md`;
+- `services/users-access/README.md`;
+- `web/README.md`;
+- `docs/development/WEB_IMPLEMENTATION.md`;
+- `docs/development/ROADMAP.md`;
+- `docs/context/CHAT_CONTEXT.md`;
+- этот sprint report.
+
+Изменения потребовались в status/roadmap/context, Users & Access architecture/contract/service docs, Web handoff и этом отчёте. `service-hub-contract.md`, `project-manager-contract.md`, `concept/07-users-access.md`, `concept/10-web-ui.md` и `web/README.md` уже соответствуют фактическому baseline и не изменялись.
+
+### Итог
+
+Все критерии завершения CORE-005 выполнены в согласованной backend-first границе. `CORE-005 — Users & Access` даёт security foundation для следующего backend sprint `CORE-006 — Device Manager`. До начала CORE-006 требуется только проверить SHA documentation-closure commit в GitHub.
 
 # Что сознательно не входит в CORE-005
 

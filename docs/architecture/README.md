@@ -4,7 +4,7 @@
 
 Этот файл фиксирует **первый согласованный архитектурный baseline** проекта.
 
-Он описывает общую модель backend, взаимодействие сервисов, runtime-модель метрик и уже подтверждённые технические решения. Документ намеренно не является детальным ТЗ: технологии фиксируются только тогда, когда они реально выбраны в соответствующем спринте. Решения уже конкретизированы для Data Hub, Service Hub, Project Manager и текущей Users & Access boundary, а Event Hub, общая persistence-стратегия будущих сервисов, deployment и другие будущие механизмы остаются открытыми до соответствующих спринтов.
+Он описывает общую модель backend, взаимодействие сервисов, runtime-модель метрик и уже подтверждённые технические решения. Документ намеренно не является детальным ТЗ: технологии фиксируются только тогда, когда они реально выбраны в соответствующем спринте. Решения уже конкретизированы для Data Hub, Service Hub, Project Manager и завершённой в `CORE-005` Users & Access boundary, а Event Hub, общая persistence-стратегия будущих сервисов, deployment и другие будущие механизмы остаются открытыми до соответствующих спринтов.
 
 ## Общий подход
 
@@ -236,7 +236,7 @@ Project Manager — самостоятельный сервис проектов
 
 Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
 
-В `CORE-005 / Steps 1–6` и завершённом `Step 7A` уже зафиксированы:
+В завершённом `CORE-005` зафиксированы:
 
 - stable opaque user ID, независимый от login/display properties;
 - enabled/disabled user state;
@@ -257,7 +257,7 @@ Users & Access — самостоятельная backend responsibility для 
 - create-user сохраняет user + scrypt credential atomically, а ordinary admin password baseline совпадает с bootstrap: 15..1024 bytes;
 - authoritative validation bearer credential внутри Users & Access, а не в Service Hub;
 - Project Manager authorization использует `users-access.v1/evaluate-access` и не читает Users & Access SQLite напрямую;
-- local security audit без password/raw session token; Step 6C добавил атомарный audit administration mutations в существующую SQLite `security_audit` без schema migration;
+- local security audit без password/raw session token; Step 6C добавил атомарный audit administration mutations в существующую SQLite `security_audit` без schema migration, а Step 8 закрывает durable audit успешных explicit control-mode enable/disable действий без schema migration;
 - Step 7A добавляет ephemeral project-scoped control mode: authoritative `control` check, fixed 10-minute absolute lifetime, no refresh on status, access-revocation fail-closed и reset на Users & Access restart.
 
 В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.
@@ -267,6 +267,9 @@ Users & Access — самостоятельная backend responsibility для 
 `CORE-005 / Step 6C` завершает local administration audit semantics без изменения wire contract: успешные create/enable-disable/password-reset/permission-set/assignment mutations записывают actor из authoritative authenticated session; mutation и audit row выполняются одной SQLite transaction и вместе откатываются при audit failure. Для user/assignment events `subject_user_id` — target user; `permission_set_created` оставляет user-specific subject пустым.
 
 `CORE-005 / Step 7A` зафиксировал control mode как ephemeral accidental-write guard поверх authenticated session, а не как authorization grant. Mode привязан к project, требует effective `control`, живёт 600000 ms без продления и не переживает Users & Access restart; current status повторно проверяет capability и сбрасывается при access revocation. Три новые protected operations добавляются совместимо в `users-access.v1`.
+`CORE-005 / Step 8` дополняет эту boundary двумя локальными audit events — `control_mode_enabled` и `control_mode_disabled`. Actor/subject берутся из authoritative session user; project ID не кодируется в user-specific `subject_user_id`. Audit failure при enable откатывает in-memory mode; audit failure при explicit disable не восстанавливает уже снятый guard.
+
+Финальный Step 8 backend acceptance подтвердил Users & Access domain/persistence/bootstrap/session/control-mode/administration/lifecycle/Service Hub integration и Project Manager authorization regression, включая unavailable/recovery/revoked/disabled/expired/reconnect paths и secret-leakage checks.
 
 После подтверждения Step 7A дальнейшая feature-разработка Web отложена до завершения backend foundation через `CORE-013`. Это sequencing/process decision, а не изменение архитектурных ролей или Web stack; будущий Web handoff ведётся в `docs/development/WEB_IMPLEMENTATION.md`.
 

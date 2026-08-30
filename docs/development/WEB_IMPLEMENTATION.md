@@ -108,7 +108,7 @@ Sources: <contract docs>
 
 ### Users & Access
 
-**Статус backend:** identity, credentials, sessions, permissions, administration, security audit и control-mode backend baseline реализованы к `CORE-005 / Step 7A`.
+**Статус backend:** `CORE-005` завершён. Identity, credentials, sessions, permissions, administration, durable security audit и control-mode backend baseline прошли финальный backend acceptance. Последний отдельно подтверждённый feature SHA до closure — `f25aef1d3ff721f86487662289661409f72d3e57`; Step 8 audit closure входит в финальный documentation-closure commit CORE-005.
 
 **Уже в Web:** login/logout/current user, session restoration, minimal `/access` administration.
 
@@ -120,6 +120,8 @@ Sources: <contract docs>
 - UX для access revocation/disabled/expired session и service recovery без превращения browser state в authority.
 
 **Control mode contract:** project-scoped, требует backend `control`, fixed 10-minute absolute lifetime, не продлевается status reads, ephemeral и сбрасывается после Users & Access restart. Web должен показывать server state, но не считать mode отдельной permission grant.
+
+Step 8 не добавляет новый Web API. Он только фиксирует durable backend audit явных `control_mode_enabled` / `control_mode_disabled`; UI control-mode semantics остаются теми же.
 
 **Источник:** `docs/architecture/users-access-contract.md`, `CORE-005`.
 

@@ -15,6 +15,8 @@ enum class SecurityAuditEventType {
     permission_set_created,
     access_assignment_added,
     access_assignment_removed,
+    control_mode_enabled,
+    control_mode_disabled,
     authentication_succeeded,
     authentication_failed,
     session_logged_out,
@@ -41,6 +43,10 @@ enum class SecurityAuditEventType {
         return "access_assignment_added";
     case SecurityAuditEventType::access_assignment_removed:
         return "access_assignment_removed";
+    case SecurityAuditEventType::control_mode_enabled:
+        return "control_mode_enabled";
+    case SecurityAuditEventType::control_mode_disabled:
+        return "control_mode_disabled";
     case SecurityAuditEventType::authentication_succeeded:
         return "authentication_succeeded";
     case SecurityAuditEventType::authentication_failed:

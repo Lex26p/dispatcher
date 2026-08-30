@@ -63,9 +63,9 @@ Roadmap использует три уровня: этап → спринт → 
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
-- [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план и живой отчёт текущего спринта Users & Access.
+- [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план и итоговый отчёт завершённого спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–6 и backend Step 7A завершены, подтверждённый baseline — `f25aef1d3ff721f86487662289661409f72d3e57`. Незакоммиченный Step 7B Web integration отложен; текущий шаг — `Step 8 — backend acceptance и documentation closure`. После CORE-005 разработка идёт backend-first через CORE-013, а Web context накапливается в `WEB_IMPLEMENTATION.md` до отдельного CORE-014.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` завершён после backend Step 8 acceptance/documentation closure; итоговый отчёт находится в `sprints/CORE-005.md`. Следующая задача — планирование `CORE-006 — Device Manager`. Разработка продолжает идти backend-first через CORE-013, а Web context накапливается в `WEB_IMPLEMENTATION.md` до отдельного CORE-014.
 
 ### `docs/context/`
 

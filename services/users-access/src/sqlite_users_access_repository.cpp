@@ -186,6 +186,14 @@ private:
         event = SecurityAuditEventType::access_assignment_removed;
         return true;
     }
+    if (value == "control_mode_enabled") {
+        event = SecurityAuditEventType::control_mode_enabled;
+        return true;
+    }
+    if (value == "control_mode_disabled") {
+        event = SecurityAuditEventType::control_mode_disabled;
+        return true;
+    }
     if (value == "authentication_succeeded") {
         event = SecurityAuditEventType::authentication_succeeded;
         return true;
