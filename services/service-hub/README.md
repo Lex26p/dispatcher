@@ -6,7 +6,7 @@ Service Hub is the addressable request/response service of Dispatcher.
 
 `CORE-002 — Service Hub` is complete after sprint acceptance and documentation review.
 
-The external Service Hub v1 WebSocket + UTF-8 JSON contract is implemented and verified by integration tests.
+The external Service Hub v1 WebSocket + UTF-8 JSON contract is implemented and verified by integration tests. `CORE-005 / Step 4` adds an optional session-authentication transport context without changing the endpoint/subprotocol.
 
 ## Implemented
 
@@ -27,7 +27,8 @@ Current implementation includes:
 - ignored late provider responses for already timed-out/cancelled requests;
 - bounded server shutdown with active connections;
 - real process shutdown on SIGINT and SIGTERM;
-- basic lifecycle diagnostics.
+- basic lifecycle diagnostics;
+- optional request `auth` context with strict session-token shape validation and forwarding separate from business `payload`.
 
 ## Lifecycle executable
 
@@ -81,6 +82,22 @@ The Web Shell uses the same direct WebSocket boundary:
 
 No additional browser gateway is required or introduced.
 
+
+## Authenticated request transport
+
+`CORE-005 / Step 4` extends the existing v1 request with an optional transport field:
+
+    "auth": {
+      "type": "session",
+      "token": "64-lowercase-hex-characters"
+    }
+
+The Hub validates only the envelope shape and forwards the opaque credential to the selected provider. It does not derive a user ID, roles or permissions and does not make service-specific authorization decisions. A protected provider must validate the session through the Users & Access security boundary before performing protected work.
+
+Malformed `auth` is rejected as `hub.invalid_request`. Requests without `auth` remain representable because `users-access.v1/login` is explicitly public and existing automation/test services can define their own policy.
+
+The browser `ServiceHubClient` exposes this through per-request options; Step 4 does not choose persistent browser token storage.
+
 ## Internal implementation notes
 
 Boost.Asio + Boost.Beast provide the WebSocket/networking layer.
@@ -104,7 +121,7 @@ Recent timed-out/cancelled Hub request IDs are retained in a bounded internal se
 
 ## Known limitations after CORE-002
 
-- no authentication or authorization;
+- Service Hub forwards an authentication credential but does not itself validate session identity or own authorization policy;
 - no production Origin/TLS policy;
 - in-memory provider registry only;
 - one active provider per service and no load balancing;

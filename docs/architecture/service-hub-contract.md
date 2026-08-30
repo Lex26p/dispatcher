@@ -171,6 +171,10 @@ Load balancing и несколько providers одного service не вхо�
   "payload": {
     "text": "hello"
   },
+  "auth": {
+    "type": "session",
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
   "timeout_ms": 5000
 }
 ```
@@ -182,7 +186,21 @@ Load balancing и несколько providers одного service не вхо�
 - `service` — адрес provider;
 - `operation` — предметная операция provider;
 - `payload` — любое JSON value, включая `null`;
+- `auth` — необязательный transport-level authentication context;
 - `timeout_ms` — необязательный timeout в миллисекундах.
+
+`CORE-005 / Step 4` совместимо расширяет request v1 необязательным `auth`. Текущий тип authentication context:
+
+```json
+{
+  "type": "session",
+  "token": "64-lowercase-hex-characters"
+}
+```
+
+Service Hub проверяет только форму `auth`: `type` должен быть `session`, token — ровно 64 lowercase hexadecimal characters. Malformed `auth` получает `hub.invalid_request`. Hub не считает такую проверку аутентификацией пользователя: bearer token остаётся opaque для Hub и должен быть authoritative проверен Users & Access boundary перед защищённым действием.
+
+Отсутствие `auth` допустимо на уровне transport, потому что существуют явно публичные операции, например `users-access.v1/login`, и legacy/automation requests, для которых предметный provider сам определяет необходимость authentication.
 
 Если `timeout_ms` отсутствует, используется 5000 ms.
 
@@ -227,9 +245,15 @@ Provider получает тот же logical request envelope:
   "payload": {
     "text": "hello"
   },
+  "auth": {
+    "type": "session",
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
   "timeout_ms": 5000
 }
 ```
+
+Если client request содержал корректно сформированный `auth`, Hub переносит его в forwarded request отдельно от `payload`. Hub не добавляет `user_id`, roles или permissions и не интерпретирует bearer token. Provider обязан считать такой credential только входом в authoritative authentication/authorization boundary, а не готовым доказательством разрешения.
 
 Для provider поле `id` принадлежит Hub и уникально среди активных requests этого provider connection.
 
@@ -456,24 +480,23 @@ const socket = new WebSocket(
 
 Отдельный обязательный gateway между браузером и Service Hub не требуется.
 
-Production Origin policy, authentication и `wss://`/TLS остаются отдельными будущими решениями.
+Production Origin policy и `wss://`/TLS остаются отдельными deployment/security решениями.
 
 ## Security boundary
 
-`CORE-002` определяет routing transport, но не authentication/authorization.
+`CORE-002` определил routing transport без authentication/authorization. `CORE-005 / Step 4` добавляет в тот же v1 request совместимый необязательный transport field `auth` для opaque Users & Access session credential. Endpoint `/v1/ws`, subprotocol и request/correlation/cancel/timeout semantics не меняются.
 
-В v1 текущего спринта envelope не содержит:
+Service Hub по-прежнему **не является владельцем authorization semantics**. Он:
 
-- user ID;
-- roles;
-- permissions;
-- project access;
-- control mode;
-- auth token.
+- не принимает `user_id`, roles, permissions, project access или control mode от client как trusted identity;
+- не выводит identity/permissions из `payload`;
+- проверяет только допустимую transport-форму `auth`;
+- переносит `auth` provider отдельно от business payload;
+- не логирует и не должен сохранять bearer token как application data.
 
-Эти данные нельзя придумывать заранее как generic JSON fields.
+Текущий session bearer credential authoritative валидирует Users & Access. Providers защищённых services должны использовать согласованную security boundary и не считать наличие `auth` само по себе разрешением. В частности, `user_id` или permissions внутри Project Manager/другого business payload не могут аутентифицировать caller.
 
-Когда будут разработаны Users & Access и Web security boundary, пользовательский контекст будет добавлен согласованным способом без переноса предметной авторизации в providers случайным образом.
+`CORE-005 / Step 4` не определяет production TLS/Origin policy и не делает локальный `ws://` production security baseline.
 
 ## JSON Schema
 

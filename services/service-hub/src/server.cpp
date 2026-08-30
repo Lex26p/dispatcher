@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -105,6 +106,71 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     }
 
     result = json_object_get_boolean(value) != 0;
+    return true;
+}
+
+[[nodiscard]] bool object_has_only_fields(
+    json_object* object,
+    const std::initializer_list<std::string_view> allowed) {
+    if (object == nullptr || !json_object_is_type(object, json_type_object)) {
+        return false;
+    }
+
+    json_object_object_foreach(object, key, value) {
+        (void)value;
+        bool accepted = false;
+        for (const auto candidate : allowed) {
+            if (candidate == key) {
+                accepted = true;
+                break;
+            }
+        }
+        if (!accepted) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool is_valid_session_token(
+    const std::string_view token) noexcept {
+    if (token.size() != 64) {
+        return false;
+    }
+
+    for (const char character : token) {
+        const bool digit = character >= '0' && character <= '9';
+        const bool lower_hex = character >= 'a' && character <= 'f';
+        if (!digit && !lower_hex) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool get_optional_session_auth(
+    json_object* message,
+    json_object*& authentication) {
+    authentication = nullptr;
+    json_object* value = nullptr;
+    if (!json_object_object_get_ex(message, "auth", &value)) {
+        return true;
+    }
+
+    if (!object_has_only_fields(value, {"type", "token"})) {
+        return false;
+    }
+
+    std::string type;
+    std::string token;
+    if (!get_string(value, "type", type) || type != "session" ||
+        !get_string(value, "token", token) ||
+        !is_valid_session_token(token)) {
+        return false;
+    }
+
+    authentication = value;
     return true;
 }
 
@@ -784,6 +850,14 @@ public:
                     "Client request requires payload"));
             }
 
+            json_object* authentication = nullptr;
+            if (!get_optional_session_auth(message, authentication)) {
+                return send_text(make_request_error(
+                    client_request_id,
+                    "hub.invalid_request",
+                    "auth must be a valid Service Hub session authentication object"));
+            }
+
             int timeout_ms = kDefaultTimeoutMs;
             json_object* timeout = nullptr;
 
@@ -887,6 +961,12 @@ public:
                 forwarded.get(),
                 "payload",
                 json_object_get(payload));
+            if (authentication != nullptr) {
+                json_object_object_add(
+                    forwarded.get(),
+                    "auth",
+                    json_object_get(authentication));
+            }
             json_object_object_add(
                 forwarded.get(),
                 "timeout_ms",

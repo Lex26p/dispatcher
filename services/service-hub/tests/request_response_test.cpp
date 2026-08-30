@@ -188,6 +188,31 @@ private:
     return valid;
 }
 
+[[nodiscard]] bool provider_request_has_session_auth(
+    const std::string& message,
+    const std::string_view expected_token) {
+    json_object* request = json_tokener_parse(message.c_str());
+    if (request == nullptr) {
+        return false;
+    }
+
+    json_object* auth = nullptr;
+    json_object* type = nullptr;
+    json_object* token = nullptr;
+    const bool valid =
+        json_object_object_get_ex(request, "auth", &auth) &&
+        json_object_is_type(auth, json_type_object) &&
+        json_object_object_get_ex(auth, "type", &type) &&
+        json_object_is_type(type, json_type_string) &&
+        std::string_view(json_object_get_string(type)) == "session" &&
+        json_object_object_get_ex(auth, "token", &token) &&
+        json_object_is_type(token, json_type_string) &&
+        std::string_view(json_object_get_string(token)) == expected_token;
+
+    json_object_put(request);
+    return valid;
+}
+
 [[nodiscard]] bool parse_client_success(
     const std::string& message,
     std::string& request_id,
@@ -633,6 +658,90 @@ int test_same_request_id_on_different_clients() {
     return 0;
 }
 
+int test_session_authentication_is_forwarded_and_malformed_rejected() {
+    dispatcher::service_hub::ServiceHubServer server("127.0.0.1:0");
+    if (!server.start()) {
+        return fail("auth forwarding test server failed to start");
+    }
+
+    TestWebSocket provider;
+    if (!register_provider(provider, server.bound_port())) {
+        server.shutdown();
+        return fail("auth forwarding provider registration failed");
+    }
+
+    const std::string token(64, 'a');
+    std::atomic<bool> provider_ok{false};
+    std::thread provider_thread([&provider, &provider_ok, &token] {
+        std::string message;
+        std::string hub_id;
+        std::string marker;
+        if (!provider.read(message) ||
+            !parse_provider_request(message, hub_id, marker) ||
+            marker != "authenticated" ||
+            !provider_request_has_session_auth(message, token) ||
+            !provider.write(make_provider_response(hub_id, marker))) {
+            return;
+        }
+        provider_ok.store(true);
+    });
+
+    TestWebSocket client;
+    const std::string authenticated_request =
+        R"({"type":"request","id":"req-auth","service":"test.echo","operation":"echo","payload":{"marker":"authenticated"},"auth":{"type":"session","token":")" +
+        token +
+        R"("},"timeout_ms":5000})";
+
+    if (!client.connect("127.0.0.1", server.bound_port()) ||
+        !client.write(authenticated_request)) {
+        client.close();
+        provider.close();
+        provider_thread.join();
+        server.shutdown();
+        return fail("authenticated client request failed");
+    }
+
+    std::string response;
+    std::string response_id;
+    std::string marker;
+    const bool authenticated_response =
+        client.read(response) &&
+        parse_client_success(response, response_id, marker) &&
+        response_id == "req-auth" &&
+        marker == "authenticated";
+
+    provider_thread.join();
+
+    if (!client.write(
+            R"({"type":"request","id":"req-bad-auth","service":"test.echo","operation":"echo","payload":{"marker":"bad"},"auth":{"type":"session","token":"abc"}})")) {
+        client.close();
+        provider.close();
+        server.shutdown();
+        return fail("malformed authentication request write failed");
+    }
+
+    std::string error_response;
+    std::string error_id;
+    std::string error_code;
+    const bool malformed_rejected =
+        client.read(error_response) &&
+        parse_client_error(error_response, error_id, error_code) &&
+        error_id == "req-bad-auth" &&
+        error_code == "hub.invalid_request";
+
+    client.close();
+    provider.close();
+    server.shutdown();
+
+    if (!provider_ok.load() || !authenticated_response) {
+        return fail("session authentication was not forwarded to the provider");
+    }
+    if (!malformed_rejected) {
+        return fail("malformed session authentication was not rejected by the Hub");
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -652,6 +761,10 @@ int main() {
         return result;
     }
 
-    std::cout << "Service Hub parallel correlation tests passed\n";
+    if (const auto result = test_session_authentication_is_forwarded_and_malformed_rejected(); result != 0) {
+        return result;
+    }
+
+    std::cout << "Service Hub parallel correlation/auth forwarding tests passed\n";
     return 0;
 }

@@ -65,20 +65,29 @@ private:
 
 int Application::run(
     std::ostream& output,
-    const std::string_view database_path) const {
+    UsersAccessServiceProvider& provider,
+    const std::string_view database_path,
+    const std::string_view service_hub_address) const {
     const ShutdownSignalWaiter shutdown_signal;
     if (!shutdown_signal.ready()) {
         output << "Failed to configure Dispatcher Users & Access shutdown signals\n";
         return 1;
     }
 
+    if (!provider.start()) {
+        output << "Failed to start Dispatcher Users & Access Service Hub provider\n";
+        return 1;
+    }
+
     output << "Dispatcher Users & Access started "
            << "(SQLite " << database_path
-           << "; server-side session storage ready; Service Hub provider not configured)\n";
+           << "; Service Hub provider users-access.v1 -> "
+           << service_hub_address << ")\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();
     if (!signal_number.has_value()) {
+        provider.stop();
         output << "Failed to wait for Dispatcher Users & Access shutdown signal\n";
         output.flush();
         return 1;
@@ -86,6 +95,7 @@ int Application::run(
 
     output << "Dispatcher Users & Access shutdown requested by "
            << ShutdownSignalWaiter::name(*signal_number) << '\n';
+    provider.stop();
     output << "Dispatcher Users & Access stopped\n";
     output.flush();
     return 0;

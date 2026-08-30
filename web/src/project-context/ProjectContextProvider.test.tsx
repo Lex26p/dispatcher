@@ -161,9 +161,11 @@ describe('ProjectContextProvider', () => {
 
     await screen.findByText('Актуальное имя');
     expect(client.operations).toEqual(['get-project']);
-    expect(window.sessionStorage.getItem(PROJECT_CONTEXT_STORAGE_KEY)).toContain(
-      'Актуальное имя',
-    );
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem(PROJECT_CONTEXT_STORAGE_KEY)).toContain(
+        'Актуальное имя',
+      );
+    });
   });
 
   it('clears a stored selection only when Project Manager confirms project.not_found', async () => {

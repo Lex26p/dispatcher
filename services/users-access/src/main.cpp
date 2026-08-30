@@ -1,6 +1,10 @@
 #include "dispatcher/users_access/application.hpp"
 #include "dispatcher/users_access/bootstrap.hpp"
 #include "dispatcher/users_access/openssl_scrypt_password_hasher.hpp"
+#include "dispatcher/users_access/openssl_session_token_codec.hpp"
+#include "dispatcher/users_access/service_hub_provider.hpp"
+#include "dispatcher/users_access/session.hpp"
+#include "dispatcher/users_access/users_access_manager.hpp"
 #include "dispatcher/users_access/sqlite_users_access_repository.hpp"
 
 #include <openssl/crypto.h>
@@ -15,11 +19,12 @@
 namespace {
 
 constexpr std::string_view default_database_path = "dispatcher-users-access.db";
+constexpr std::string_view default_service_hub_address = "127.0.0.1:50052";
 
 void print_usage() {
     std::cerr
         << "Usage:\n"
-        << "  dispatcher-users-access [database-path]\n"
+        << "  dispatcher-users-access [database-path] [service-hub-address]\n"
         << "  dispatcher-users-access --bootstrap-admin <login> <display-name> [database-path]\n";
 }
 
@@ -101,11 +106,15 @@ int main(int argc, char* argv[]) {
     std::string_view login;
     std::string_view display_name;
     std::string_view database_path = default_database_path;
+    std::string_view service_hub_address = default_service_hub_address;
 
     if (argc == 1) {
-        // Normal service startup with default storage path.
+        // Normal service startup with default storage and Hub paths.
     } else if (argc == 2 && std::string_view(argv[1]) != "--bootstrap-admin") {
         database_path = argv[1];
+    } else if (argc == 3 && std::string_view(argv[1]) != "--bootstrap-admin") {
+        database_path = argv[1];
+        service_hub_address = argv[2];
     } else if (
         (argc == 4 || argc == 5) &&
         std::string_view(argv[1]) == "--bootstrap-admin") {
@@ -173,10 +182,41 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    const auto endpoint =
+        dispatcher::users_access::parse_service_hub_address(service_hub_address);
+    if (!endpoint.has_value()) {
+        std::cerr << "Invalid Service Hub address: " << service_hub_address << '\n';
+        return 2;
+    }
+
+    dispatcher::users_access::OpenSslScryptPasswordHasher password_hasher;
+    dispatcher::users_access::OpenSslSessionTokenCodec token_codec;
+    dispatcher::users_access::UsersAccessManager access_manager{repository};
+    dispatcher::users_access::AuthenticationSessionService authentication{
+        repository,
+        repository,
+        repository,
+        repository,
+        password_hasher,
+        token_codec,
+        access_manager};
+    if (!authentication.ready()) {
+        std::cerr << "Failed to initialize Dispatcher Users & Access authentication service\n";
+        return 1;
+    }
+
+    dispatcher::users_access::ServiceHubProvider provider{
+        authentication,
+        *endpoint};
+
     std::cout << "Dispatcher Users & Access SQLite storage ready at "
               << database_path << '\n';
     std::cout.flush();
 
     const dispatcher::users_access::Application application;
-    return application.run(std::cout, database_path);
+    return application.run(
+        std::cout,
+        provider,
+        database_path,
+        service_hub_address);
 }

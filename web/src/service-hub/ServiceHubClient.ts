@@ -3,6 +3,7 @@ export const SERVICE_HUB_SUBPROTOCOL = 'dispatcher.service-hub.v1';
 const webSocketConnectingState = 0;
 const webSocketOpenState = 1;
 const serviceNamePattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const sessionTokenPattern = /^[0-9a-f]{64}$/;
 
 export type ServiceHubConnectionState =
   | 'disconnected'
@@ -16,8 +17,14 @@ export interface ServiceHubErrorPayload {
   details?: unknown;
 }
 
+export interface ServiceHubSessionAuthentication {
+  type: 'session';
+  token: string;
+}
+
 export interface ServiceHubRequestOptions {
   timeoutMs?: number;
+  auth?: ServiceHubSessionAuthentication;
 }
 
 export interface ServiceHubRequestHandle<TResponse = unknown> {
@@ -305,6 +312,7 @@ export class ServiceHubClient {
     validateServiceName('service', service);
     validateServiceName('operation', operation);
     validateTimeout(options.timeoutMs);
+    validateAuthentication(options.auth);
 
     const id = this.createRequestId();
     const message: Record<string, unknown> = {
@@ -317,6 +325,13 @@ export class ServiceHubClient {
 
     if (options.timeoutMs !== undefined) {
       message.timeout_ms = options.timeoutMs;
+    }
+
+    if (options.auth !== undefined) {
+      message.auth = {
+        type: 'session',
+        token: options.auth.token,
+      };
     }
 
     let serialized: string;
@@ -537,6 +552,20 @@ function validateServiceName(label: string, value: string): void {
   if (!serviceNamePattern.test(value)) {
     throw new TypeError(
       `${label} must match the Service Hub v1 name pattern and be 1..128 characters`,
+    );
+  }
+}
+
+function validateAuthentication(
+  authentication: ServiceHubSessionAuthentication | undefined,
+): void {
+  if (authentication === undefined) {
+    return;
+  }
+
+  if (authentication.type !== 'session' || !sessionTokenPattern.test(authentication.token)) {
+    throw new TypeError(
+      'Service Hub session authentication requires a 64-character lowercase hexadecimal token',
     );
   }
 }

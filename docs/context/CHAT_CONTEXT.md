@@ -203,7 +203,13 @@ Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`
 
 Step 2 зафиксировал локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record.
 
-Текущий шаг — `CORE-005 / Step 3 — Authentication/session contract`. Service address фиксируется как `users-access.v1`; session — opaque 256-bit bearer token с server-side state, 30-minute idle timeout и 12-hour absolute lifetime. SQLite schema v2 хранит только SHA-256 token digest и durable session metadata. Step 3 публикует language-independent contract/schema и реализует session engine/tests, но ещё не меняет Service Hub envelope и не добавляет Web login; это Step 4+.
+`CORE-005 / Step 3` завершён commit:
+
+`02a2d86e730a6c73ee0c33250bb9d4dc14791681`
+
+Step 3 зафиксировал `users-access.v1`, opaque 256-bit server-side session, 30-minute idle / 12-hour absolute lifetime, SQLite schema v2 с token digest и language-independent auth/session contract.
+
+Текущий шаг — `CORE-005 / Step 4 — Authenticated Service Hub request boundary`. Service Hub v1 получает optional transport `auth: {type: "session", token}` отдельно от business payload, сохраняет correlation/cancel/timeout semantics и не вычисляет user/permissions. Production `users-access.v1` provider authoritative валидирует session для protected session-core operations. Project Manager authorization и Web user context остаются Step 5–6.
 
 ## Рабочий процесс
 

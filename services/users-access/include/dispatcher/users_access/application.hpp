@@ -1,5 +1,7 @@
 #pragma once
 
+#include "dispatcher/users_access/users_access_service_provider.hpp"
+
 #include <iosfwd>
 #include <string_view>
 
@@ -11,7 +13,11 @@ public:
         return "users-access";
     }
 
-    int run(std::ostream& output, std::string_view database_path) const;
+    int run(
+        std::ostream& output,
+        UsersAccessServiceProvider& provider,
+        std::string_view database_path,
+        std::string_view service_hub_address) const;
 };
 
 }  // namespace dispatcher::users_access

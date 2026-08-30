@@ -448,6 +448,8 @@ Step 1 зафиксировал отдельный C++ Users & Access skeleton, 
 
 `CORE-005 / Step 2` завершён commit `3b140d808638bb0c14a70b2aa1df96eb377af197`: локальный SQLite storage Users & Access, OpenSSL scrypt verifier без plaintext, explicit first-admin bootstrap, durable enabled state/security audit baseline и restart/reopen tests.
 
-Текущий шаг — `Step 3 — Authentication/session contract`: фиксируется `users-access.v1`, opaque server-side session token, durable session lifecycle, machine-readable payload schema и authentication/session tests. Service Hub authenticated envelope, Project Manager enforcement и Web остаются следующими шагами.
+`CORE-005 / Step 3` завершён commit `02a2d86e730a6c73ee0c33250bb9d4dc14791681`: зафиксированы `users-access.v1`, opaque server-side session, durable session lifecycle, machine-readable payload schema и authentication/session tests.
+
+Текущий шаг — `Step 4 — Authenticated Service Hub request boundary`: optional session `auth` переносится в существующем Service Hub v1 отдельно от business payload, browser client получает per-request auth option, а production Users & Access provider валидирует protected session-core operations. Project Manager enforcement и Web user context остаются следующими шагами.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

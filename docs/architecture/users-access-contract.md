@@ -23,17 +23,26 @@ Machine-readable payload definitions:
 
 Контракт является language-independent. C++ типы Users & Access являются реализацией сервиса, а не межсервисным API.
 
-## Граница Step 3 / Step 4
+## Service Hub transport binding
 
-Step 3 **не изменяет Service Hub v1 envelope** и ещё не регистрирует production Users & Access provider.
+Step 3 зафиксировал предметные operations/session semantics. `CORE-005 / Step 4` подключает их к существующему Service Hub v1 без второго transport и без изменения endpoint/subprotocol.
 
-Он фиксирует предметные operations и реализует session/application storage semantics. В Step 4 существующий Service Hub получит согласованный authenticated request context, после чего `users-access.v1` будет подключён к transport boundary.
+Client может добавить к обычному Service Hub request transport field:
 
-Только `login` является публичной operation.
+```json
+"auth": {
+  "type": "session",
+  "token": "64-lowercase-hex-characters"
+}
+```
 
-Остальные operations требуют authenticated request context. Session token не должен дублироваться внутри их business payload. Точный способ передачи bearer token через Service Hub определяется Step 4 и не является частью этого payload-контракта.
+Только `login` является публичной `users-access.v1` operation и отправляется без `auth`. Для `logout`, `current-session`, `evaluate-access` и последующих protected operations bearer приходит в forwarded Service Hub request **отдельно от business payload**. Production Users & Access provider перед выполнением protected operation authoritative валидирует token через `AuthenticationSessionService`.
 
-Project Manager и другие providers не должны принимать `user_id`, roles или permissions из собственного business payload как доказательство идентичности.
+Service Hub проверяет transport shape token, но не вычисляет user identity/permissions и не является authorization engine. Наличие syntactically valid `auth` не означает, что session действительна. Invalid/revoked/disabled session отвергается Users & Access provider.
+
+Project Manager и другие providers не должны принимать `user_id`, roles или permissions из собственного business payload как доказательство идентичности. Step 5 применит эту boundary к реальному Project Manager authorization.
+
+Raw bearer token не должен попадать в diagnostics/audit и не хранится Service Hub как durable state. Browser-side storage/lifecycle token остаётся Step 6.
 
 ## User
 
@@ -399,7 +408,7 @@ Service-specific codes v1:
 
 `hub.*` остаётся зарезервированным за Service Hub и не переименовывается.
 
-Disabled user при `login` получает `auth.invalid_credentials`. При использовании ранее выданной session authenticated boundary считает её недействительной; Step 4 фиксирует точное transport mapping так, чтобы disabled state не становился способом подделать identity.
+Disabled user при `login` получает `auth.invalid_credentials`. При использовании ранее выданной session production Users & Access provider возвращает `auth.invalid_session`; expired session возвращает `auth.session_expired`. Service Hub не подменяет эти provider-specific errors.
 
 ## Security audit
 
@@ -425,6 +434,8 @@ Control mode **не добавляется в session schema Step 3**.
 
 `users-access.v1` фиксирует предметные operation names и payload shapes.
 
-Step 4 может совместимо расширить Service Hub transport envelope authenticated context, но не должен переносить user identity в business payload Users & Access/Project Manager.
+Step 4 совместимо расширяет Service Hub v1 request optional `auth` context и не переносит user identity в business payload Users & Access/Project Manager.
+
+На Step 4 production provider реализует transport path для session-core operations `login`, `logout`, `current-session`, `evaluate-access`. Administration operation names/payloads выше уже зарезервированы v1 contract, но их production application implementation остаётся Step 6; до этого они не считаются готовым административным API.
 
 Несовместимое изменение Users & Access payload semantics требует нового service version, а не скрытого изменения v1.

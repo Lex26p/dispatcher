@@ -165,6 +165,45 @@ describe('ServiceHubClient', () => {
     await expect(first.response).resolves.toEqual({ order: 1 });
   });
 
+
+  it('adds validated session authentication without changing the business payload', async () => {
+    const { client, socket } = await connectedClient();
+    const token = 'a'.repeat(64);
+
+    const request = client.request(
+      'users-access.v1',
+      'current-session',
+      {},
+      {
+        auth: {
+          type: 'session',
+          token,
+        },
+      },
+    );
+
+    expect(JSON.parse(socket.sent[0] ?? '')).toEqual({
+      type: 'request',
+      id: request.id,
+      service: 'users-access.v1',
+      operation: 'current-session',
+      payload: {},
+      auth: {
+        type: 'session',
+        token,
+      },
+    });
+
+    expect(() =>
+      client.request('users-access.v1', 'current-session', {}, {
+        auth: {
+          type: 'session',
+          token: 'not-a-session-token',
+        },
+      }),
+    ).toThrow(TypeError);
+  });
+
   it('distinguishes Hub request errors from transport failures', async () => {
     const { client, socket } = await connectedClient();
     const request = client.request('missing.service', 'read', null);

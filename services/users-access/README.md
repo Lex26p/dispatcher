@@ -8,9 +8,9 @@ Users & Access is the core backend responsibility for stable user identity, acce
 
 `CORE-005 / Step 2` established durable local users/access persistence, password-verifier storage and explicit first-administrator bootstrap.
 
-`CORE-005 / Step 3` establishes the versioned `users-access.v1` authentication/session contract and server-side session engine.
+`CORE-005 / Step 3` established the versioned `users-access.v1` authentication/session contract and server-side session engine.
 
-There is still no authenticated Service Hub envelope/provider binding or Web login. Transport propagation begins at Step 4.
+`CORE-005 / Step 4` binds the session credential to the existing Service Hub v1 request path and adds the production `users-access.v1` provider. Web login/session state remains Step 6.
 
 ## Domain model
 
@@ -101,7 +101,7 @@ The external service address is:
 Payload contract: `docs/architecture/users-access-contract.md`.
 Machine-readable definitions: `services/users-access/protocol/dispatcher/users_access/v1/users_access.schema.json`.
 
-Step 3 intentionally does not place the session token inside protected operation payloads. `login` is public; protected operations rely on the authenticated request context that Step 4 will add to the existing Service Hub boundary. Browser token storage is not selected yet.
+The session token is never placed inside protected business payloads. `login` is public. Protected requests carry a separate Service Hub `auth` context; the Users & Access provider authoritative validates that token before session/access operations. Browser token storage is not selected yet.
 
 ## Secure first-administrator bootstrap
 
@@ -125,37 +125,40 @@ Bootstrap rules:
 - all bootstrap writes happen in one SQLite transaction;
 - a second bootstrap is rejected.
 
-Step 2 does not yet expose password login, reset/change-password, sessions or remote administration. Those belong to the Step 3 external contract and later Web work.
+Bootstrap remains separate from remote authentication. Step 4 exposes real login/session/access-evaluation transport; administrative operation shapes are reserved by the v1 contract but their production application implementation remains Step 6.
 
 ## Lifecycle
 
 Normal service startup:
 
-    dispatcher-users-access [database-path]
+    dispatcher-users-access [database-path] [service-hub-address]
 
-Default:
+Defaults:
 
-    database-path  dispatcher-users-access.db
+    database-path       dispatcher-users-access.db
+    service-hub-address 127.0.0.1:50052
 
-On normal startup the executable opens/initializes SQLite before entering the SIGINT/SIGTERM lifecycle. Storage initialization failure prevents the service from starting.
+On normal startup the executable opens/initializes SQLite and the authentication/session engine, then starts a reconnecting `users-access.v1` provider on the existing Service Hub boundary before entering the SIGINT/SIGTERM lifecycle. Storage/session initialization failure prevents startup. Provider connection loss does not destroy SQLite/session state; the provider retries and re-registers.
 
-No authenticated Service Hub provider binding exists yet. Step 4 owns transport integration.
+Step 4 production provider implements the session-core operations `login`, `logout`, `current-session` and `evaluate-access`. The administration operations already named by the v1 contract are intentionally staged for Step 6 and are not yet considered implemented.
 
 ## Dependencies
 
-Ubuntu/WSL development dependencies added by Step 2:
+Ubuntu/WSL development dependencies:
 
     libsqlite3-dev
     libssl-dev
+    libboost-dev
+    libjson-c-dev
 
-OpenSSL provides the established scrypt implementation and secure random salt generation. No standalone SQLite server is required.
+OpenSSL provides scrypt and session-token cryptographic primitives. Boost.Beast + json-c provide the same Service Hub WebSocket/JSON provider boundary used by existing backend services. No standalone SQLite server is required.
 
 ## Build and test in WSL
 
 From the repository root:
 
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests dispatcher_users_access_session_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests dispatcher_users_access_session_tests dispatcher_users_access_service_hub_test_client
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
 
 Current CTest checks:
@@ -165,6 +168,7 @@ Current CTest checks:
 - `users-access.bootstrap-cli`;
 - `users-access.authentication-and-session`;
 - `users-access.signal-term`;
-- `users-access.signal-int`.
+- `users-access.signal-int`;
+- `users-access.service-hub-integration` when the root Service Hub target is available.
 
 The tests use temporary database paths and do not write credential databases into the repository.

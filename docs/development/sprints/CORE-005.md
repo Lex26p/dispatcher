@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 2 завершён; текущий шаг — Step 3.**
+**В разработке. Step 3 завершён; текущий шаг — Step 4.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий шаг — `Step 3 — Authentication/session contract`.
+Текущий шаг — `Step 4 — Authenticated Service Hub request boundary`.
 
 ## Цель
 
@@ -498,6 +498,10 @@ Step 3 реализует `AuthenticationSessionService`, OpenSSL session-token 
 
 Control mode в session schema Step 3 не добавляется: его реальная representation остаётся Step 7, после проверки authenticated Service Hub/Web boundary. Browser token storage также не выбирается до соответствующего Web/security шага.
 
+Step 3 завершён commit:
+
+`02a2d86e730a6c73ee0c33250bb9d4dc14791681`
+
 ## Step 4 — Authenticated Service Hub request boundary
 
 ### Что делаем
@@ -526,6 +530,20 @@ Control mode в session schema Step 3 не добавляется: его реа
 ### Результат
 
 Browser и backend имеют единый authenticated Service Hub request path без второго transport.
+
+### Решение и реализация Step 4
+
+Service Hub v1 расширяется совместимо optional request field `auth`; endpoint `/v1/ws`, subprotocol `dispatcher.service-hub.v1`, request IDs, correlation, cancellation и timeout semantics не меняются. Текущий transport auth shape — `{ "type": "session", "token": "<64 lowercase hex>" }`. Malformed auth возвращает `hub.invalid_request`.
+
+Hub проверяет только transport shape и переносит auth provider отдельно от business `payload`. Он не декодирует token, не создаёт trusted `user_id`/roles/permissions и не принимает authorization decisions. Наличие syntactically valid auth не является доказательством действующей session: protected provider обязан выполнить authoritative validation через Users & Access security boundary.
+
+Browser `ServiceHubClient.request()` получает optional per-request `auth` без выбора global/persistent browser token storage. Public `users-access.v1/login` отправляется без auth.
+
+Users & Access получает production reconnecting Service Hub provider `users-access.v1`. На Step 4 реально подключены session-core operations `login`, `logout`, `current-session`, `evaluate-access`; protected operations валидируют forwarded bearer через `AuthenticationSessionService`, а `user_id` внутри business payload не может аутентифицировать caller. Contract-defined administration operations остаются зарезервированы для Step 6 и на Step 4 не считаются production-ready admin API.
+
+Real interprocess test поднимает Service Hub + Users & Access на temporary SQLite, bootstrap первого admin через stdin и проверяет public login, authenticated current-session/evaluate, forged subject без auth, malformed auth, logout/revocation и clean shutdown без secret leakage. Existing Service Hub request/response test дополнительно подтверждает auth forwarding при сохранении parallel correlation.
+
+Project Manager authorization policy не меняется на Step 4; он будет использовать эту boundary на Step 5.
 
 ## Step 5 — Project Manager authorization enforcement
 
