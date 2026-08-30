@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 3 завершён; текущий шаг — Step 4.**
+**В разработке. Step 4 завершён; текущий шаг — Step 5.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий шаг — `Step 4 — Authenticated Service Hub request boundary`.
+Текущий шаг — `Step 5 — Project Manager authorization enforcement`.
 
 ## Цель
 
@@ -544,6 +544,10 @@ Users & Access получает production reconnecting Service Hub provider `us
 Real interprocess test поднимает Service Hub + Users & Access на temporary SQLite, bootstrap первого admin через stdin и проверяет public login, authenticated current-session/evaluate, forged subject без auth, malformed auth, logout/revocation и clean shutdown без secret leakage. Existing Service Hub request/response test дополнительно подтверждает auth forwarding при сохранении parallel correlation.
 
 Project Manager authorization policy не меняется на Step 4; он будет использовать эту boundary на Step 5.
+
+Step 4 завершён commit:
+
+`eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`
 
 ## Step 5 — Project Manager authorization enforcement
 

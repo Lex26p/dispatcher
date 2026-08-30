@@ -14,9 +14,9 @@
 
 `CORE-003 — Web Shell` завершён: существует самостоятельный React + TypeScript Web Shell с компактным global Header, глобальной навигацией, рабочей областью, общим browser-side Service Hub client/React connection boundary и реальной browser → Service Hub → test provider интеграционной проверкой.
 
-`CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery. Authentication/authorization по-прежнему относится к `CORE-005 — Users & Access`.
+`CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery.
 
-`CORE-005 — Users & Access` — текущий планируемый спринт. План находится в `docs/development/sprints/CORE-005.md`; реализация начинается только после отдельного plan commit и проверки его SHA на baseline `29b1f0ea750633cc53cc4e023585835d2b06ad8b`.
+`CORE-005 — Users & Access` находится в разработке. Steps 1–4 завершены: существуют stable user/access domain, локальный durable SQLite storage, OpenSSL scrypt credential baseline, opaque server-side sessions, versioned `users-access.v1` contract и authenticated Service Hub request path с optional session `auth` отдельно от business payload. Текущий шаг — `Step 5 — Project Manager authorization enforcement`.
 
 ## Документация
 
@@ -30,6 +30,8 @@
 
 Контракт Project Manager: [`docs/architecture/project-manager-contract.md`](docs/architecture/project-manager-contract.md).
 
+Контракт Users & Access: [`docs/architecture/users-access-contract.md`](docs/architecture/users-access-contract.md).
+
 Дорожная карта: [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md).
 
 Итог `CORE-001`: [`docs/development/sprints/CORE-001.md`](docs/development/sprints/CORE-001.md).
@@ -40,6 +42,6 @@
 
 Итог `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
 
-План `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
+Текущий спринт `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).

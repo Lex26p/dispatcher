@@ -8,6 +8,10 @@
 
 В документы не следует записывать неподтверждённые решения как факт.
 
+Документация ведётся вместе с разработкой. Если конкретный шаг меняет уже документированные факты, контракт, выбранную технологию, команды, статус или важную границу, соответствующий документ обновляется в этом же шаге. Финальный documentation audit в конце спринта проверяет целостность и рассинхронизацию между документами, но не заменяет документирование решений по мере их принятия.
+
+Обязательные правила рабочего процесса AI-агента находятся в корневом [`AGENTS.md`](../AGENTS.md).
+
 ## Структура
 
 ### `docs/concept/`
@@ -39,24 +43,26 @@
 
 - [`README.md`](architecture/README.md) — архитектурный baseline: микросервисы, Hub-модель, границы основных сервисов, модель метрик и выбранные языки/инструменты.
 - [`data-hub-contract.md`](architecture/data-hub-contract.md) — внешний gRPC + Protocol Buffers контракт Data Hub и его runtime-семантика.
-- [`service-hub-contract.md`](architecture/service-hub-contract.md) — внешний WebSocket + JSON контракт Service Hub, provider registration и request/response semantics.
+- [`service-hub-contract.md`](architecture/service-hub-contract.md) — внешний WebSocket + JSON контракт Service Hub, provider registration, request/response и authenticated request transport semantics.
 - [`project-manager-contract.md`](architecture/project-manager-contract.md) — versioned Project Manager v1 operations/payload/errors поверх Service Hub.
 - [`users-access-contract.md`](architecture/users-access-contract.md) — versioned Users & Access v1 authentication/session/access payload contract и session semantics.
 
-Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Users & Access использует локальный SQLite storage и versioned `users-access.v1` payload contract; `CORE-005 / Step 4` добавляет optional session-auth context в существующий Service Hub v1 и production `users-access.v1` provider без второго transport. Service-local SQLite не является выбором общей БД платформы. Event Hub, общая persistence-стратегия других сервисов и deployment выбираются в соответствующих будущих спринтах.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub transport/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Users & Access использует локальный SQLite storage и versioned `users-access.v1` payload contract. `CORE-005 / Step 4` добавил optional session-auth context в существующий Service Hub v1 и production `users-access.v1` provider без второго transport. Service-local SQLite не является выбором общей БД платформы. Event Hub, persistence-стратегия будущих сервисов и deployment выбираются в соответствующих будущих спринтах.
 
 ### `docs/development/`
 
-Рабочий план разработки и отчёты по завершённым спринтам.
+Рабочий план разработки и отчёты по спринтам.
+
+Roadmap использует три уровня: этап → спринт → шаг. Этапы задают долгосрочное направление; спринты конкретного этапа определяются перед началом этапа; перед реализацией каждого нового спринта его план сначала раскладывается на локальные шаги и фиксируется в sprint-файле. Для текущего `L1-01` спринты уже определены.
 
 - [`ROADMAP.md`](development/ROADMAP.md) — этапы, спринты и текущая точка разработки.
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
-- [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план текущего спринта Users & Access.
+- [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план и живой отчёт текущего спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Step 3 authentication/session contract завершён, текущий шаг — authenticated Service Hub request boundary.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–4 завершены, текущий шаг — `Step 5 — Project Manager authorization enforcement`.
 
 ### `docs/context/`
 

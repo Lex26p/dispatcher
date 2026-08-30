@@ -4,7 +4,7 @@
 
 Этот файл быстро восстанавливает контекст проекта «Диспетчер».
 
-Репозиторий `Lex26p/dispatcher` является источником истины. Сначала следует читать `docs/README.md`, затем нужные concept-файлы и `docs/architecture/README.md`.
+Репозиторий `Lex26p/dispatcher` является источником истины. Перед разработкой обязательно прочитать корневой `AGENTS.md`. Для продуктового/архитектурного контекста сначала следует читать `docs/README.md`, затем нужные concept-файлы, `docs/architecture/README.md`, roadmap и файл текущего спринта.
 
 ## Продукт
 
@@ -87,7 +87,7 @@ Realtime-значения находятся в Data Hub.
 Отдельный Hub для событий и аварий. Не смешивается с Data Hub.
 
 ### Service Hub
-- реализован и завершён в `CORE-002`;
+- реализован и завершён как базовый сервис в `CORE-002`;
 - внешний transport v1: WebSocket;
 - serialization: UTF-8 JSON;
 - endpoint path: `/v1/ws`;
@@ -97,7 +97,9 @@ Realtime-значения находятся в Data Hub.
 - Hub выполняет correlation, timeout/cancel и возвращает response;
 - generic payload остаётся непрозрачным JSON;
 - тот же client protocol напрямую пригоден browser Web Shell;
-- authentication/authorization в CORE-002 не реализуются.
+- `CORE-005 / Step 4` добавил optional transport `auth: {type: "session", token}` отдельно от business payload;
+- Hub проверяет только форму session auth, не декодирует token и не создаёт trusted user/permissions;
+- authoritative session/access validation принадлежит Users & Access и защищённым providers.
 
 Подробный контракт: `docs/architecture/service-hub-contract.md`.
 
@@ -109,10 +111,24 @@ Realtime-значения находятся в Data Hub.
 - операции — `create-project`, `list-projects`, `get-project`, `update-project`;
 - Service Hub envelope не содержит project-specific field;
 - Web Shell имеет `/projects`, list/create/edit UI и общий project context с явным global mode;
-- project context сохраняется только в browser `sessionStorage`, проверяется через `get-project` и не является user preference до CORE-005;
-- реальная browser integration подтверждает durable restart/re-registration path.
+- project context сохраняется только в browser `sessionStorage`, проверяется через `get-project` и не является доказательством доступа;
+- реальная browser integration подтверждает durable restart/re-registration path;
+- текущий `CORE-005 / Step 5` должен добавить server-side authorization поверх существующей Project Manager boundary без `user_id`/permissions в Project v1 payload.
 
 Подробный контракт: `docs/architecture/project-manager-contract.md`.
+
+### Users & Access
+- `CORE-005 / Step 1` создал отдельную domain/application boundary со stable user identity, permission sets и global/project assignments;
+- capabilities `view`, `control`, `edit`, `admin` независимы и не имеют скрытой иерархии;
+- `CORE-005 / Step 2` выбрал локальный SQLite storage только для Users & Access и OpenSSL scrypt credential verifier без plaintext;
+- secure first-admin bootstrap выполняется явно и читает password через stdin;
+- `CORE-005 / Step 3` зафиксировал `users-access.v1`, opaque server-side session, 30-minute idle / 12-hour absolute lifetime и SQLite schema v2 с SHA-256 token digest;
+- `CORE-005 / Step 4` подключил production `users-access.v1` provider через существующий Service Hub;
+- public `login`; protected session-core operations `logout`, `current-session`, `evaluate-access`;
+- protected operation получает bearer только из Service Hub transport auth context, а не из business payload;
+- local security audit не содержит password/raw bearer token.
+
+Подробный контракт: `docs/architecture/users-access-contract.md`.
 
 ### Независимость
 Сервис не должен знать других потребителей своих данных без необходимости. Плагины работают через общие контракты.
@@ -133,7 +149,7 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 
 ## Пока не выбрано
 
-Для Data Hub и Service Hub transport/serialization уже выбраны. Project Manager использует локальный SQLite schema v1; это не определяет общую persistence-технологию платформы.
+Для Data Hub и Service Hub transport/serialization уже выбраны. Project Manager использует локальный SQLite schema v1; Users & Access — локальный SQLite schema v2. Это не определяет общую persistence-технологию платформы.
 
 Пока не утверждены:
 
@@ -141,9 +157,10 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 - общая persistence-стратегия будущих сервисов и истории;
 - deployment;
 - внешний Driver Runtime API и межпроцессный путь write-provider;
-- механизм восстановления runtime state;
+- механизм восстановления runtime state Data Hub;
 - точный state enum;
-- exact authentication/session representation для CORE-005 до contract step;
+- browser-side session token storage/restoration до `CORE-005 / Step 6`;
+- exact control-mode representation/expiration policy до `CORE-005 / Step 7`;
 - production TLS/origin policy Service Hub;
 - frontend state manager и UI-библиотеки.
 
@@ -189,35 +206,38 @@ Plan commit проверен:
 
 CORE-005 должен дать stable user identity, durable users/access configuration, local authentication/session boundary, согласованный authenticated Service Hub request path, backend-authoritative Project Manager access, Web login/current-user/access administration и control-mode baseline. Первый sprint реально применяет global + project scope; Device/Dashboard-specific ACL, external IdP/MFA и Event Hub audit publication не имитируются.
 
-Exact credential hashing dependency, session/token representation и Service Hub auth representation выбираются только на соответствующих шагах плана.
+Функциональные commits CORE-005 на текущий момент:
 
-`CORE-005 / Step 1` завершён commit:
-
-`e8b42e69fecf7079f7b18f5f86fe334308d2579c`
+- Step 1 — `e8b42e69fecf7079f7b18f5f86fe334308d2579c`;
+- Step 2 — `3b140d808638bb0c14a70b2aa1df96eb377af197`;
+- Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
+- Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
-`CORE-005 / Step 2` завершён commit:
-
-`3b140d808638bb0c14a70b2aa1df96eb377af197`
-
 Step 2 зафиксировал локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record.
-
-`CORE-005 / Step 3` завершён commit:
-
-`02a2d86e730a6c73ee0c33250bb9d4dc14791681`
 
 Step 3 зафиксировал `users-access.v1`, opaque 256-bit server-side session, 30-minute idle / 12-hour absolute lifetime, SQLite schema v2 с token digest и language-independent auth/session contract.
 
-Текущий шаг — `CORE-005 / Step 4 — Authenticated Service Hub request boundary`. Service Hub v1 получает optional transport `auth: {type: "session", token}` отдельно от business payload, сохраняет correlation/cancel/timeout semantics и не вычисляет user/permissions. Production `users-access.v1` provider authoritative валидирует session для protected session-core operations. Project Manager authorization и Web user context остаются Step 5–6.
+Step 4 совместимо добавил optional Service Hub v1 transport `auth: {type: "session", token}` отдельно от business payload, per-request auth option в browser `ServiceHubClient` и production `users-access.v1` provider с authoritative validation `logout`/`current-session`/`evaluate-access`. `login` остаётся public. Project Manager policy на Step 4 не менялась.
+
+**Текущий шаг — `CORE-005 / Step 5 — Project Manager authorization enforcement`.**
+
+На Step 5 нужно защитить реальный Project Manager через уже созданную boundary: unauthenticated deny, filtered `list-projects`, allowed/denied `get-project`, global capability для create, project-scoped capability для update, disabled/expired/revoked behavior, Users & Access unavailable => fail closed и reconnect regression. Project v1 business payload не получает `user_id`, roles, permissions или auth token.
 
 ## Рабочий процесс
+
+Планирование имеет три уровня: этап → спринт → шаг. Этапы предварительно задают направление. Спринты конкретного этапа агент расписывает перед началом этого этапа; спринты текущего `L1-01` уже зафиксированы. Перед началом каждого нового спринта агент обязан сначала расписать локальные шаги в sprint-файле, чтобы реализация двигалась по заранее определённой последовательности и не раздувала scope.
+
+Roadmap можно корректировать, но это исключение. Локальную техническую необходимость сначала следует решать изменением/разделением шагов текущего спринта; изменение этапов или уже согласованных спринтов требует объективной причины и явной фиксации.
 
 Изменения ChatGPT отдаёт архивом с готовыми файлами проекта. Пользователь распаковывает его поверх `C:\Projects\dispatcher`, выполняет необходимые проверки, коммитит и отправляет SHA. Новый SHA становится базовой точкой истины.
 
 Web frontend проверяется нативно в Windows/PowerShell через `npm.cmd` / `npx.cmd` на зафиксированном Node.js/npm toolchain. C++ backend собирается и тестируется в Linux/WSL.
 
-В конце каждого спринта обязательна целевая проверка актуальности связанной документации. Устаревшие статусы, архитектурные решения, команды, roadmap/current point и README должны быть синхронизированы до перехода к следующему спринту.
+Документация обновляется по ходу каждого шага, если шаг изменил уже документированный факт, контракт, технологическое решение, статус, команды или важное ограничение. Не следует откладывать такие решения до конца спринта и затем восстанавливать их по чату.
+
+В конце каждого спринта дополнительно обязательна целевая проверка актуальности связанной документации. Финальный audit является проверкой целостности и пропущенной рассинхронизации, а не первой попыткой описать уже завершённый спринт.
 
 В пользовательском Git-workflow не используются команды `git diff`.
 

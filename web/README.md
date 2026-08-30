@@ -16,7 +16,7 @@
 
 `CORE-003 / Step 6` established the real browser/backend integration path against the existing C++ Service Hub and an automation-only test provider.
 
-`CORE-003 — Web Shell` is complete. `CORE-004 — Project Manager` now uses that frontend foundation.
+`CORE-003 — Web Shell` is complete. `CORE-004 — Project Manager` uses that frontend foundation.
 
 `CORE-004 / Step 4` established the first real service UI: the `/projects` destination, typed Project Manager client adapter, project list and create/edit form.
 
@@ -24,9 +24,13 @@
 
 `CORE-004 / Step 6` established a separate real Project Manager browser integration path with durable restart recovery.
 
-`CORE-004 — Project Manager` is complete. The next planned sprint is `CORE-005 — Users & Access`; its implementation starts only after a separate sprint plan is committed and verified.
+`CORE-004 — Project Manager` is complete.
 
-Notifications, messages, user actions, authentication, Dashboard and later service screens are not implemented yet.
+`CORE-005 — Users & Access` is in progress. Steps 1–4 are complete. Step 4 extended the existing Service Hub v1 request path with optional per-request session auth and updated the browser `ServiceHubClient` to carry that transport context without adding a second WebSocket or choosing persistent browser token storage.
+
+The current sprint step is `CORE-005 / Step 5 — Project Manager authorization enforcement`. Web login/current-user/session restoration and Users & Access administration remain Step 6.
+
+Notifications, messages, Dashboard and later service screens are not implemented yet. A reusable transport path for authentication now exists, but the Web Shell does not yet own a logged-in user session or login/logout UI.
 
 ## Toolchain baseline
 
@@ -111,6 +115,8 @@ It does not open another WebSocket and it validates successful response payload 
 
 `src/project-manager/ProjectManagerView.tsx` implements the current list/editor UI. It provides loading, empty and local error states, creation and editing of `name`/`description`, and keeps the rest of Web Shell usable if Service Hub or Project Manager is unavailable.
 
+Project Manager authorization is not implemented in the current Web view yet. `CORE-005 / Step 5` adds backend enforcement first; Web user/session UX follows in Step 6.
+
 ## Project context
 
 `src/project-context/ProjectContextProvider.tsx` provides the shared frontend project context. The value is either a real Project v1 snapshot (`id`, `name`, `description`) or `null` for explicit global mode.
@@ -126,7 +132,7 @@ The context:
 - can be selected from real Project Manager list data in `/projects`;
 - updates its display snapshot if the selected project is renamed in the editor.
 
-No project field is added to the Service Hub envelope, and no user-specific saved preference is introduced before `CORE-005`.
+No project field is added to the Service Hub envelope. The current `sessionStorage` project snapshot is frontend navigation context, not proof of access. `CORE-005 / Step 6` must reconcile this context with the authenticated user/session lifecycle.
 
 ## Service Hub client
 
@@ -140,9 +146,33 @@ The client:
 - supports parallel request/response correlation;
 - returns a request handle with `id`, `response` Promise and `cancel()`;
 - distinguishes `ServiceHubRequestError`, `ServiceHubTransportError` and connection-level `ServiceHubProtocolError`;
-- does not implement authentication, automatic reconnect or an application heartbeat.
+- supports optional per-request Service Hub `auth` context for the session credential shape established in `CORE-005 / Step 4`;
+- does not own persistent browser session-token storage, logged-in user state, automatic reconnect or an application heartbeat.
 
 React integration is provided by `src/service-hub/ServiceHubProvider.tsx`. `useServiceHub()` exposes the shared client and current connection state to future Web screens.
+
+## Authenticated request transport
+
+`CORE-005 / Step 4` keeps authentication on the same Service Hub WebSocket boundary.
+
+A request may include an optional transport context equivalent to:
+
+    {
+      type: "session",
+      token: "64-lowercase-hex-characters"
+    }
+
+The browser client accepts this context per request and places it in the Service Hub `auth` field separately from business `payload`.
+
+Important boundaries:
+
+- public `users-access.v1/login` is sent without auth;
+- the client does not convert a token into `user_id`, roles or permissions;
+- the presence of syntactically valid auth does not prove that the session is valid;
+- authoritative validation belongs to Users & Access / protected backend providers;
+- persistent browser token storage, restoration and shared authenticated user context are intentionally deferred to `CORE-005 / Step 6`.
+
+This keeps Step 4 as transport plumbing rather than prematurely implementing Web login/session ownership.
 
 ## Service Hub URL configuration
 
@@ -154,7 +184,6 @@ The shared client uses `VITE_SERVICE_HUB_URL` when it is set. Example for local 
 When `VITE_SERVICE_HUB_URL` is not set, Web Shell derives the URL from the page origin and uses `/v1/ws`, choosing `ws://` for HTTP pages and `wss://` for HTTPS pages.
 
 Web Shell does not implement automatic reconnect. A failed or closed connection returns the shared client to its disconnected state while the React application stays usable; reconnect is explicit.
-
 
 ## Real Service Hub browser integration
 
@@ -205,3 +234,4 @@ The command is intended for the Windows + WSL workflow. It:
 
 This runner does not introduce a test provider for Project Manager: the provider is the production C++ `dispatcher-project-manager` process.
 
+The existing Project Manager browser integration still reflects the unauthenticated `CORE-004` baseline. `CORE-005 / Step 5` must update the backend authorization path and its relevant integration coverage before Web login/session UX is added in Step 6.

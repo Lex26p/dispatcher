@@ -4,7 +4,7 @@
 
 Этот файл фиксирует **первый согласованный архитектурный baseline** проекта.
 
-Он описывает общую модель backend, взаимодействие сервисов, runtime-модель метрик и уже подтверждённые технические решения. Документ намеренно не является детальным ТЗ: технологии фиксируются только тогда, когда они реально выбраны в соответствующем спринте. Поэтому часть решений уже конкретизирована для Data Hub и Service Hub, а Event Hub, БД, deployment и другие будущие механизмы пока остаются открытыми.
+Он описывает общую модель backend, взаимодействие сервисов, runtime-модель метрик и уже подтверждённые технические решения. Документ намеренно не является детальным ТЗ: технологии фиксируются только тогда, когда они реально выбраны в соответствующем спринте. Решения уже конкретизированы для Data Hub, Service Hub, Project Manager и текущей Users & Access boundary, а Event Hub, общая persistence-стратегия будущих сервисов, deployment и другие будущие механизмы остаются открытыми до соответствующих спринтов.
 
 ## Общий подход
 
@@ -28,6 +28,8 @@ Hub — архитектурная роль, а не заранее выбран
 flowchart LR
     WEB[Web UI<br/>React + TypeScript] --> SH[Service Hub]
 
+    PM[Project Manager] <--> SH
+    UA[Users & Access] <--> SH
     DM[Device Manager] <--> SH
     SVC[Сервисы и плагины] <--> SH
 
@@ -165,7 +167,7 @@ Service Hub используется там, где сервисам требу�
 
 В `CORE-002` для Service Hub зафиксированы и подтверждены реализацией:
 
-- WebSocket как единый двусторонний транспорт для backend-клиентов, providers и будущего Web Shell;
+- WebSocket как единый двусторонний транспорт для backend-клиентов, providers и Web Shell;
 - UTF-8 JSON как формат сообщений;
 - versioned WebSocket endpoint `/v1/ws`;
 - WebSocket subprotocol `dispatcher.service-hub.v1`;
@@ -181,6 +183,19 @@ Service Hub используется там, где сервисам требу�
 - прямая browser-compatible WebSocket boundary без обязательного отдельного gateway;
 - самостоятельный Linux lifecycle с SIGINT/SIGTERM.
 
+`CORE-005 / Step 4` совместимо расширил существующий Service Hub v1 request необязательным transport-level authentication context:
+
+```json
+{
+  "auth": {
+    "type": "session",
+    "token": "64-lowercase-hex-characters"
+  }
+}
+```
+
+Service Hub проверяет только допустимую форму `auth` и переносит opaque credential provider отдельно от business `payload`. Hub не декодирует session token, не создаёт trusted `user_id`/roles/permissions и не принимает authorization decisions. Наличие синтаксически корректного `auth` само по себе не является доказательством действующей session.
+
 Текущая C++ implementation использует Boost.Asio + Boost.Beast для WebSocket/networking и `json-c` для внутреннего JSON parsing/serialization. Эти библиотеки не являются частью межсервисного v1-контракта.
 
 Подробный контракт: [`service-hub-contract.md`](service-hub-contract.md).
@@ -189,15 +204,60 @@ Service Hub маршрутизирует запрос по `service`, но не 
 
 WebSocket выбран как единый транспорт, потому что provider должен иметь постоянный двусторонний канал для получения адресованных запросов, а Web Shell может использовать тот же протокол напрямую через стандартный browser WebSocket API без отдельного обязательного gateway.
 
-Для пользовательских запросов в будущих спринтах должна выполняться проверка:
+Для защищённых пользовательских действий должна выполняться authoritative проверка:
 
-- личности пользователя;
+- личности пользователя/session;
 - его прав;
 - доступа к нужному проекту или объекту;
 - права управления, если запрос изменяет записываемую метрику;
 - режима управления, если он включён политикой системы.
 
-`CORE-002` не реализует эту авторизацию и не фиксирует модель токенов. Она добавляется в соответствующих будущих спринтах поверх уже определённой Service Hub границы.
+`CORE-002` изначально не реализовал эту безопасность. `CORE-005` добавляет её поверх уже стабильной Service Hub boundary: Step 3 зафиксировал server-side session model, Step 4 — transport auth propagation, Step 5 применяет эту boundary к реальному Project Manager. Service Hub при этом не становится authorization engine.
+
+## Project Manager
+
+Project Manager — самостоятельный сервис проектов и их базового контекста.
+
+В `CORE-004` зафиксированы:
+
+- Project v1 со stable opaque `id`, `name`, `description`;
+- плоская модель без parent project и без ownership будущих ресурсов;
+- локальный SQLite schema v1 как durable storage, внутренний только для Project Manager;
+- versioned Service Hub provider `project-manager.v1`;
+- операции `create-project`, `list-projects`, `get-project`, `update-project`;
+- Web-раздел `/projects` и shared frontend project context;
+- browser → Service Hub → Project Manager → SQLite restart/re-registration integration.
+
+Project Manager v1 business payload не содержит `user_id`, roles, permissions или auth token. `CORE-005 / Step 5` должен добавить server-side authorization поверх доверенной authenticated request boundary, не превращая frontend project context в доказательство доступа и не меняя Project entity ради auth.
+
+Подробный контракт: [`project-manager-contract.md`](project-manager-contract.md).
+
+## Users & Access
+
+Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
+
+В `CORE-005 / Steps 1–4` уже зафиксированы:
+
+- stable opaque user ID, независимый от login/display properties;
+- enabled/disabled user state;
+- независимые capabilities `view`, `control`, `edit`, `admin` без скрытой иерархии;
+- named permission sets и assignments с global/project scope;
+- effective permissions как union matching assignments;
+- локальный SQLite durable storage только Users & Access;
+- OpenSSL scrypt password verifier без plaintext storage;
+- explicit secure first-admin bootstrap;
+- opaque 256-bit server-side bearer session;
+- 30-minute idle timeout и 12-hour absolute lifetime;
+- хранение только SHA-256 session-token digest в SQLite;
+- versioned service address `users-access.v1`;
+- production provider через существующий Service Hub v1;
+- public `login` и protected session-core operations `logout`, `current-session`, `evaluate-access`;
+- authoritative validation bearer credential внутри Users & Access, а не в Service Hub;
+- local security audit baseline без записи password/raw session token.
+
+В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.
+
+Подробный контракт: [`users-access-contract.md`](users-access-contract.md).
 
 ## Основные потоки
 
@@ -230,12 +290,24 @@ Data Hub
 Сервис → Service Hub → Device Manager → Service Hub → Сервис
 ```
 
+### Защищённый пользовательский request
+
+```text
+Web UI
+  → Service Hub + opaque session auth
+  → provider
+  → authoritative Users & Access validation/evaluation
+  → разрешённое service-specific действие или отказ
+```
+
+Service Hub переносит credential, но не определяет policy конкретного сервиса.
+
 ### Пользовательская запись
 
 ```text
 Web UI
   → Service Hub
-  → проверка доступа
+  → проверка доступа и control-mode policy
   → запись управляемой метрики
   → Data Hub / соответствующий путь к драйверу
   → оборудование
@@ -277,16 +349,17 @@ Node.js используется как инструментальная сре�
 На текущем этапе сознательно не зафиксированы:
 
 - конкретная технология Event Hub;
-- БД и схема постоянного хранения;
-- механизм восстановления runtime-состояния после перезапуска;
+- общая persistence-стратегия будущих сервисов и истории;
+- механизм восстановления runtime-состояния Data Hub после перезапуска;
 - точный набор state-значений;
 - внешний межпроцессный путь регистрации write-provider/Driver Runtime;
 - формат Driver Runtime API;
-- аутентификация и токены;
+- browser-side session-token storage/restoration policy до `CORE-005 / Step 6`;
+- точная representation/expiration policy control mode до `CORE-005 / Step 7`;
 - production TLS/origin policy для Service Hub;
 - окончательные process/container/deployment-модели;
 - frontend state manager и UI-библиотеки.
 
-Транспорт и сериализация Data Hub и Service Hub, а также C++/build baseline больше не относятся к этому списку: они были подтверждены соответствующими спринтами.
+Транспорт и сериализация Data Hub и Service Hub, C++/build baseline, Project Manager local persistence, Users & Access local persistence/session representation и Service Hub session-auth transport больше не относятся к этому списку: они подтверждены соответствующими спринтами/шагами.
 
 Остальные вопросы фиксируются только после отдельного обсуждения и появления реальной необходимости.
