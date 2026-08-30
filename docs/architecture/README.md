@@ -236,7 +236,7 @@ Project Manager — самостоятельный сервис проектов
 
 Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
 
-В `CORE-005 / Steps 1–6` и текущем `Step 7A` уже зафиксированы:
+В `CORE-005 / Steps 1–6` и завершённом `Step 7A` уже зафиксированы:
 
 - stable opaque user ID, независимый от login/display properties;
 - enabled/disabled user state;
@@ -266,7 +266,9 @@ Users & Access — самостоятельная backend responsibility для 
 
 `CORE-005 / Step 6C` завершает local administration audit semantics без изменения wire contract: успешные create/enable-disable/password-reset/permission-set/assignment mutations записывают actor из authoritative authenticated session; mutation и audit row выполняются одной SQLite transaction и вместе откатываются при audit failure. Для user/assignment events `subject_user_id` — target user; `permission_set_created` оставляет user-specific subject пустым.
 
-`CORE-005 / Step 7A` фиксирует control mode как ephemeral accidental-write guard поверх authenticated session, а не как authorization grant. Mode привязан к project, требует effective `control`, живёт 600000 ms без продления и не переживает Users & Access restart; current status повторно проверяет capability и сбрасывается при access revocation. Три новые protected operations добавляются совместимо в `users-access.v1`.
+`CORE-005 / Step 7A` зафиксировал control mode как ephemeral accidental-write guard поверх authenticated session, а не как authorization grant. Mode привязан к project, требует effective `control`, живёт 600000 ms без продления и не переживает Users & Access restart; current status повторно проверяет capability и сбрасывается при access revocation. Три новые protected operations добавляются совместимо в `users-access.v1`.
+
+После подтверждения Step 7A дальнейшая feature-разработка Web отложена до завершения backend foundation через `CORE-013`. Это sequencing/process decision, а не изменение архитектурных ролей или Web stack; будущий Web handoff ведётся в `docs/development/WEB_IMPLEMENTATION.md`.
 
 Подробный контракт: [`users-access-contract.md`](users-access-contract.md).
 

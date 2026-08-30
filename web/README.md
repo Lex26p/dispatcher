@@ -6,14 +6,13 @@
 
 `CORE-003 — Web Shell` and `CORE-004 — Project Manager` are complete.
 
-`CORE-005 — Users & Access` is in progress:
+The last committed Web feature baseline is `CORE-005 / Step 6B`, commit `ccde3a262d92ace53069d6e7740108b84f14aad9`. It provides browser session ownership/restoration, login/logout/current user, authenticated Project Manager requests and the minimal Users & Access administration UI.
 
-- Steps 1–5 established the Users & Access model/session boundary and backend-authoritative Project Manager authorization;
-- Step 6A completed the real `users-access.v1` administration backend in commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
-- current Step 6B adds browser session ownership, login/logout/current user, authenticated Project Manager requests and the minimal Users & Access administration UI;
-- Step 6C will complete local security-audit semantics for administration mutations before control mode in Step 7.
+`CORE-005 / Step 7A`, commit `f25aef1d3ff721f86487662289661409f72d3e57`, added backend control-mode semantics but did not change Web. The attempted Step 7B Web control-mode/security integration was never committed and has been discarded. It is not part of the repository baseline.
 
-Notifications, messages, Dashboard and later service screens are not implemented yet.
+The project is now in a **backend-first phase**: new Web feature development is frozen until backend foundation `CORE-005`–`CORE-013` is complete. React + TypeScript remain the selected frontend stack. Backend sprints must record future Web integration requirements in [`../docs/development/WEB_IMPLEMENTATION.md`](../docs/development/WEB_IMPLEMENTATION.md) instead of adding UI alongside each service. After `CORE-013`, `CORE-014 — Web Integration & Core Operations UI` resumes frontend integration.
+
+Notifications, messages, Device/Package/System screens, control-mode UI, Dashboard and later service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -26,11 +25,13 @@ Notifications, messages, Dashboard and later service screens are not implemented
 - React Testing Library;
 - Playwright 1.62.1 with Chromium.
 
-Direct package versions are pinned in `package.json`. Step 6B adds no frontend dependency.
+Direct package versions are pinned in `package.json`. The backend-first pause does not change the frontend toolchain or add dependencies.
 
 ## Local Web workflow
 
 Web development and Web checks run natively on Windows. C++ backend checks remain Linux/WSL.
+
+During the backend-first phase these commands are used only when Web itself is intentionally changed or when a backend change directly affects an already committed browser-facing contract. Backend-only sprint steps do not run frontend work merely as ceremony.
 
 Use the Windows command shims from PowerShell:
 
@@ -124,7 +125,7 @@ Step 6B reconciles it with the user lifecycle:
 
 A project-scoped assignment takes an explicit project ID. The UI does not assume global `admin` implicitly grants project `view`, because capabilities are independent and the backend remains authoritative.
 
-Device/Dashboard-specific ACL, groups/ABAC, external identity providers and control mode are outside Step 6B.
+Device/Dashboard-specific ACL, groups/ABAC and external identity providers are outside the committed Web baseline. Backend control mode exists after Step 7A, but its Web presentation is deliberately deferred to CORE-014.
 
 ## Service Hub URL configuration
 
@@ -153,6 +154,6 @@ Current Project Manager browser integration:
 
     npm.cmd run test:e2e:project-manager
 
-That existing runner starts real Service Hub + Project Manager but intentionally does not start Users & Access yet. In Step 6B it verifies that the real connected shell gates `/projects` behind login instead of surfacing raw `auth.invalid_session` as normal UI.
+That existing runner starts real Service Hub + Project Manager but intentionally does not start Users & Access. It verifies the committed Step 6B behavior that the real connected shell gates `/projects` behind login instead of surfacing raw `auth.invalid_session` as normal UI.
 
-The full authenticated multi-process browser security path — `Browser → Service Hub → Users & Access → Project Manager` with allowed/denied permissions, revocation and restart behavior — remains the planned Step 7 integration/acceptance work.
+The full authenticated multi-process browser security path, control-mode UX and broader core-service integration are deferred to `CORE-014`. Their handoff requirements are maintained in [`docs/development/WEB_IMPLEMENTATION.md`](../docs/development/WEB_IMPLEMENTATION.md). When Web work resumes, start from that document + the relevant architecture contracts rather than scanning all backend sources.

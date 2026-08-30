@@ -12,7 +12,8 @@ Users & Access is the core backend responsibility for stable user identity, acce
 - `Step 6A` completed in `04e83879c73e298d1eac61acbd8e861f0ba5988d`: all reserved administration operations are connected to the real backend/Service Hub path.
 - `Step 6B` completed in `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
 - `Step 6C` completed in `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: administration mutations are coupled atomically with durable local security audit.
-- current `Step 7A`: authoritative project-scoped control mode backend/contract.
+- `Step 7A` completed in `f25aef1d3ff721f86487662289661409f72d3e57`: authoritative project-scoped control mode backend/contract.
+- current `Step 8`: backend acceptance and documentation closure. The uncommitted Step 7B Web control-mode/security work was discarded and deferred to `CORE-014 — Web Integration & Core Operations UI`.
 
 ## Domain and access model
 
@@ -110,6 +111,8 @@ Control mode is not authorization by itself. Future write-capable services must 
 The backend contract remains unchanged. Web keeps only the opaque bearer for the current browser session in `sessionStorage`, restores identity through authoritative `current-session`, and sends protected operations through the same Service Hub WebSocket. Invalid/expired session errors clear the browser bearer; browser user/permission presentation never replaces backend authorization.
 
 The administration UI uses the Step 6A API only for authenticated global administrators.
+
+Further Web feature work is frozen during the backend-first phase through `CORE-013`. Future Users & Access Web integration requirements, including control mode and browser security acceptance, are maintained in `docs/development/WEB_IMPLEMENTATION.md`; React + TypeScript remains the selected Web stack.
 
 ## Secure first-administrator bootstrap
 

@@ -55,14 +55,17 @@
 
 Roadmap использует три уровня: этап → спринт → шаг. Этапы задают долгосрочное направление; спринты конкретного этапа определяются перед началом этапа; перед реализацией каждого нового спринта его план сначала раскладывается на локальные шаги и фиксируется в sprint-файле. Для текущего `L1-01` спринты уже определены.
 
+Для текущей части `L1-01` дополнительно действует backend-first staging: до закрытия `CORE-013` новые Web features не разрабатываются вместе с backend-спринтами. React + TypeScript остаются выбранным stack; backend-спринты вместо раннего UI обязаны оставлять contracts и обновлять `WEB_IMPLEMENTATION.md`. После CORE-013 отдельный CORE-014 собирает готовый backend foundation в Web.
+
 - [`ROADMAP.md`](development/ROADMAP.md) — этапы, спринты и текущая точка разработки.
+- [`WEB_IMPLEMENTATION.md`](development/WEB_IMPLEMENTATION.md) — накопительный handoff/backlog будущей Web-интеграции во время backend-first фазы; обновляется backend-спринтами вместе с contracts.
 - [`sprints/CORE-001.md`](development/sprints/CORE-001.md) — план и итоговый отчёт завершённого спринта Data Hub.
 - [`sprints/CORE-002.md`](development/sprints/CORE-002.md) — план и итоговый отчёт завершённого спринта Service Hub.
 - [`sprints/CORE-003.md`](development/sprints/CORE-003.md) — план и итоговый отчёт завершённого спринта Web Shell.
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
 - [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план и живой отчёт текущего спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–5 завершены, текущий шаг — `Step 6 — Web login, current user и access administration`.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; Steps 1–6 и backend Step 7A завершены, подтверждённый baseline — `f25aef1d3ff721f86487662289661409f72d3e57`. Незакоммиченный Step 7B Web integration отложен; текущий шаг — `Step 8 — backend acceptance и documentation closure`. После CORE-005 разработка идёт backend-first через CORE-013, а Web context накапливается в `WEB_IMPLEMENTATION.md` до отдельного CORE-014.
 
 ### `docs/context/`
 

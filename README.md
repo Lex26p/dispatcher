@@ -16,7 +16,9 @@
 
 `CORE-004 — Project Manager` завершён: существует отдельный C++20 Project Manager со стабильными project ID, локальным SQLite schema v1, versioned Service Hub provider `project-manager.v1`, Web-разделом `/projects`, общим browser-session project context и реальной browser → Service Hub → Project Manager → SQLite проверкой с restart recovery.
 
-`CORE-005 — Users & Access` находится в разработке. Steps 1–5 завершены: существуют stable user/access domain, локальный durable SQLite storage, OpenSSL scrypt credential baseline, opaque server-side sessions, versioned `users-access.v1` contract, authenticated Service Hub request path и backend-authoritative Project Manager authorization с fail-closed поведением. Текущий шаг — `Step 6 — Web login, current user и access administration`.
+`CORE-005 — Users & Access` находится в разработке. Steps 1–6 и backend `Step 7A` завершены; подтверждённый baseline `f25aef1d3ff721f86487662289661409f72d3e57` включает durable users/access/session foundation, administration + audit, backend-authoritative Project Manager authorization и project-scoped ephemeral control mode. Незакоммиченный `Step 7B` с дальнейшей Web-интеграцией отменён и отложен. Текущий шаг — `Step 8 — backend acceptance и documentation closure`.
+
+Внутри `L1-01` принят backend-first порядок: новые Web features заморожены до завершения `CORE-013 — System & Administration`. React + TypeScript остаются выбранным Web-стеком. Каждый backend-спринт документирует будущую Web-интеграцию в `docs/development/WEB_IMPLEMENTATION.md`; после backend foundation отдельный `CORE-014 — Web Integration & Core Operations UI` подключит накопленные стабильные контракты к Web без reverse engineering всего backend-кода.
 
 ## Документация
 
@@ -33,6 +35,8 @@
 Контракт Users & Access: [`docs/architecture/users-access-contract.md`](docs/architecture/users-access-contract.md).
 
 Дорожная карта: [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md).
+
+Накопительный handoff для будущей Web-интеграции: [`docs/development/WEB_IMPLEMENTATION.md`](docs/development/WEB_IMPLEMENTATION.md).
 
 Итог `CORE-001`: [`docs/development/sprints/CORE-001.md`](docs/development/sprints/CORE-001.md).
 

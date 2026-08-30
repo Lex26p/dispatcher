@@ -363,7 +363,7 @@ Disabled user при login получает `auth.invalid_credentials`; ране
 
 ## Control mode
 
-`CORE-005 / Step 7A` добавляет server-side accidental-write guard поверх существующей authenticated session. Control mode **не является новой permission grant** и не заменяет service-specific authorization.
+`CORE-005 / Step 7A` добавил server-side accidental-write guard поверх существующей authenticated session. Control mode **не является новой permission grant** и не заменяет service-specific authorization.
 
 Baseline semantics:
 
@@ -430,8 +430,10 @@ Request `{}`. Возвращает current authoritative mode state. Возмо�
 
 Будущие write-capable services не должны считать один факт `enabled` достаточной authorization: обычная capability/subject policy остаётся отдельной обязательной проверкой.
 
+Web presentation control mode сознательно отложена до будущего Web integration sprint после backend foundation. Wire contract и backend semantics остаются источником истины независимо от наличия текущего UI.
+
 ## Versioning
 
 `users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, Step 6C завершил внутренний durable administration audit, а Step 7A совместимо добавляет три protected control-mode operations без изменения Service Hub transport. Несовместимое изменение требует нового service version.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, Step 6C завершил внутренний durable administration audit, а Step 7A совместимо добавил три protected control-mode operations без изменения Service Hub transport. Несовместимое изменение требует нового service version.

@@ -168,6 +168,12 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ## Спринты L1-01
 
+### Backend-first порядок внутри L1-01
+
+После подтверждённого `CORE-005 / Step 7A` принято последовательное выполнение: feature-разработка Web заморожена, пока не завершён backend foundation через `CORE-013`. Existing committed Web Shell остаётся рабочим baseline, но backend-спринты `CORE-005`–`CORE-013` не расширяют UI «заодно». Вместо этого каждый sprint поддерживает внешние contracts и накопительный [`WEB_IMPLEMENTATION.md`](WEB_IMPLEMENTATION.md), достаточные для будущей интеграции.
+
+После `CORE-013` отдельный `CORE-014 — Web Integration & Core Operations UI` собирает готовые backend capabilities в Web. Это изменение порядка не меняет целевую концепцию Web UI и не отменяет React + TypeScript. Dashboard и Mimics следуют после общего Web integration layer. Поскольку прежние `CORE-014/015/016` ещё не начинались, они перенумерованы в `CORE-015/016/017`; завершённые и текущие спринты не перенумеровываются.
+
 ### CORE-001 — Data Hub
 
 **Статус:** завершён.
@@ -214,7 +220,7 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 **Цель:** добавить пользовательский контекст и контроль доступа.
 
-**Результат:** backend и Web выполняют действия в контексте пользователя и проверяют права просмотра, управления, редактирования и администрирования, включая режим управления.
+**Результат:** backend имеет stable users/access/session foundation, backend-authoritative Project Manager enforcement и project-scoped control mode. Уже committed Web login/current-user/access administration сохраняется как baseline; дальнейшая Web-интеграция control mode и security UX отложена до `CORE-014`.
 
 План спринта: [`sprints/CORE-005.md`](sprints/CORE-005.md).
 
@@ -228,7 +234,7 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 **Цель:** создать единый механизм управления пакетами до реализации реальных протокольных драйверов.
 
-**Результат:** платформа умеет устанавливать, включать, отключать и удалять пакеты и предоставляет базовый Web-интерфейс Package Manager.
+**Результат:** backend умеет устанавливать, включать, отключать и удалять пакеты через стабильный внешний contract; Web-интеграция и operator/admin presentation фиксируются в `WEB_IMPLEMENTATION.md` и реализуются позже в `CORE-014`.
 
 ### CORE-008 — Driver Runtime / Driver Manager
 
@@ -258,27 +264,35 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 **Цель:** реализовать формирование событий, аварий и state-метрик на основе реальных данных.
 
-**Результат:** изменение метрики может изменить её state, сформировать событие/аварию и отобразиться в Web через Event Hub.
+**Результат:** изменение метрики может изменить её state и сформировать событие/аварию через Event Hub; browser-facing semantics и будущая presentation фиксируются для последующей Web-интеграции, но UI в этом backend sprint не реализуется.
 
 ### CORE-013 — System & Administration
 
 **Цель:** включить саму платформу в общую модель мониторинга и добавить базовое администрирование.
 
-**Результат:** CPU, RAM, диск, uptime и состояния сервисов представлены через общие механизмы метрик и событий, а администратор получает необходимые базовые инструменты.
+**Результат:** CPU, RAM, диск, uptime и состояния сервисов представлены через общие механизмы метрик и событий, а backend предоставляет необходимые базовые administration operations/status. Web presentation фиксируется в `WEB_IMPLEMENTATION.md`.
 
-### CORE-014 — Dashboard
+### CORE-014 — Web Integration & Core Operations UI
+
+**Цель:** после завершения backend foundation собрать стабильные contracts `CORE-005`–`CORE-013` в цельный Web operational/admin layer без одновременной разработки Dashboard constructor.
+
+**Результат:** существующий React + TypeScript Web Shell интегрирует users/access/control mode, project context, Device Manager, Package Manager, events и System & Administration поверх уже проверенных backend boundaries; real browser integration acceptance выполняется на стабильном backend.
+
+До начала спринта его шаги формируются по накопленному [`WEB_IMPLEMENTATION.md`](WEB_IMPLEMENTATION.md), concept Web UI и актуальным architecture contracts. Backend implementation читается только точечно при обнаруженной неясности.
+
+### CORE-015 — Dashboard
 
 **Цель:** создать рабочую основу универсального конструктора пользовательских страниц.
 
 **Результат:** инженер может создать Dashboard из контейнеров и базовых компонентов, использовать параметры/контекст и отображать реальные метрики и state без написания Web-кода.
 
-### CORE-015 — Mimics
+### CORE-016 — Mimics
 
 **Цель:** реализовать мнемосхемы как самостоятельный SVG-ресурс внутри Dashboard.
 
 **Результат:** можно создать операторский экран с привязками к реальным метрикам, state, динамическими свойствами и управляемыми значениями.
 
-### CORE-016 — Core Integration & Stabilization
+### CORE-017 — Core Integration & Stabilization
 
 **Цель:** проверить завершённость L1-01 как одной работающей платформы.
 
@@ -477,6 +491,10 @@ Step 1 зафиксировал отдельный C++ Users & Access skeleton, 
 
 `CORE-005 / Step 6C` завершён commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: administration mutation + audit фиксируются atomically в существующем Users & Access SQLite storage с authoritative authenticated actor и без изменения wire contract.
 
-Текущий локальный подшаг — `Step 7A — authoritative session control mode backend/contract`. Step 7 локально разделён на 7A backend/contract и 7B Web + real browser security integration. Control mode project-scoped, требует authoritative `control`, имеет фиксированный 10-minute absolute lifetime и намеренно сбрасывается при Users & Access restart. После проверенного Step 7A SHA выполняется Step 7B.
+`CORE-005 / Step 7A` завершён commit `f25aef1d3ff721f86487662289661409f72d3e57`: Users & Access получил authoritative project-scoped ephemeral control mode, fixed 10-minute absolute lifetime, access-revocation fail-closed semantics и reset после Users & Access restart.
+
+Незакоммиченный `Step 7B — Web control-mode UX + real browser security integration` отменён как текущая реализация и перенесён в будущий `CORE-014 — Web Integration & Core Operations UI`. Ни один Step 7B/FIX overlay не является source of truth.
+
+**Текущий локальный подшаг — `CORE-005 / Step 8 — backend acceptance, итоговый отчёт и documentation audit`.** После закрытия CORE-005 разработка идёт backend-first через CORE-013; Web feature work в этих спринтах заменяется поддержанием contracts и `docs/development/WEB_IMPLEMENTATION.md`.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

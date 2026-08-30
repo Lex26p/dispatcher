@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Steps 1–6 завершены; текущий подшаг — Step 7A.**
+**В разработке. Steps 1–6 и Step 7A завершены; текущий подшаг — Step 8 backend acceptance/documentation closure. Step 7B Web integration отложен до CORE-014.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий подшаг — `Step 7A — authoritative session control mode backend/contract`.
+Текущий подшаг — `Step 8 — backend acceptance, итоговый отчёт и documentation audit`.
 
 ## Цель
 
@@ -31,10 +31,12 @@ Plan commit зафиксирован и проверен в репозитори
 - получать только доступные ему проекты;
 - выполнять разрешённые Project Manager операции и получать предсказуемый отказ при отсутствии прав;
 - администрировать базовые users/access assignments при наличии административного права;
-- использовать режим управления только при наличии права управления;
-- сохранять понятное поведение Web Shell при logout, истечении/недействительности сессии и временной недоступности backend.
+- иметь backend-возможность включить режим управления только при наличии права управления; Web presentation этого режима отложена до `CORE-014`;
+- сохранять уже реализованное понятное поведение committed Web Shell при logout и недействительности session в пределах Step 6B baseline; дальнейшая унификация browser lifecycle/recovery отложена до `CORE-014`.
 
 `CORE-005` должен создать reusable security boundary для будущих Device Manager, Package Manager, Dashboard и других сервисов, но не должен заранее моделировать их предметные ACL.
+
+После подтверждённого Step 7A принято backend-first решение: незакоммиченный Step 7B Web control-mode/security integration не продолжается в этом спринте. Уже committed Web baseline Step 6B сохраняется, а оставшаяся Web-интеграция переносится в `CORE-014 — Web Integration & Core Operations UI` и ведётся через `docs/development/WEB_IMPLEMENTATION.md`. Это не меняет security semantics backend и не является отказом от React + TypeScript.
 
 ## Продуктовые исходные решения
 
@@ -197,7 +199,7 @@ Control mode входит в roadmap и концепцию, но реально�
 - режим управления относится к authenticated session/user context, а не к Project entity;
 - logout/session invalidation выключает режим;
 - auto-expiration policy должна быть поддержана или явно зафиксирована как configuration/session rule;
-- Web ясно показывает active/inactive state и причину, если включение недоступно;
+- backend contract явно возвращает active/inactive state и reason; Web presentation этих состояний отложена до `CORE-014`;
 - Project Manager `edit` operation не подменяется control mode;
 - реальные writable metric operations в будущих спринтах будут обязаны проверять одновременно capability и control-mode policy.
 
@@ -243,17 +245,15 @@ Users, credential verifiers, permission sets, assignments и необходим�
 - имеет stable user identity и durable local users/access configuration;
 - предоставляет локальную authentication/session boundary;
 - предоставляет versioned language-independent external contract;
-- интегрируется с существующим Service Hub browser path без второго transport;
+- интегрируется с существующим Service Hub request path без второго transport;
 - предоставляет backend-authoritative access evaluation;
-- защищает реальный Project Manager;
-- фильтрует project visibility;
+- защищает реальный Project Manager и фильтрует project visibility;
 - поддерживает разные project-scoped permissions одного пользователя;
-- даёт Web login/logout/current-user UX;
-- даёт минимальный administration UI для users/access;
-- очищает/перепроверяет project context при user/access changes;
-- даёт session baseline control mode;
+- сохраняет уже committed Web Step 6B baseline: login/logout/current-user и минимальный users/access administration UI;
+- предоставляет authoritative backend control mode с project `control`, expiry/revocation/logout/restart semantics;
 - фиксирует security-relevant actions без secret leakage;
-- подтверждена real browser → Service Hub → Users & Access / Project Manager integration;
+- подтверждает allowed/denied/fail-closed/restart paths реальными backend processes через Service Hub;
+- оставляет документированный Web handoff для control mode и будущих сервисов в `docs/development/WEB_IMPLEMENTATION.md`;
 - не вводит fake ACL для ещё не существующих ресурсов.
 
 ## Критерий завершения
@@ -280,11 +280,11 @@ Users, credential verifiers, permission sets, assignments и необходим�
 18. Web имеет login/logout/current-user state.
 19. Logout/user change не оставляет старый project context доверенным.
 20. Административный Web UI позволяет выполнить минимальные users/access assignments.
-21. Недоступные UI actions объясняют причину и не заменяют server-side authorization.
+21. Уже committed Web Step 6B не заменяет server-side authorization; расширенная presentation control-mode/access-revocation причин отложена до CORE-014.
 22. Control mode нельзя включить без `control` capability.
 23. Logout/session invalidation выключает control mode.
 24. Security-sensitive diagnostics/tests не раскрывают passwords/session secrets.
-25. Real browser integration подтверждает allowed и denied paths.
+25. Реальная multi-process backend integration через Service Hub подтверждает allowed и denied paths; full browser security acceptance отложен до CORE-014.
 26. Restart acceptance подтверждает сохранность durable users/access configuration.
 27. Existing Service Hub correlation/cancel/reconnect regression остаётся рабочим.
 28. Existing Project Manager durable/restart behavior остаётся рабочим.
@@ -727,14 +727,14 @@ UI отражает effective access, но не считается security boun
 
 Пользователь реально входит в Web Shell, видит свой контекст и администратор может настроить минимальные права.
 
-## Step 7 — Control mode и real security integration
+## Step 7 — Control mode backend; Web часть отложена
 
 ### Локальное разбиение Step 7
 
-Step 7 объединяет новую security-state boundary и большой multi-process browser acceptance. Чтобы сохранить правило одного проверяемого изменения на commit, шаг локально разделён без изменения sprint scope:
+Step 7 первоначально был разделён на backend control-mode boundary и Web/browser integration:
 
-- **Step 7A — authoritative session control mode backend/contract**: зафиксировать server-side semantics, versioned operations, C++ application boundary и real Service Hub integration;
-- **Step 7B — Web control-mode UX и real security integration**: подключить режим к authenticated Web/project context и выполнить запланированный Browser → Service Hub → Users & Access → Project Manager acceptance.
+- **Step 7A — authoritative session control mode backend/contract** — завершён и подтверждён commit `f25aef1d3ff721f86487662289661409f72d3e57`;
+- **Step 7B — Web control-mode UX и real browser security integration** — **не завершался и не коммитился**. После backend-first решения он удалён из текущего working plan и перенесён в `CORE-014`. Любые ранее подготовленные Step 7B/FIX ZIP не являются source of truth.
 
 Control mode в 7A является intentional ephemeral guard, а не новой permission grant. Durable session переживает restart, но control mode после restart всегда сбрасывается в `inactive`. Это fail-safe поведение и не требует schema migration.
 
@@ -762,42 +762,11 @@ Control mode:
 
 Machine-readable schema и C++ contract constants расширяются без изменения Service Hub transport. Unit coverage проверяет deny без `control`, enable, fixed expiry, access revocation, explicit disable, logout invalidation и restart reset. Отдельный real Service Hub integration client проверяет wire operations на bootstrap admin session.
 
-После проверенного Step 7A SHA выполняется Step 7B; только Step 7B добавляет Web control-mode presentation и полный browser security acceptance.
+Step 7A является последней функциональной реализацией CORE-005. Web control-mode presentation, объединённый frontend lifecycle и full browser security acceptance записаны в `docs/development/WEB_IMPLEMENTATION.md` как backlog `CORE-014`.
 
-### Что делаем
+### Результат Step 7A
 
-Добавляем session baseline control mode:
-
-- enable/disable;
-- проверка `control` capability в текущем project context;
-- expiration rule;
-- logout/session invalidation reset;
-- понятное Web state/reason.
-
-Не создаём fake Device controls.
-
-Затем строим real integration/acceptance path:
-
-`Browser → Service Hub → Users & Access → Project Manager → durable storages`
-
-Проверяем как минимум:
-
-- bootstrap/login;
-- current user;
-- два users с разными project permissions;
-- project list filtering;
-- allowed/denied get/update/create;
-- project context behavior при access change/logout;
-- disabled user/session invalidation;
-- control mode allowed/denied/expiration;
-- service restart/re-registration;
-- Users & Access unavailable => fail closed;
-- отсутствие secret leakage;
-- существующие Service Hub/Project Manager regressions.
-
-### Результат
-
-Security boundary подтверждена реальными процессами и browser UI, а не только unit tests.
+Control-mode security boundary существует и проверяется на backend/Service Hub уровне без fake Device controls и без преждевременного расширения Web.
 
 ## Step 8 — Sprint acceptance, итоговый отчёт и documentation audit
 
@@ -805,16 +774,18 @@ Security boundary подтверждена реальными процессам
 
 Новых product features не добавляем, кроме исправлений, необходимых для критериев завершения.
 
-Выполняем полный acceptance:
+Выполняем backend-focused acceptance:
 
 - C++ Users & Access build/tests;
-- persistence/credential/session tests;
-- Service Hub regression;
-- Project Manager regression;
-- Web typecheck/unit/build/browser smoke;
-- generic Service Hub browser integration;
-- real Users & Access + Project Manager browser security integration;
-- restart/fail-closed scenarios.
+- persistence/credential/session/administration/control-mode tests;
+- real `users-access.v1` Service Hub integration, включая control mode;
+- Project Manager authorization regression;
+- allowed/denied/disabled/expired/revoked paths;
+- Users & Access unavailable => Project Manager fail closed и recovery;
+- restart/re-registration и durable storage scenarios;
+- secret-leakage regression.
+
+Новый Web code, control-mode UX и full browser security integration в Step 8 не добавляются. Уже committed Step 6B Web baseline принимается как существующий результат, а дальнейшая интеграция ведётся в `WEB_IMPLEMENTATION.md` и `CORE-014`.
 
 Проводим targeted documentation audit:
 
@@ -827,6 +798,7 @@ Security boundary подтверждена реальными процессам
 - `docs/concept/07-users-access.md`;
 - `docs/concept/10-web-ui.md`;
 - relevant service/Web README;
+- `docs/development/WEB_IMPLEMENTATION.md`;
 - roadmap;
 - chat context;
 - sprint report.

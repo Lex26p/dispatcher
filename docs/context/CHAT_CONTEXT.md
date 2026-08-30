@@ -206,7 +206,7 @@ Plan commit проверен:
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`.
 
-CORE-005 должен дать stable user identity, durable users/access configuration, local authentication/session boundary, согласованный authenticated Service Hub request path, backend-authoritative Project Manager access, Web login/current-user/access administration и control-mode baseline. Первый sprint реально применяет global + project scope; Device/Dashboard-specific ACL, external IdP/MFA и Event Hub audit publication не имитируются.
+CORE-005 должен дать stable user identity, durable users/access configuration, local authentication/session boundary, согласованный authenticated Service Hub request path, backend-authoritative Project Manager access и control-mode backend baseline. Уже committed Step 6B Web login/current-user/access administration сохраняется как существующий результат, но дальнейшая Web feature-интеграция отложена до backend foundation completion. Первый sprint реально применяет global + project scope; Device/Dashboard-specific ACL, external IdP/MFA и Event Hub audit publication не имитируются.
 
 Функциональные commits CORE-005 на текущий момент:
 
@@ -217,9 +217,10 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
 - Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
 - Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`;
-- Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`.
+- Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`;
+- Step 7A — `f25aef1d3ff721f86487662289661409f72d3e57`.
 
-Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6C functional commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59` является baseline текущего Step 7A.
+Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Подтверждённый Step 7A commit `f25aef1d3ff721f86487662289661409f72d3e57` является текущим baseline.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
@@ -237,9 +238,13 @@ Step 6B завершён commit `ccde3a262d92ace53069d6e7740108b84f14aad9`: brow
 
 Step 6C завершён commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: local `security_audit` покрывает administration mutations, authenticated global-admin user ID является actor, mutation + audit row выполняются одной SQLite transaction и fail-closed откатываются вместе при audit failure.
 
-**Текущий локальный подшаг — `CORE-005 / Step 7A — authoritative session control mode backend/contract`.**
+Step 7A завершён commit `f25aef1d3ff721f86487662289661409f72d3e57`: project-scoped ephemeral `ControlModeService` требует authoritative `control`, имеет absolute lifetime 10 минут без refresh, fail-closed сбрасывается при access revocation и после Users & Access restart возвращается в `inactive`. Raw bearer не хранится; in-memory key — token digest.
 
-Step 7 локально разделён на 7A backend/contract и 7B Web + real browser security integration. 7A вводит project-scoped ephemeral `ControlModeService`: enable требует authoritative `control`, absolute lifetime 10 минут и не продлевается status reads; logout/invalid session делают mode unusable, access revocation сбрасывает его, а Users & Access restart всегда возвращает `inactive`. Raw bearer не хранится; in-memory key — token digest. После проверенного Step 7A SHA выполняется Step 7B.
+Незакоммиченный Step 7B Web control-mode/security integration отменён как текущая работа. Его ZIP/FIX overlays не являются source of truth и не должны восстанавливаться. Web feature-разработка заморожена до завершения backend foundation через `CORE-013`.
+
+**Текущий локальный подшаг — `CORE-005 / Step 8 — backend acceptance, итоговый отчёт и documentation audit`.**
+
+После CORE-005 порядок: `CORE-006`…`CORE-013` backend-first. Каждый backend sprint обязан оставлять достаточные внешние contracts и обновлять `docs/development/WEB_IMPLEMENTATION.md` для будущего UI. После `CORE-013` начинается `CORE-014 — Web Integration & Core Operations UI`; React + TypeScript остаются выбранным frontend stack.
 
 ## Рабочий процесс
 
@@ -249,9 +254,9 @@ Roadmap можно корректировать, но это исключени�
 
 Изменения ChatGPT отдаёт архивом с готовыми файлами проекта. Пользователь распаковывает его поверх `C:\Projects\dispatcher`, выполняет необходимые проверки, коммитит и отправляет SHA. Новый SHA становится базовой точкой истины.
 
-Web frontend проверяется нативно в Windows/PowerShell через `npm.cmd` / `npx.cmd` на зафиксированном Node.js/npm toolchain. C++ backend собирается и тестируется в Linux/WSL.
+Web frontend при Web-работе проверяется нативно в Windows/PowerShell через `npm.cmd` / `npx.cmd` на зафиксированном Node.js/npm toolchain. В текущей backend-first фазе backend-only шаги не обязаны запускать Web tests, если не меняют committed browser-facing contract. C++ backend собирается и тестируется в Linux/WSL.
 
-Документация обновляется по ходу каждого шага, если шаг изменил уже документированный факт, контракт, технологическое решение, статус, команды или важное ограничение. Не следует откладывать такие решения до конца спринта и затем восстанавливать их по чату.
+Документация обновляется по ходу каждого шага, если шаг изменил уже документированный факт, контракт, технологическое решение, статус, команды или важное ограничение. Не следует откладывать такие решения до конца спринта и затем восстанавливать их по чату. Во время backend-first фазы новые backend capabilities, которые позже потребуются Web, дополнительно фиксируются в `docs/development/WEB_IMPLEMENTATION.md`, чтобы будущая frontend-фаза опиралась на contracts/docs, а не на поиск semantics по исходникам.
 
 В конце каждого спринта дополнительно обязательна целевая проверка актуальности связанной документации. Финальный audit является проверкой целостности и пропущенной рассинхронизации, а не первой попыткой описать уже завершённый спринт.
 
