@@ -232,6 +232,26 @@ if(DISPATCHER_BUILD_TESTS)
         PROPERTIES OUTPUT_NAME "dispatcher-users-access-session-tests"
     )
 
+    add_executable(dispatcher_users_access_project_manager_authorization_fixture
+        tests/project_manager_authorization_fixture.cpp
+    )
+    target_link_libraries(
+        dispatcher_users_access_project_manager_authorization_fixture
+        PRIVATE
+            dispatcher_users_access_core
+            dispatcher_users_access_crypto
+            dispatcher_users_access_sqlite
+            SQLite::SQLite3
+    )
+    target_compile_features(
+        dispatcher_users_access_project_manager_authorization_fixture
+        PRIVATE cxx_std_20
+    )
+    set_target_properties(
+        dispatcher_users_access_project_manager_authorization_fixture
+        PROPERTIES OUTPUT_NAME "dispatcher-users-access-project-manager-authorization-fixture"
+    )
+
     add_executable(dispatcher_users_access_service_hub_test_client
         tests/service_hub_integration_client.cpp
     )
@@ -261,6 +281,7 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_users_access_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_persistence_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_session_tests PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(dispatcher_users_access_project_manager_authorization_fixture PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_service_hub_test_client PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 

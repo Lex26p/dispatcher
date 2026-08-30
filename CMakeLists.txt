@@ -16,3 +16,16 @@ add_subdirectory(services/data-hub)
 add_subdirectory(services/service-hub)
 add_subdirectory(services/project-manager)
 add_subdirectory(services/users-access)
+
+if(
+    DISPATCHER_BUILD_TESTS
+    AND TARGET dispatcher_project_manager_service_hub_test_client
+    AND TARGET dispatcher_users_access
+    AND TARGET dispatcher_users_access_project_manager_authorization_fixture
+)
+    add_dependencies(
+        dispatcher_project_manager_service_hub_test_client
+        dispatcher_users_access
+        dispatcher_users_access_project_manager_authorization_fixture
+    )
+endif()

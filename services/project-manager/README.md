@@ -4,52 +4,77 @@ Project Manager is the core service responsible for Dispatcher projects as stabl
 
 ## Current implementation stage
 
-`CORE-004 / Step 1` established the domain/application boundary and standalone C++ service skeleton.
+`CORE-004` established the Project Manager domain/application boundary, durable SQLite storage, `project-manager.v1` Service Hub provider, `/projects` Web UI, shared browser project context and real browser restart-recovery integration.
 
-`CORE-004 / Step 2` established the first production durable storage adapter using local SQLite.
+`CORE-005 / Step 5` adds backend-authoritative authorization to the existing Project Manager provider without changing Project v1 business payloads.
 
-`CORE-004 / Step 3` established the versioned Service Hub provider contract at `project-manager.v1`.
+Project Manager now requires session authentication for all v1 operations and evaluates current access through `users-access.v1/evaluate-access`.
 
-`CORE-004 / Steps 4–6` established the `/projects` Web UI, shared browser project context, and real browser → Service Hub → Project Manager → SQLite restart-recovery integration.
-
-`CORE-004 — Project Manager` is complete.
-
-The current Project model contains only:
+The current Project model still contains only:
 
 - stable opaque `id`;
 - human-readable `name`;
 - optional `description`.
 
-The identifier is independent of mutable display properties. Projects are not nested and do not contain Dashboard, Device or other future-service records.
+The identifier is independent of mutable display properties. Projects are not nested and do not contain Dashboard, Device, ACL or other future-service records.
 
 ## Application boundary
 
-`ProjectManager` currently supports:
+`ProjectManager` supports:
 
 - create;
 - list;
 - get by project ID;
 - update name/description.
 
-The application layer still depends only on the abstract `ProjectRepository` storage port. Domain/application tests use an in-memory implementation; production startup uses `SqliteProjectRepository`.
+The application layer still depends only on the abstract `ProjectRepository` storage port. It does **not** depend on Users & Access, Service Hub, session tokens or permission types.
+
+Domain/application tests use an in-memory repository; production startup uses `SqliteProjectRepository`.
 
 Validation requires a non-whitespace name, limits the UTF-8 payload to 256 bytes for `name` and 4096 bytes for `description`, and reports application errors separately from repository failures.
 
+## Authorization boundary
+
+Authorization is applied around the Service Hub provider before protected business operations are executed.
+
+Policy:
+
+- `create-project` requires global `admin`;
+- `list-projects` exposes only projects where `view` is allowed;
+- `get-project` requires project-scoped `view`;
+- `update-project` requires project-scoped `edit` or `admin`.
+
+Capabilities remain independent. Project Manager does not assume `admin => edit => view`.
+
+The incoming bearer is read only from the Service Hub request-level `auth` context. `user_id`, roles or permissions inside Project Manager payload are never trusted and remain invalid/unknown business fields.
+
+Project Manager does not link against Users & Access C++ implementation and does not read its SQLite database. A separate internal Service Hub client connection calls:
+
+    users-access.v1 / evaluate-access
+
+with the forwarded session credential and requested global/project scope.
+
+Effective access is checked on every protected Project Manager request. Assignments are not cached locally, so revocation, disabled users and session expiry take effect on the next authoritative evaluation.
+
+If Users & Access is unavailable, returns an internal storage/crypto failure, or cannot provide a valid evaluation response, Project Manager fails closed with `project.authorization_unavailable`.
+
+Detailed policy/error semantics are documented in `docs/architecture/project-manager-contract.md`.
+
 ## Durable persistence
 
-Step 2 selects SQLite specifically for Project Manager storage.
+Project Manager uses local SQLite storage.
 
 Reasons for the choice:
 
-- Project Manager currently owns a small local metadata model;
+- Project Manager owns a small local metadata model;
 - SQLite is embedded and transactional, so no additional database service is introduced;
-- one database file remains private to Project Manager instead of becoming a cross-service contract;
+- the database file remains private to Project Manager instead of becoming a cross-service contract;
 - create/read/list/update and restart/reopen behavior can be tested directly;
 - the choice does not prescribe persistence technology for other Dispatcher services or future history storage.
 
-The internal schema is versioned through SQLite `PRAGMA user_version`. Step 2 schema version is `1` and stores only `id`, `name` and `description`.
+The internal schema is versioned through SQLite `PRAGMA user_version`. Schema version remains `1` and stores only `id`, `name` and `description`.
 
-A new database path is initialized automatically. A database with a schema version newer than the executable supports is rejected rather than silently modified.
+`CORE-005 / Step 5` does not add user/access columns or share persistence with Users & Access.
 
 ## Lifecycle
 
@@ -62,9 +87,13 @@ Defaults:
     database-path        dispatcher-project-manager.db
     service-hub-address  127.0.0.1:50052
 
-On startup the executable opens/initializes SQLite storage before entering the Linux signal lifecycle. If storage cannot be opened or initialized, startup fails instead of running with volatile data.
+On startup the executable opens/initializes SQLite before entering the Linux signal lifecycle.
 
-Project Manager does not open its own server endpoint. It connects as a provider to Service Hub `/v1/ws`, requests subprotocol `dispatcher.service-hub.v1`, and registers service `project-manager.v1`. If the Hub connection is lost, the provider retries and registers again after reconnect.
+Project Manager does not open its own server endpoint. It connects as provider to Service Hub `/v1/ws`, requests subprotocol `dispatcher.service-hub.v1`, and registers `project-manager.v1`.
+
+The provider remains registered even if Users & Access is temporarily unavailable. In that state protected operations fail closed rather than allowing access.
+
+If Service Hub itself is lost, the provider reconnects and registers again. The internal authorization client also recreates its client-role connection when necessary.
 
 ## Service Hub contract
 
@@ -79,43 +108,90 @@ Operations:
 - `get-project`;
 - `update-project`.
 
-The full payload/error contract is documented in `docs/architecture/project-manager-contract.md`. Project-specific fields stay inside Service Hub `operation`/`payload`; the common Service Hub envelope is unchanged.
+Project payload definitions are unchanged from CORE-004.
 
+After `CORE-005 / Step 4`, callers may carry a session credential in the shared Service Hub request `auth` field. Step 5 makes that context mandatory for Project Manager business operations and validates its effective access through Users & Access.
 
-## Web integration
+No Project Manager payload contains `auth`, `user_id`, role or permissions.
 
-The Web Shell uses the existing shared `ServiceHubClient` and service `project-manager.v1`; it does not open a second transport. `/projects` provides list/create/edit behavior, while `ProjectContextProvider` keeps either a real Project v1 snapshot or explicit global mode for the current browser session.
+## Web integration during CORE-005 Step 5
 
-The real Windows + WSL acceptance command is:
+The Web Shell already has transport support for optional per-request session `auth`, but shared login/current-user/session ownership is intentionally Step 6.
 
-    npx.cmd --yes npm@11.19.0 run test:e2e:project-manager
+Therefore Step 5 protects the backend **before** Web login UX exists. The current unauthenticated `/projects` UI receives `auth.invalid_session` from the real Project Manager boundary.
 
-It starts real C++ Service Hub and Project Manager processes, uses a temporary SQLite database, exercises the production Web UI, restarts Project Manager on the same database, waits for provider re-registration, and verifies stable ID/data/context recovery.
+The dedicated real browser Project Manager integration is temporarily focused on confirming this fail-closed boundary. Full authenticated browser CRUD returns in `CORE-005 / Step 6–7` when the Web Shell owns a real user session.
+
+This staging is intentional: Web presentation is not used as a security boundary.
+
+## Step 5 integration coverage
+
+`project-manager.service-hub-integration` now uses real processes:
+
+    Service Hub
+        ├── Project Manager
+        └── Users & Access
+
+The scenario bootstraps a real admin, creates two projects, seeds project-scoped test users through a test-only Users & Access fixture, and verifies:
+
+- unauthenticated Project Manager access is denied;
+- global admin can create projects;
+- global view can see the complete list;
+- a project-scoped user sees only an allowed project;
+- allowed/denied `get-project`;
+- create denial without global admin;
+- project-scoped edit success and inaccessible update denial;
+- project-scoped `admin` can update without implicit `view`, confirming capability independence;
+- durable session use after Users & Access restart;
+- access revocation reflected on the next request;
+- disabled user invalidates an existing session;
+- expired session returns `auth.session_expired`;
+- Users & Access unavailable => `project.authorization_unavailable`;
+- authorization resumes after Users & Access returns;
+- Project Manager and Users & Access re-register after Service Hub restart;
+- authenticated authorization still works after Hub reconnect;
+- service shutdown does not print credential material.
+
+The fixture is test-only. It does not add production administration operations before Step 6.
+
+## Current authorization limitation
+
+When the caller does not have global `view`, `list-projects` evaluates `view` separately for each stored project through `users-access.v1/evaluate-access`. This keeps Step 5 on the existing Users & Access v1 contract and avoids inventing a batch ACL API prematurely.
+
+The baseline is correct and fail-closed, but very large project sets may require a future contract-level batch/visibility optimization after real scale requirements are known. That optimization must preserve authoritative filtering and must not move access state into Project Manager storage.
 
 ## Intentionally not implemented yet
 
-- authentication/authorization;
+- Web login/logout/current-user context — Step 6;
+- production Users & Access administration API/UI — Step 6;
+- control mode — Step 7;
 - project ownership of future resources;
 - Dashboard relations;
 - project deletion lifecycle;
-- user-specific persistence of selected project context.
+- user-specific durable persistence of selected project context.
 
 ## Dependencies
 
-On Ubuntu/WSL the Project Manager dependencies are already aligned with existing core services:
+On Ubuntu/WSL:
 
     libsqlite3-dev
     libboost-dev
     libjson-c-dev
 
-SQLite remains local persistence; Boost.Beast + json-c implement the Service Hub adapter. No standalone SQLite server is required.
+Project Manager itself still uses SQLite locally plus Boost.Beast/json-c for Service Hub transport.
+
+Real Step 5 integration also requires the existing Users & Access dependencies because the test runs that production service:
+
+    libssl-dev
+
+No direct production library dependency Project Manager → Users & Access is introduced.
 
 ## Build and test in WSL
 
 From the repository root:
 
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_project_manager dispatcher_project_manager_tests dispatcher_project_manager_persistence_tests dispatcher_project_manager_service_hub_test_client
+    cmake --build "$HOME/.cache/dispatcher/build/debug" -j
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^project-manager\."
 
 Current CTest checks:
@@ -125,3 +201,5 @@ Current CTest checks:
 - `project-manager.service-hub-integration`;
 - `project-manager.signal-term`;
 - `project-manager.signal-int`.
+
+The full build is required before `project-manager.service-hub-integration`, because the scenario also launches the Users & Access production executable and its test-only fixture from the sibling build directory.

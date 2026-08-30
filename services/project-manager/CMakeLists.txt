@@ -63,6 +63,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 add_library(dispatcher_project_manager_service_hub STATIC
+    src/authorization_client.cpp
     src/service_hub_provider.cpp
 )
 
@@ -187,7 +188,7 @@ if(DISPATCHER_BUILD_TESTS)
                 $<TARGET_FILE:dispatcher_project_manager>
                 $<TARGET_FILE:dispatcher_project_manager_service_hub_test_client>
         )
-        set_tests_properties(project-manager.service-hub-integration PROPERTIES TIMEOUT 30)
+        set_tests_properties(project-manager.service-hub-integration PROPERTIES TIMEOUT 90)
     endif()
 
     set_tests_properties(

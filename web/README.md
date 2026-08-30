@@ -26,11 +26,13 @@
 
 `CORE-004 — Project Manager` is complete.
 
-`CORE-005 — Users & Access` is in progress. Steps 1–4 are complete. Step 4 extended the existing Service Hub v1 request path with optional per-request session auth and updated the browser `ServiceHubClient` to carry that transport context without adding a second WebSocket or choosing persistent browser token storage.
+`CORE-005 — Users & Access` is in progress. Steps 1–4 established Users & Access domain/persistence/session semantics and optional per-request Service Hub session auth.
 
-The current sprint step is `CORE-005 / Step 5 — Project Manager authorization enforcement`. Web login/current-user/session restoration and Users & Access administration remain Step 6.
+`CORE-005 / Step 5` now protects the real Project Manager backend. The existing Web Shell still has no owned logged-in user session, so unauthenticated `/projects` requests are intentionally rejected by the backend with `auth.invalid_session`.
 
-Notifications, messages, Dashboard and later service screens are not implemented yet. A reusable transport path for authentication now exists, but the Web Shell does not yet own a logged-in user session or login/logout UI.
+Web login/current-user/session restoration and Users & Access administration remain Step 6. The temporary Step 5 browser state is therefore fail-closed rather than continuing the old unauthenticated CORE-004 CRUD path.
+
+Notifications, messages, Dashboard and later service screens are not implemented yet.
 
 ## Toolchain baseline
 
@@ -115,7 +117,7 @@ It does not open another WebSocket and it validates successful response payload 
 
 `src/project-manager/ProjectManagerView.tsx` implements the current list/editor UI. It provides loading, empty and local error states, creation and editing of `name`/`description`, and keeps the rest of Web Shell usable if Service Hub or Project Manager is unavailable.
 
-Project Manager authorization is not implemented in the current Web view yet. `CORE-005 / Step 5` adds backend enforcement first; Web user/session UX follows in Step 6.
+The Web view does not yet own session auth. Step 5 deliberately leaves that UX for Step 6, while the backend already enforces authentication and authorization. Until Step 6, real Project Manager requests from this view fail with `auth.invalid_session`.
 
 ## Project context
 
@@ -132,7 +134,7 @@ The context:
 - can be selected from real Project Manager list data in `/projects`;
 - updates its display snapshot if the selected project is renamed in the editor.
 
-No project field is added to the Service Hub envelope. The current `sessionStorage` project snapshot is frontend navigation context, not proof of access. `CORE-005 / Step 6` must reconcile this context with the authenticated user/session lifecycle.
+No project field is added to the Service Hub envelope. The current `sessionStorage` project snapshot is frontend navigation context, not proof of access. `CORE-005 / Step 6` must reconcile this context with the authenticated user/session lifecycle and clear/revalidate it when user/access changes.
 
 ## Service Hub client
 
@@ -172,7 +174,7 @@ Important boundaries:
 - authoritative validation belongs to Users & Access / protected backend providers;
 - persistent browser token storage, restoration and shared authenticated user context are intentionally deferred to `CORE-005 / Step 6`.
 
-This keeps Step 4 as transport plumbing rather than prematurely implementing Web login/session ownership.
+Step 5 uses the same transport field to protect Project Manager. No Project Manager business payload receives identity or permission fields.
 
 ## Service Hub URL configuration
 
@@ -211,27 +213,24 @@ The integration build enables `VITE_SERVICE_HUB_E2E=1` only to expose the alread
 
 ## Real Project Manager browser integration
 
-The Project Manager end-to-end check is separate from both backend-independent smoke and the generic Service Hub integration:
+The Project Manager end-to-end check remains separate from backend-independent smoke and generic Service Hub integration:
 
     npm.cmd run test:e2e:project-manager
 
-When the repository npm baseline is invoked through `npx.cmd --yes npm@11.19.0`, the runner keeps its nested production build on the same npm executable.
+During `CORE-005 / Step 5` this browser check has a deliberately narrower purpose than the completed CORE-004 acceptance.
 
-The command is intended for the Windows + WSL workflow. It:
+The runner still starts real C++ Service Hub and Project Manager processes and serves a production Web build. Because Step 6 login/session ownership is not implemented yet, the browser does **not** attempt to bypass the new backend security boundary with a test-only user injection.
 
-- builds the real C++ Service Hub and Project Manager targets in WSL;
-- starts Service Hub on a temporary loopback port;
-- starts Project Manager against a temporary SQLite database;
-- waits until `project-manager.v1` is actually registered;
-- builds and serves the production Web Shell against that Service Hub;
-- creates and edits a project through the real browser UI;
-- selects the real project as shared Web Shell context;
-- performs parallel `list-projects` and `get-project` requests through the shared browser Service Hub client;
-- stops only Project Manager while Service Hub remains connected and verifies the local unavailable-service UI without losing project context;
-- restarts Project Manager with the same SQLite database and waits for provider re-registration;
-- verifies the stable project ID, persisted data, restored session context and a new update after restart;
-- stops the exact temporary processes and removes the temporary database.
+Instead the Step 5 browser assertion verifies:
 
-This runner does not introduce a test provider for Project Manager: the provider is the production C++ `dispatcher-project-manager` process.
+- Service Hub connects normally;
+- `/projects` remains a real Project Manager destination;
+- unauthenticated `list-projects` is rejected by the production Project Manager with `auth.invalid_session`;
+- an unauthenticated create attempt is also rejected;
+- the Web Shell remains rendered rather than treating UI visibility as authorization.
 
-The existing Project Manager browser integration still reflects the unauthenticated `CORE-004` baseline. `CORE-005 / Step 5` must update the backend authorization path and its relevant integration coverage before Web login/session UX is added in Step 6.
+Authenticated browser CRUD, user-aware project context and permission-sensitive controls return as part of Step 6/7 integration after the Web Shell has a production user/session context.
+
+The stronger Step 5 backend authorization matrix is covered by `project-manager.service-hub-integration` in WSL, which runs real Service Hub + Project Manager + Users & Access processes.
+
+This staging avoids introducing a hidden test-only browser authentication mechanism and keeps Web presentation separate from the actual security boundary.

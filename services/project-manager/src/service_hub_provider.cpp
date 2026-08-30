@@ -1,5 +1,7 @@
 #include "dispatcher/project_manager/service_hub_provider.hpp"
 
+#include "dispatcher/project_manager/authorization_client.hpp"
+
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
@@ -11,6 +13,7 @@
 #include <cctype>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <poll.h>
 #include <string>
 #include <thread>
@@ -77,6 +80,21 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     }
 
     return true;
+}
+
+[[nodiscard]] bool session_auth_token(
+    json_object* message,
+    std::string& token) {
+    json_object* auth = nullptr;
+    if (!json_object_object_get_ex(message, "auth", &auth) ||
+        !object_has_only_fields(auth, {"type", "token"})) {
+        return false;
+    }
+
+    std::string type;
+    return string_field(auth, "type", type) &&
+           type == "session" &&
+           string_field(auth, "token", token);
 }
 
 [[nodiscard]] json_object* project_json(const Project& project) {
@@ -164,11 +182,88 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     return success_response(request_id, payload.release());
 }
 
+[[nodiscard]] std::optional<std::string> authorization_error(
+    const std::string_view request_id,
+    const AuthorizationResult result) {
+    switch (result) {
+    case AuthorizationResult::allowed:
+        return std::nullopt;
+    case AuthorizationResult::denied:
+        return error_response(
+            request_id,
+            "access.forbidden",
+            "Authenticated user does not have the required Project Manager access");
+    case AuthorizationResult::invalid_session:
+        return error_response(
+            request_id,
+            "auth.invalid_session",
+            "Project Manager requires a valid authenticated session");
+    case AuthorizationResult::session_expired:
+        return error_response(
+            request_id,
+            "auth.session_expired",
+            "Authenticated session has expired");
+    case AuthorizationResult::unavailable:
+        return error_response(
+            request_id,
+            "project.authorization_unavailable",
+            "Users & Access authorization is unavailable");
+    }
+
+    return error_response(
+        request_id,
+        "project.authorization_unavailable",
+        "Users & Access authorization is unavailable");
+}
+
+[[nodiscard]] std::optional<std::string> require_authorization(
+    UsersAccessAuthorizationClient& authorization,
+    const std::string_view request_id,
+    const std::string_view session_token,
+    const AuthorizationScope& scope,
+    const std::string_view capability) {
+    return authorization_error(
+        request_id,
+        authorization.evaluate(session_token, scope, capability));
+}
+
+[[nodiscard]] std::optional<std::string> require_edit_or_admin(
+    UsersAccessAuthorizationClient& authorization,
+    const std::string_view request_id,
+    const std::string_view session_token,
+    const std::string_view project_id) {
+    const AuthorizationScope scope =
+        AuthorizationScope::project(std::string(project_id));
+
+    const auto edit =
+        authorization.evaluate(session_token, scope, "edit");
+    if (edit == AuthorizationResult::allowed) {
+        return std::nullopt;
+    }
+    if (edit != AuthorizationResult::denied) {
+        return authorization_error(request_id, edit);
+    }
+
+    return authorization_error(
+        request_id,
+        authorization.evaluate(session_token, scope, "admin"));
+}
+
 [[nodiscard]] std::string handle_request(
     ProjectManager& project_manager,
+    UsersAccessAuthorizationClient& authorization,
     const std::string_view request_id,
     const std::string_view operation,
+    json_object* message,
     json_object* payload) {
+    std::string session_token;
+    if (!session_auth_token(message, session_token)) {
+        return error_response(
+            request_id,
+            "auth.invalid_session",
+            "Project Manager requires session authentication");
+    }
+
     if (operation == "create-project") {
         if (!object_has_only_fields(payload, {"name", "description"})) {
             return error_response(
@@ -198,6 +293,16 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             description = json_object_get_string(description_value);
         }
 
+        if (const auto denied = require_authorization(
+                authorization,
+                request_id,
+                session_token,
+                AuthorizationScope::global(),
+                "admin");
+            denied.has_value()) {
+            return *denied;
+        }
+
         return result_response(
             request_id,
             project_manager.create(CreateProjectInput{
@@ -214,17 +319,47 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
                 "list-projects payload must be an empty object");
         }
 
+        const auto global_view = authorization.evaluate(
+            session_token,
+            AuthorizationScope::global(),
+            "view");
+        if (global_view != AuthorizationResult::allowed &&
+            global_view != AuthorizationResult::denied) {
+            return *authorization_error(request_id, global_view);
+        }
+
         auto result = project_manager.list();
         if (!result.ok()) {
-            const auto [code, message] = error_info(result.error);
-            return error_response(request_id, code, message);
+            const auto [code, message_text] = error_info(result.error);
+            return error_response(request_id, code, message_text);
         }
 
         auto payload_object = adopt_json(json_object_new_object());
         json_object* projects = json_object_new_array();
-        for (const auto& project : *result.value) {
-            json_object_array_add(projects, project_json(project));
+
+        if (global_view == AuthorizationResult::allowed) {
+            for (const auto& project : *result.value) {
+                json_object_array_add(projects, project_json(project));
+            }
+        } else {
+            for (const auto& project : *result.value) {
+                const auto access = authorization.evaluate(
+                    session_token,
+                    AuthorizationScope::project(project.id),
+                    "view");
+
+                if (access == AuthorizationResult::allowed) {
+                    json_object_array_add(projects, project_json(project));
+                    continue;
+                }
+
+                if (access != AuthorizationResult::denied) {
+                    json_object_put(projects);
+                    return *authorization_error(request_id, access);
+                }
+            }
         }
+
         json_object_object_add(payload_object.get(), "projects", projects);
         return success_response(request_id, payload_object.release());
     }
@@ -243,6 +378,16 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
                 request_id,
                 "project.invalid_request",
                 "get-project requires a non-empty string id");
+        }
+
+        if (const auto denied = require_authorization(
+                authorization,
+                request_id,
+                session_token,
+                AuthorizationScope::project(id),
+                "view");
+            denied.has_value()) {
+            return *denied;
         }
 
         return result_response(request_id, project_manager.get(id));
@@ -266,6 +411,15 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
                 request_id,
                 "project.invalid_request",
                 "update-project requires string id, name and description");
+        }
+
+        if (const auto denied = require_edit_or_admin(
+                authorization,
+                request_id,
+                session_token,
+                id);
+            denied.has_value()) {
+            return *denied;
         }
 
         return result_response(
@@ -404,6 +558,7 @@ private:
 [[nodiscard]] bool handle_hub_message(
     HubConnection& connection,
     ProjectManager& project_manager,
+    UsersAccessAuthorizationClient& authorization,
     const std::string& message_text) {
     auto message = adopt_json(json_tokener_parse(message_text.c_str()));
     if (!message || !json_object_is_type(message.get(), json_type_object)) {
@@ -436,7 +591,13 @@ private:
     }
 
     return connection.write(
-        handle_request(project_manager, request_id, operation, payload));
+        handle_request(
+            project_manager,
+            authorization,
+            request_id,
+            operation,
+            message.get(),
+            payload));
 }
 
 void interruptible_sleep(const std::atomic<bool>& stop_requested) {
@@ -511,6 +672,10 @@ void ServiceHubProvider::stop() {
 }
 
 void ServiceHubProvider::run() {
+    UsersAccessAuthorizationClient authorization{
+        endpoint_.host,
+        endpoint_.port};
+
     while (!stop_requested_.load()) {
         HubConnection connection;
         if (!connection.connect(endpoint_) || !register_provider(connection)) {
@@ -529,7 +694,11 @@ void ServiceHubProvider::run() {
                 healthy = false;
                 break;
             case HubConnection::ReadResult::message:
-                healthy = handle_hub_message(connection, project_manager_, message);
+                healthy = handle_hub_message(
+                    connection,
+                    project_manager_,
+                    authorization,
+                    message);
                 break;
             }
         }
