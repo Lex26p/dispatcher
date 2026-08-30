@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 1 завершён; текущий шаг — Step 2.**
+**В разработке. Step 2 завершён; текущий шаг — Step 3.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий шаг — `Step 1 — Users & Access domain и backend skeleton`.
+Текущий шаг — `Step 3 — Authentication/session contract`.
 
 ## Цель
 
@@ -430,6 +430,10 @@ Tests покрывают scrypt correct/wrong password verification, SQLite crea
 
 На Step 2 по-прежнему **нет** Service Hub provider/auth envelope, authentication/session external contract, login operation или Web UI. Это начинается только Step 3.
 
+Step 2 завершён commit:
+
+`3b140d808638bb0c14a70b2aa1df96eb377af197`
+
 ## Step 3 — Authentication/session contract
 
 ### Что делаем
@@ -462,6 +466,37 @@ Tests покрывают scrypt correct/wrong password verification, SQLite crea
 ### Результат
 
 Существует стабильный Users & Access auth/session contract, на который можно опереть Service Hub и providers.
+
+### Решение и реализация Step 3
+
+Service address фиксируется как `users-access.v1`. Предметный payload contract документируется в `docs/architecture/users-access-contract.md`, machine-readable definitions — в `services/users-access/protocol/dispatcher/users_access/v1/users_access.schema.json`.
+
+Step 3 сознательно не меняет Service Hub v1 envelope и не регистрирует production Users & Access provider: public/protected operation semantics фиксируются сейчас, а transport authentication propagation принадлежит Step 4. `login` является public operation; остальные operations должны получать subject из trusted authenticated request context и не принимают `user_id`/session token в business payload как доказательство identity.
+
+Session representation:
+
+- opaque bearer token;
+- 256 bit CSPRNG entropy;
+- wire representation — 64 lowercase hex characters;
+- token не содержит user ID/permissions/timestamps;
+- SQLite хранит только SHA-256 digest token;
+- idle timeout — 30 минут;
+- absolute lifetime — 12 часов;
+- timeout/validation выполняются server-side;
+- successful validation обновляет last activity;
+- logout удаляет session;
+- sessions durable переживают restart до expiry/revocation;
+- disabled user не получает новую session, а existing session fail-closed при следующей validation.
+
+SQLite schema мигрирует `v1 -> v2` добавлением таблицы `sessions` и индекса по user ID. Existing users/access/credentials/audit records не меняются.
+
+Authentication intentionally uses generic invalid-credentials behavior для unknown login, wrong password, missing verifier и disabled user. Для unknown/missing credential path выполняется dummy scrypt verification, чтобы не создавать дешёвый obvious timing path.
+
+Local security audit расширяется событиями `authentication_succeeded`, `authentication_failed`, `session_logged_out`, `session_expired`, `session_rejected_disabled_user`; password/raw bearer token не записываются.
+
+Step 3 реализует `AuthenticationSessionService`, OpenSSL session-token codec и durable session repository; tests покрывают login, generic failure, token format, project-scope access evaluation, restart persistence, idle expiration, disabled-user invalidation, logout и отсутствие raw token в SQLite.
+
+Control mode в session schema Step 3 не добавляется: его реальная representation остаётся Step 7, после проверки authenticated Service Hub/Web boundary. Browser token storage также не выбирается до соответствующего Web/security шага.
 
 ## Step 4 — Authenticated Service Hub request boundary
 

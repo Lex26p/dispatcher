@@ -10,6 +10,11 @@ enum class SecurityAuditEventType {
     bootstrap_admin_created,
     user_enabled,
     user_disabled,
+    authentication_succeeded,
+    authentication_failed,
+    session_logged_out,
+    session_expired,
+    session_rejected_disabled_user,
 };
 
 [[nodiscard]] constexpr const char* security_audit_event_name(
@@ -21,6 +26,16 @@ enum class SecurityAuditEventType {
         return "user_enabled";
     case SecurityAuditEventType::user_disabled:
         return "user_disabled";
+    case SecurityAuditEventType::authentication_succeeded:
+        return "authentication_succeeded";
+    case SecurityAuditEventType::authentication_failed:
+        return "authentication_failed";
+    case SecurityAuditEventType::session_logged_out:
+        return "session_logged_out";
+    case SecurityAuditEventType::session_expired:
+        return "session_expired";
+    case SecurityAuditEventType::session_rejected_disabled_user:
+        return "session_rejected_disabled_user";
     }
     return "unknown";
 }

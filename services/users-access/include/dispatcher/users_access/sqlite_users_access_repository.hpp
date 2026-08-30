@@ -3,6 +3,7 @@
 #include "dispatcher/users_access/bootstrap.hpp"
 #include "dispatcher/users_access/credential.hpp"
 #include "dispatcher/users_access/security_audit.hpp"
+#include "dispatcher/users_access/session.hpp"
 #include "dispatcher/users_access/users_access_repository.hpp"
 
 #include <string>
@@ -16,6 +17,7 @@ class SqliteUsersAccessRepository final
     : public UsersAccessRepository,
       public CredentialRepository,
       public SecurityAuditRepository,
+      public SessionRepository,
       public BootstrapStore {
 public:
     explicit SqliteUsersAccessRepository(std::string_view database_path);
@@ -56,6 +58,16 @@ public:
         const SecurityAuditRecord& record) override;
     SecurityAuditRepositoryStatus list_security_audit(
         std::vector<SecurityAuditRecord>& records) const override;
+
+    SessionRepositoryStatus insert_session(const SessionRecord& session) override;
+    SessionRepositoryStatus find_session_by_digest(
+        const std::vector<unsigned char>& token_digest,
+        SessionRecord& session) const override;
+    SessionRepositoryStatus update_session_activity(
+        const std::vector<unsigned char>& token_digest,
+        std::int64_t last_activity_unix_ms) override;
+    SessionRepositoryStatus erase_session(
+        const std::vector<unsigned char>& token_digest) override;
 
     BootstrapStoreStatus bootstrap_first_admin(
         const BootstrapAdminRecord& record) override;

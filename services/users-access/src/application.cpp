@@ -74,7 +74,7 @@ int Application::run(
 
     output << "Dispatcher Users & Access started "
            << "(SQLite " << database_path
-           << "; authentication/session contract not configured)\n";
+           << "; server-side session storage ready; Service Hub provider not configured)\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();

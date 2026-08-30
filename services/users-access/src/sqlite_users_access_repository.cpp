@@ -10,7 +10,7 @@
 namespace dispatcher::users_access {
 namespace {
 
-constexpr int supported_schema_version = 1;
+constexpr int supported_schema_version = 2;
 
 class Statement final {
 public:
@@ -166,6 +166,26 @@ private:
         event = SecurityAuditEventType::user_disabled;
         return true;
     }
+    if (value == "authentication_succeeded") {
+        event = SecurityAuditEventType::authentication_succeeded;
+        return true;
+    }
+    if (value == "authentication_failed") {
+        event = SecurityAuditEventType::authentication_failed;
+        return true;
+    }
+    if (value == "session_logged_out") {
+        event = SecurityAuditEventType::session_logged_out;
+        return true;
+    }
+    if (value == "session_expired") {
+        event = SecurityAuditEventType::session_expired;
+        return true;
+    }
+    if (value == "session_rejected_disabled_user") {
+        event = SecurityAuditEventType::session_rejected_disabled_user;
+        return true;
+    }
     return false;
 }
 
@@ -256,49 +276,72 @@ bool SqliteUsersAccessRepository::initialize_schema() {
         return false;
     }
 
-    const bool created =
-        execute(
-            "CREATE TABLE users ("
-            "id TEXT PRIMARY KEY NOT NULL,"
-            "login TEXT NOT NULL UNIQUE,"
-            "display_name TEXT NOT NULL,"
-            "enabled INTEGER NOT NULL CHECK(enabled IN (0,1))"
-            ");") &&
-        execute(
-            "CREATE TABLE permission_sets ("
-            "id TEXT PRIMARY KEY NOT NULL,"
-            "name TEXT NOT NULL,"
-            "capabilities INTEGER NOT NULL"
-            ");") &&
-        execute(
-            "CREATE TABLE access_assignments ("
-            "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-            "permission_set_id TEXT NOT NULL REFERENCES permission_sets(id) ON DELETE CASCADE,"
-            "scope_kind INTEGER NOT NULL CHECK(scope_kind IN (0,1)),"
-            "project_id TEXT NOT NULL,"
-            "UNIQUE(user_id, permission_set_id, scope_kind, project_id)"
-            ");") &&
-        execute(
-            "CREATE TABLE credential_verifiers ("
-            "user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
-            "algorithm TEXT NOT NULL,"
-            "cost_n INTEGER NOT NULL,"
-            "block_size_r INTEGER NOT NULL,"
-            "parallelization_p INTEGER NOT NULL,"
-            "salt BLOB NOT NULL,"
-            "digest BLOB NOT NULL"
-            ");") &&
-        execute(
-            "CREATE TABLE security_audit ("
-            "sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "occurred_at_unix_ms INTEGER NOT NULL,"
-            "event_type TEXT NOT NULL,"
-            "actor_user_id TEXT NOT NULL,"
-            "subject_user_id TEXT NOT NULL"
-            ");") &&
-        execute("PRAGMA user_version = 1;");
+    bool success = true;
+    if (version == 0) {
+        success =
+            execute(
+                "CREATE TABLE users ("
+                "id TEXT PRIMARY KEY NOT NULL,"
+                "login TEXT NOT NULL UNIQUE,"
+                "display_name TEXT NOT NULL,"
+                "enabled INTEGER NOT NULL CHECK(enabled IN (0,1))"
+                ");") &&
+            execute(
+                "CREATE TABLE permission_sets ("
+                "id TEXT PRIMARY KEY NOT NULL,"
+                "name TEXT NOT NULL,"
+                "capabilities INTEGER NOT NULL"
+                ");") &&
+            execute(
+                "CREATE TABLE access_assignments ("
+                "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                "permission_set_id TEXT NOT NULL REFERENCES permission_sets(id) ON DELETE CASCADE,"
+                "scope_kind INTEGER NOT NULL CHECK(scope_kind IN (0,1)),"
+                "project_id TEXT NOT NULL,"
+                "UNIQUE(user_id, permission_set_id, scope_kind, project_id)"
+                ");") &&
+            execute(
+                "CREATE TABLE credential_verifiers ("
+                "user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                "algorithm TEXT NOT NULL,"
+                "cost_n INTEGER NOT NULL,"
+                "block_size_r INTEGER NOT NULL,"
+                "parallelization_p INTEGER NOT NULL,"
+                "salt BLOB NOT NULL,"
+                "digest BLOB NOT NULL"
+                ");") &&
+            execute(
+                "CREATE TABLE security_audit ("
+                "sequence INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "occurred_at_unix_ms INTEGER NOT NULL,"
+                "event_type TEXT NOT NULL,"
+                "actor_user_id TEXT NOT NULL,"
+                "subject_user_id TEXT NOT NULL"
+                ");");
+    } else if (version != 1) {
+        set_error("unsupported database schema version");
+        success = false;
+    }
 
-    if (!created) {
+    if (success) {
+        success = execute(
+            "CREATE TABLE sessions ("
+            "token_digest BLOB PRIMARY KEY NOT NULL CHECK(length(token_digest)=32),"
+            "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+            "issued_at_unix_ms INTEGER NOT NULL,"
+            "last_activity_unix_ms INTEGER NOT NULL,"
+            "absolute_expires_at_unix_ms INTEGER NOT NULL"
+            ");");
+    }
+    if (success) {
+        success = execute(
+            "CREATE INDEX sessions_user_id_idx ON sessions(user_id);");
+    }
+    if (success) {
+        success = execute("PRAGMA user_version = 2;");
+    }
+
+    if (!success) {
         (void)execute("ROLLBACK;");
         return false;
     }
@@ -747,6 +790,134 @@ SecurityAuditRepositoryStatus SqliteUsersAccessRepository::list_security_audit(
             .subject_user_id = column_text(statement.get(), 4),
         });
     }
+}
+
+
+SessionRepositoryStatus SqliteUsersAccessRepository::insert_session(
+    const SessionRecord& session) {
+    if (!ready_ ||
+        session.token_digest.size() != session_token_digest_bytes ||
+        session.user_id.empty()) {
+        return SessionRepositoryStatus::error;
+    }
+
+    Statement statement(
+        database_,
+        "INSERT INTO sessions("
+        "token_digest, user_id, issued_at_unix_ms, last_activity_unix_ms, "
+        "absolute_expires_at_unix_ms"
+        ") VALUES(?1, ?2, ?3, ?4, ?5);");
+    if (!statement ||
+        !bind_blob(statement.get(), 1, session.token_digest) ||
+        !bind_text(statement.get(), 2, session.user_id) ||
+        sqlite3_bind_int64(statement.get(), 3, session.issued_at_unix_ms) != SQLITE_OK ||
+        sqlite3_bind_int64(statement.get(), 4, session.last_activity_unix_ms) != SQLITE_OK ||
+        sqlite3_bind_int64(statement.get(), 5, session.absolute_expires_at_unix_ms) != SQLITE_OK) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+
+    const int result = sqlite3_step(statement.get());
+    if (result == SQLITE_DONE) {
+        return SessionRepositoryStatus::ok;
+    }
+    if (result == SQLITE_CONSTRAINT_PRIMARYKEY ||
+        result == SQLITE_CONSTRAINT_UNIQUE) {
+        return SessionRepositoryStatus::conflict;
+    }
+
+    set_error(sqlite3_errmsg(database_));
+    return SessionRepositoryStatus::error;
+}
+
+SessionRepositoryStatus SqliteUsersAccessRepository::find_session_by_digest(
+    const std::vector<unsigned char>& token_digest,
+    SessionRecord& session) const {
+    if (!ready_ || token_digest.size() != session_token_digest_bytes) {
+        return SessionRepositoryStatus::error;
+    }
+
+    Statement statement(
+        database_,
+        "SELECT token_digest, user_id, issued_at_unix_ms, last_activity_unix_ms, "
+        "absolute_expires_at_unix_ms FROM sessions WHERE token_digest=?1;");
+    if (!statement || !bind_blob(statement.get(), 1, token_digest)) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+
+    const int result = sqlite3_step(statement.get());
+    if (result == SQLITE_DONE) {
+        return SessionRepositoryStatus::not_found;
+    }
+    if (result != SQLITE_ROW) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+
+    const auto stored_digest = column_blob(statement.get(), 0);
+    if (stored_digest.size() != session_token_digest_bytes) {
+        set_error("invalid session token digest in database");
+        return SessionRepositoryStatus::error;
+    }
+
+    session = SessionRecord{
+        .token_digest = stored_digest,
+        .user_id = column_text(statement.get(), 1),
+        .issued_at_unix_ms = sqlite3_column_int64(statement.get(), 2),
+        .last_activity_unix_ms = sqlite3_column_int64(statement.get(), 3),
+        .absolute_expires_at_unix_ms = sqlite3_column_int64(statement.get(), 4),
+    };
+    if (session.user_id.empty()) {
+        set_error("invalid session user in database");
+        return SessionRepositoryStatus::error;
+    }
+    return SessionRepositoryStatus::ok;
+}
+
+SessionRepositoryStatus SqliteUsersAccessRepository::update_session_activity(
+    const std::vector<unsigned char>& token_digest,
+    const std::int64_t last_activity_unix_ms) {
+    if (!ready_ || token_digest.size() != session_token_digest_bytes) {
+        return SessionRepositoryStatus::error;
+    }
+
+    Statement statement(
+        database_,
+        "UPDATE sessions SET last_activity_unix_ms=?1 WHERE token_digest=?2;");
+    if (!statement ||
+        sqlite3_bind_int64(statement.get(), 1, last_activity_unix_ms) != SQLITE_OK ||
+        !bind_blob(statement.get(), 2, token_digest)) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+    if (sqlite3_step(statement.get()) != SQLITE_DONE) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+    return sqlite3_changes(database_) == 1
+        ? SessionRepositoryStatus::ok
+        : SessionRepositoryStatus::not_found;
+}
+
+SessionRepositoryStatus SqliteUsersAccessRepository::erase_session(
+    const std::vector<unsigned char>& token_digest) {
+    if (!ready_ || token_digest.size() != session_token_digest_bytes) {
+        return SessionRepositoryStatus::error;
+    }
+
+    Statement statement(database_, "DELETE FROM sessions WHERE token_digest=?1;");
+    if (!statement || !bind_blob(statement.get(), 1, token_digest)) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+    if (sqlite3_step(statement.get()) != SQLITE_DONE) {
+        set_error(sqlite3_errmsg(database_));
+        return SessionRepositoryStatus::error;
+    }
+    return sqlite3_changes(database_) == 1
+        ? SessionRepositoryStatus::ok
+        : SessionRepositoryStatus::not_found;
 }
 
 BootstrapStoreStatus SqliteUsersAccessRepository::bootstrap_first_admin(

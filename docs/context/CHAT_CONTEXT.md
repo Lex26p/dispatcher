@@ -197,7 +197,13 @@ Exact credential hashing dependency, session/token representation и Service Hub
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
-Текущий шаг — `CORE-005 / Step 2 — Durable users/access storage, credentials и bootstrap`. Выбран локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record. Session/token representation, Service Hub auth и Web остаются Step 3+.
+`CORE-005 / Step 2` завершён commit:
+
+`3b140d808638bb0c14a70b2aa1df96eb377af197`
+
+Step 2 зафиксировал локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record.
+
+Текущий шаг — `CORE-005 / Step 3 — Authentication/session contract`. Service address фиксируется как `users-access.v1`; session — opaque 256-bit bearer token с server-side state, 30-minute idle timeout и 12-hour absolute lifetime. SQLite schema v2 хранит только SHA-256 token digest и durable session metadata. Step 3 публикует language-independent contract/schema и реализует session engine/tests, но ещё не меняет Service Hub envelope и не добавляет Web login; это Step 4+.
 
 ## Рабочий процесс
 

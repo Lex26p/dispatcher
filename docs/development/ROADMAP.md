@@ -446,6 +446,8 @@ Plan commit проверен:
 
 Step 1 зафиксировал отдельный C++ Users & Access skeleton, stable user identity, independent `view/control/edit/admin` capabilities, permission sets, global/project assignments, deterministic union-based effective permissions, repository port, unit tests и Linux lifecycle.
 
-Текущий шаг — `Step 2 — Durable users/access storage, credentials и bootstrap`: локальный durable storage Users & Access, established password verifier без plaintext, explicit secure first-admin bootstrap, durable enabled state/security audit baseline и restart/reopen tests. Authentication/session contract, authenticated Service Hub boundary, Project Manager enforcement и Web остаются последующими шагами.
+`CORE-005 / Step 2` завершён commit `3b140d808638bb0c14a70b2aa1df96eb377af197`: локальный SQLite storage Users & Access, OpenSSL scrypt verifier без plaintext, explicit first-admin bootstrap, durable enabled state/security audit baseline и restart/reopen tests.
+
+Текущий шаг — `Step 3 — Authentication/session contract`: фиксируется `users-access.v1`, opaque server-side session token, durable session lifecycle, machine-readable payload schema и authentication/session tests. Service Hub authenticated envelope, Project Manager enforcement и Web остаются следующими шагами.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

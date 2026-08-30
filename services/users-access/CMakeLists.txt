@@ -27,6 +27,7 @@ endif()
 
 add_library(dispatcher_users_access_crypto STATIC
     src/openssl_scrypt_password_hasher.cpp
+    src/openssl_session_token_codec.cpp
 )
 
 target_include_directories(
@@ -94,6 +95,28 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(dispatcher_users_access_sqlite PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(dispatcher_users_access_session STATIC
+    src/authentication_session_service.cpp
+)
+
+target_include_directories(
+    dispatcher_users_access_session
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+    dispatcher_users_access_session
+    PUBLIC
+        dispatcher_users_access_core
+)
+
+target_compile_features(dispatcher_users_access_session PUBLIC cxx_std_20)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dispatcher_users_access_session PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(dispatcher_users_access
     src/main.cpp
 )
@@ -143,9 +166,27 @@ if(DISPATCHER_BUILD_TESTS)
         PROPERTIES OUTPUT_NAME "dispatcher-users-access-persistence-tests"
     )
 
+    add_executable(dispatcher_users_access_session_tests
+        tests/session_test.cpp
+    )
+    target_link_libraries(
+        dispatcher_users_access_session_tests
+        PRIVATE
+            dispatcher_users_access_bootstrap
+            dispatcher_users_access_core
+            dispatcher_users_access_crypto
+            dispatcher_users_access_session
+            dispatcher_users_access_sqlite
+    )
+    set_target_properties(
+        dispatcher_users_access_session_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-users-access-session-tests"
+    )
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(dispatcher_users_access_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_persistence_tests PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(dispatcher_users_access_session_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
     add_test(
@@ -162,6 +203,10 @@ if(DISPATCHER_BUILD_TESTS)
             $<TARGET_FILE:dispatcher_users_access>
     )
     add_test(
+        NAME users-access.authentication-and-session
+        COMMAND dispatcher_users_access_session_tests
+    )
+    add_test(
         NAME users-access.signal-term
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/lifecycle_signal_test.sh
             $<TARGET_FILE:dispatcher_users_access> TERM SIGTERM
@@ -176,6 +221,7 @@ if(DISPATCHER_BUILD_TESTS)
         users-access.domain-and-application
         users-access.persistence-and-credentials
         users-access.bootstrap-cli
+        users-access.authentication-and-session
         users-access.signal-term
         users-access.signal-int
         PROPERTIES TIMEOUT 30

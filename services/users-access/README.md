@@ -6,9 +6,11 @@ Users & Access is the core backend responsibility for stable user identity, acce
 
 `CORE-005 / Step 1` established the domain/application boundary and standalone C++ service skeleton.
 
-`CORE-005 / Step 2` adds durable local users/access persistence, password-verifier storage and explicit first-administrator bootstrap.
+`CORE-005 / Step 2` established durable local users/access persistence, password-verifier storage and explicit first-administrator bootstrap.
 
-There is still no authentication/session external contract, Service Hub provider or Web login. Those begin at Step 3.
+`CORE-005 / Step 3` establishes the versioned `users-access.v1` authentication/session contract and server-side session engine.
+
+There is still no authenticated Service Hub envelope/provider binding or Web login. Transport propagation begins at Step 4.
 
 ## Domain model
 
@@ -46,13 +48,16 @@ The choice is service-local:
 
 Schema version is tracked with `PRAGMA user_version`.
 
-Schema v1 stores:
+Schema v2 stores:
 
 - `users`;
 - `permission_sets`;
 - `access_assignments`;
 - `credential_verifiers`;
-- `security_audit`.
+- `security_audit`;
+- `sessions`.
+
+Step 3 migrates an existing schema v1 database in-place by adding only the `sessions` table/index and advancing `PRAGMA user_version` to `2`.
 
 Foreign-key checking is enabled. A database with a schema version newer than the executable supports is rejected.
 
@@ -71,7 +76,32 @@ Current stored verifier parameters:
 
 The database stores only algorithm parameters, salt and derived verifier. Plaintext passwords are never persisted.
 
-The verifier format is internal to Users & Access and can be evolved later. Session/token representation is deliberately not selected until Step 3.
+The verifier format is internal to Users & Access and can be evolved later.
+
+
+## Authentication/session baseline
+
+Step 3 uses server-side opaque sessions.
+
+- the bearer token contains 256 bits of CSPRNG entropy and is represented as 64 lowercase hex characters;
+- the token contains no user ID, permissions or timestamps;
+- SQLite stores only SHA-256 token digest, never the raw bearer token;
+- idle timeout is 30 minutes and absolute lifetime is 12 hours;
+- validation and expiration are server-side;
+- successful validation refreshes last activity;
+- logout removes the session;
+- sessions survive Users & Access restart until expiry/revocation;
+- disabled users cannot authenticate and an already-issued session fails closed at the next validation;
+- authentication success/failure, logout, expiry and disabled-session rejection are recorded in the local security audit without password/token material.
+
+The external service address is:
+
+    users-access.v1
+
+Payload contract: `docs/architecture/users-access-contract.md`.
+Machine-readable definitions: `services/users-access/protocol/dispatcher/users_access/v1/users_access.schema.json`.
+
+Step 3 intentionally does not place the session token inside protected operation payloads. `login` is public; protected operations rely on the authenticated request context that Step 4 will add to the existing Service Hub boundary. Browser token storage is not selected yet.
 
 ## Secure first-administrator bootstrap
 
@@ -109,7 +139,7 @@ Default:
 
 On normal startup the executable opens/initializes SQLite before entering the SIGINT/SIGTERM lifecycle. Storage initialization failure prevents the service from starting.
 
-No network endpoint or Service Hub registration exists yet.
+No authenticated Service Hub provider binding exists yet. Step 4 owns transport integration.
 
 ## Dependencies
 
@@ -125,7 +155,7 @@ OpenSSL provides the established scrypt implementation and secure random salt ge
 From the repository root:
 
     cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests
+    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests dispatcher_users_access_session_tests
     ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
 
 Current CTest checks:
@@ -133,6 +163,7 @@ Current CTest checks:
 - `users-access.domain-and-application`;
 - `users-access.persistence-and-credentials`;
 - `users-access.bootstrap-cli`;
+- `users-access.authentication-and-session`;
 - `users-access.signal-term`;
 - `users-access.signal-int`.
 

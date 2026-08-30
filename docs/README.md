@@ -41,8 +41,9 @@
 - [`data-hub-contract.md`](architecture/data-hub-contract.md) — внешний gRPC + Protocol Buffers контракт Data Hub и его runtime-семантика.
 - [`service-hub-contract.md`](architecture/service-hub-contract.md) — внешний WebSocket + JSON контракт Service Hub, provider registration и request/response semantics.
 - [`project-manager-contract.md`](architecture/project-manager-contract.md) — versioned Project Manager v1 operations/payload/errors поверх Service Hub.
+- [`users-access-contract.md`](architecture/users-access-contract.md) — versioned Users & Access v1 authentication/session/access payload contract и session semantics.
 
-Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Этот SQLite является внутренним storage detail Project Manager, а не выбором общей БД платформы. Event Hub, общая persistence-стратегия других сервисов и deployment выбираются в соответствующих будущих спринтах.
+Технические решения добавляются по мере реальной необходимости. Для Data Hub и Service Hub транспорт/serialization уже зафиксированы; Project Manager использует versioned `project-manager.v1` поверх Service Hub и локальный SQLite schema v1. Users & Access использует локальный SQLite storage и versioned `users-access.v1` payload contract; authenticated Service Hub transport propagation остаётся текущей последующей задачей CORE-005. Service-local SQLite не является выбором общей БД платформы. Event Hub, общая persistence-стратегия других сервисов и deployment выбираются в соответствующих будущих спринтах.
 
 ### `docs/development/`
 
@@ -55,7 +56,7 @@
 - [`sprints/CORE-004.md`](development/sprints/CORE-004.md) — план и итоговый отчёт завершённого спринта Project Manager.
 - [`sprints/CORE-005.md`](development/sprints/CORE-005.md) — план текущего спринта Users & Access.
 
-`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится на стадии отдельного sprint plan; реализация не начинается до фиксации и проверки plan commit.
+`CORE-004 — Project Manager` завершён closure commit `29b1f0ea750633cc53cc4e023585835d2b06ad8b`. `CORE-005 — Users & Access` находится в разработке; текущий шаг — authentication/session contract после завершённых domain и durable-storage шагов.
 
 ### `docs/context/`
 
