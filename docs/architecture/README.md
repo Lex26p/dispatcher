@@ -261,6 +261,8 @@ Users & Access — самостоятельная backend responsibility для 
 
 В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.
 
+`CORE-005 / Step 6B` фиксирует browser session boundary без изменения Service Hub protocol: Web хранит только opaque bearer текущей browser session в `sessionStorage`, authoritative восстанавливает identity через `current-session` после reload и очищает bearer при `auth.invalid_session`/`auth.session_expired`. Session-aware wrapper над существующим shared `ServiceHubClient` добавляет transport `auth` к protected requests; `login` остаётся public. User/permissions из browser storage не являются security authority. Production TLS/Origin/cookie/reverse-proxy policy этим решением не объявляется.
+
 Подробный контракт: [`users-access-contract.md`](users-access-contract.md).
 
 ## Основные потоки
@@ -358,7 +360,6 @@ Node.js используется как инструментальная сре�
 - точный набор state-значений;
 - внешний межпроцессный путь регистрации write-provider/Driver Runtime;
 - формат Driver Runtime API;
-- browser-side session-token storage/restoration policy до `CORE-005 / Step 6B`;
 - точная representation/expiration policy control mode до `CORE-005 / Step 7`;
 - production TLS/origin policy для Service Hub;
 - окончательные process/container/deployment-модели;

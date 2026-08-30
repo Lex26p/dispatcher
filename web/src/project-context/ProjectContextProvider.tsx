@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -14,6 +15,7 @@ import {
 } from '../project-manager/ProjectManagerClient';
 import { ServiceHubRequestError } from '../service-hub/ServiceHubClient';
 import { useServiceHub } from '../service-hub/ServiceHubProvider';
+import { useOptionalUserSession } from '../user-session/UserSessionProvider';
 
 export const PROJECT_CONTEXT_STORAGE_KEY = 'dispatcher.project-context.v1';
 
@@ -31,10 +33,12 @@ const ProjectContext = createContext<ProjectContextValue | null>(null);
 
 export function ProjectContextProvider({ children }: ProjectContextProviderProps) {
   const { client, connectionState } = useServiceHub();
+  const userSession = useOptionalUserSession();
   const projectManager = useMemo(() => new ProjectManagerClient(client), [client]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(() =>
     readStoredProject(),
   );
+  const previousAuthenticatedUserId = useRef<string | null>(null);
 
   const selectProject = useCallback((project: Project) => {
     setSelectedProject(project);
@@ -48,10 +52,41 @@ export function ProjectContextProvider({ children }: ProjectContextProviderProps
     persistProject(selectedProject);
   }, [selectedProject]);
 
+  useEffect(() => {
+    if (userSession === null) {
+      return;
+    }
+
+    if (userSession.status === 'unauthenticated') {
+      previousAuthenticatedUserId.current = null;
+      setSelectedProject(null);
+      return;
+    }
+
+    if (userSession.status !== 'authenticated' || userSession.session === null) {
+      return;
+    }
+
+    const userId = userSession.session.user.id;
+    if (
+      previousAuthenticatedUserId.current !== null &&
+      previousAuthenticatedUserId.current !== userId
+    ) {
+      setSelectedProject(null);
+    }
+    previousAuthenticatedUserId.current = userId;
+  }, [userSession]);
+
   const selectedProjectId = selectedProject?.id ?? null;
+  const canValidateProject =
+    userSession === null || userSession.status === 'authenticated';
 
   useEffect(() => {
-    if (connectionState !== 'connected' || selectedProjectId === null) {
+    if (
+      connectionState !== 'connected' ||
+      selectedProjectId === null ||
+      !canValidateProject
+    ) {
       return;
     }
 
@@ -72,7 +107,7 @@ export function ProjectContextProvider({ children }: ProjectContextProviderProps
         if (
           active &&
           error instanceof ServiceHubRequestError &&
-          error.code === 'project.not_found'
+          (error.code === 'project.not_found' || error.code === 'access.forbidden')
         ) {
           setSelectedProject((current) =>
             current?.id === selectedProjectId ? null : current,
@@ -89,7 +124,7 @@ export function ProjectContextProvider({ children }: ProjectContextProviderProps
         // Connection teardown already resolves the pending transport state.
       }
     };
-  }, [connectionState, projectManager, selectedProjectId]);
+  }, [canValidateProject, connectionState, projectManager, selectedProjectId]);
 
   const value = useMemo<ProjectContextValue>(
     () => ({ selectedProject, selectProject, clearProject }),

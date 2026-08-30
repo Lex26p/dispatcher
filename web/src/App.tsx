@@ -9,9 +9,14 @@ import { useProjectContext } from './project-context/ProjectContextProvider';
 import { ProjectManagerView } from './project-manager/ProjectManagerView';
 import type { ServiceHubConnectionState } from './service-hub/ServiceHubClient';
 import { useServiceHub } from './service-hub/ServiceHubProvider';
+import { useUserSession } from './user-session/UserSessionProvider';
+import { LoginView } from './users-access/LoginView';
+import { UsersAccessAdminView } from './users-access/UsersAccessAdminView';
 
 const workspacePath = '/';
 const projectsPath = '/projects';
+const loginPath = '/login';
+const accessPath = '/access';
 
 const connectionStateLabels: Record<ServiceHubConnectionState, string> = {
   disconnected: 'Service Hub недоступен',
@@ -23,6 +28,12 @@ const connectionStateLabels: Record<ServiceHubConnectionState, string> = {
 export function App() {
   const { connectionState } = useServiceHub();
   const { selectedProject, clearProject } = useProjectContext();
+  const {
+    status: userStatus,
+    session,
+    logout,
+    hasGlobalCapability,
+  } = useUserSession();
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -62,12 +73,7 @@ export function App() {
     };
   }, [menuOpen]);
 
-  const navigateTo = (
-    event: MouseEvent<HTMLAnchorElement>,
-    path: string,
-  ) => {
-    event.preventDefault();
-
+  const navigate = (path: string) => {
     if (window.location.pathname !== path) {
       window.history.pushState(null, '', path);
     }
@@ -76,13 +82,35 @@ export function App() {
     setMenuOpen(false);
   };
 
+  const navigateTo = (
+    event: MouseEvent<HTMLAnchorElement>,
+    path: string,
+  ) => {
+    event.preventDefault();
+    navigate(path);
+  };
+
   const closeMenu = () => {
     setMenuOpen(false);
     menuTriggerRef.current?.focus();
   };
 
+  const handleLogout = async () => {
+    clearProject();
+    try {
+      await logout();
+    } catch {
+      // Local session state is cleared even if remote logout cannot complete.
+    }
+    navigate(workspacePath);
+  };
+
+  const authenticated = userStatus === 'authenticated' && session !== null;
+  const canAdministerAccess = authenticated && hasGlobalCapability('admin');
   const workspaceActive = currentPath === workspacePath;
   const projectsActive = currentPath === projectsPath;
+  const loginActive = currentPath === loginPath;
+  const accessActive = currentPath === accessPath;
 
   return (
     <div className="app-shell">
@@ -143,6 +171,36 @@ export function App() {
             <span className="service-hub-status__indicator" aria-hidden="true" />
             <span>{connectionStateLabels[connectionState]}</span>
           </div>
+
+          {authenticated ? (
+            <div
+              className="user-session-summary"
+              role="group"
+              aria-label="Текущий пользователь"
+            >
+              <span className="user-session-summary__name" title={session.user.login}>
+                {session.user.display_name || session.user.login}
+              </span>
+              <button
+                className="header-session-action"
+                type="button"
+                onClick={() => void handleLogout()}
+              >
+                Выйти
+              </button>
+            </div>
+          ) : userStatus === 'restoring' ? (
+            <span className="user-session-summary__pending">Проверка пользователя…</span>
+          ) : (
+            <button
+              className="header-session-action"
+              type="button"
+              aria-label="Открыть вход"
+              onClick={() => navigate(loginPath)}
+            >
+              Войти
+            </button>
+          )}
         </div>
       </header>
 
@@ -173,14 +231,38 @@ export function App() {
               Рабочая область
             </a>
 
-            <a
-              className="global-navigation__link"
-              href={projectsPath}
-              aria-current={projectsActive ? 'page' : undefined}
-              onClick={(event) => navigateTo(event, projectsPath)}
-            >
-              Проекты
-            </a>
+            {authenticated ? (
+              <a
+                className="global-navigation__link"
+                href={projectsPath}
+                aria-current={projectsActive ? 'page' : undefined}
+                onClick={(event) => navigateTo(event, projectsPath)}
+              >
+                Проекты
+              </a>
+            ) : null}
+
+            {canAdministerAccess ? (
+              <a
+                className="global-navigation__link"
+                href={accessPath}
+                aria-current={accessActive ? 'page' : undefined}
+                onClick={(event) => navigateTo(event, accessPath)}
+              >
+                Пользователи и доступ
+              </a>
+            ) : null}
+
+            {!authenticated && userStatus !== 'restoring' ? (
+              <a
+                className="global-navigation__link"
+                href={loginPath}
+                aria-current={loginActive ? 'page' : undefined}
+                onClick={(event) => navigateTo(event, loginPath)}
+              >
+                Вход
+              </a>
+            ) : null}
           </nav>
         </div>
       ) : null}
@@ -195,7 +277,33 @@ export function App() {
             </p>
           </section>
         ) : projectsActive ? (
-          <ProjectManagerView />
+          authenticated ? (
+            <ProjectManagerView />
+          ) : (
+            <LoginView
+              title="Вход для работы с проектами"
+              description="Project Manager доступен только в authenticated user context."
+            />
+          )
+        ) : accessActive ? (
+          !authenticated ? (
+            <LoginView
+              title="Вход для администрирования"
+              description="Администрирование Users & Access требует authenticated session."
+            />
+          ) : canAdministerAccess ? (
+            <UsersAccessAdminView />
+          ) : (
+            <section className="workspace__content auth-view" aria-labelledby="access-denied-title">
+              <p className="workspace__eyebrow">Users &amp; Access</p>
+              <h1 id="access-denied-title">Недостаточно прав</h1>
+              <p className="workspace__description">
+                Для этого раздела требуется global capability admin.
+              </p>
+            </section>
+          )
+        ) : loginActive ? (
+          <LoginView onAuthenticated={() => navigate(workspacePath)} />
         ) : (
           <section className="workspace__content" aria-labelledby="not-found-title">
             <p className="workspace__eyebrow">Web Shell</p>

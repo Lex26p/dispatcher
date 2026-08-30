@@ -9,8 +9,9 @@ Users & Access is the core backend responsibility for stable user identity, acce
 - `Step 3`: versioned `users-access.v1` authentication/session contract and server-side session engine.
 - `Step 4`: authenticated Service Hub request boundary and production session-core provider.
 - `Step 5`: Project Manager uses Users & Access as authoritative authorization dependency.
-- current local substep `Step 6A`: the administration operations already reserved by `users-access.v1` are connected to a real backend/Service Hub path.
-- after a verified Step 6A SHA, `Step 6B` adds Web login/logout/current-user, session restoration and administration UI.
+- `Step 6A` completed in `04e83879c73e298d1eac61acbd8e861f0ba5988d`: all reserved administration operations are connected to the real backend/Service Hub path.
+- current `Step 6B`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
+- next `Step 6C`: complete local security audit semantics for administration mutations before Step 7.
 
 Control mode remains Step 7.
 
@@ -88,7 +89,13 @@ The backend keeps existing independent capability and global/project scope seman
 
 Step 6A tests cover the application/storage path and a real Service Hub path including unauthenticated denial, non-admin denial, user creation, password reset, enable/disable, permission sets and assignments.
 
-The broader CORE-005 security-audit requirement for administration mutations remains explicit: the existing audit covers bootstrap/session/security actions, while the final administration mutation taxonomy/semantics must be closed during Step 6 before Step 7. No fake Event Hub/audit mechanism is introduced in Step 6A.
+The broader CORE-005 security-audit requirement for administration mutations remains explicit: the existing audit covers bootstrap/session/security actions, while `Step 6C` completes the administration mutation taxonomy/semantics before Step 7. No fake Event Hub/audit mechanism is introduced.
+
+## Browser session integration — Step 6B
+
+The backend contract remains unchanged. Web keeps only the opaque bearer for the current browser session in `sessionStorage`, restores identity through authoritative `current-session`, and sends protected operations through the same Service Hub WebSocket. Invalid/expired session errors clear the browser bearer; browser user/permission presentation never replaces backend authorization.
+
+The administration UI uses the Step 6A API only for authenticated global administrators.
 
 ## Secure first-administrator bootstrap
 

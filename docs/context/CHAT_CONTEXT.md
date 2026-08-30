@@ -163,7 +163,6 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 - внешний Driver Runtime API и межпроцессный путь write-provider;
 - механизм восстановления runtime state Data Hub;
 - точный state enum;
-- browser-side session token storage/restoration до `CORE-005 / Step 6`;
 - exact control-mode representation/expiration policy до `CORE-005 / Step 7`;
 - production TLS/origin policy Service Hub;
 - frontend state manager и UI-библиотеки.
@@ -216,9 +215,10 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 2 — `3b140d808638bb0c14a70b2aa1df96eb377af197`;
 - Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
 - Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
-- Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`.
+- Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
+- Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`.
 
-Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Это baseline текущего Step 6A.
+Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6A functional commit `04e83879c73e298d1eac61acbd8e861f0ba5988d` является baseline текущего Step 6B.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
@@ -230,9 +230,13 @@ Step 4 совместимо добавил optional Service Hub v1 transport `au
 
 Step 5 защитил реальный Project Manager через Users & Access: unauthenticated deny, backend filtering `list-projects`, project-scoped `view`/`edit`/`admin`, global `admin` create, disabled/expired/revoked behavior, fail-closed при Users & Access outage и reconnect regression. Project v1 business payload не получил `user_id`, roles, permissions или auth token.
 
-**Текущий локальный подшаг — `CORE-005 / Step 6A — Users & Access administration backend`.**
+Step 6A завершён commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`: production `users-access.v1` реализует зарезервированные administration operations с global `admin`, atomic user+credential creation и real Service Hub tests.
 
-Step 6 локально разделён после проверки baseline: production `users-access.v1` ещё не реализовывал зарезервированные admin operations. Step 6A сначала реализует этот backend API с global `admin` enforcement и real Service Hub integration; после проверенного SHA Step 6B добавит Web authenticated context, login/logout/current-user, session restoration и минимальный admin UI. Control mode остаётся Step 7.
+**Текущий локальный подшаг — `CORE-005 / Step 6B — Web authenticated context и administration UI`.**
+
+Step 6B фиксирует browser session policy: opaque bearer хранится только в текущем browser `sessionStorage` (`dispatcher.user-session.v1`), reload authoritative восстанавливается через `current-session`, invalid/expired session очищается, а protected Web requests получают bearer через shared session-aware Service Hub wrapper без второго WebSocket. Web получает login/logout/current user, authenticated Project Manager path и global-admin `/access`; project context очищается при logout/user change и authoritative access revocation.
+
+После проверенного Step 6B SHA выполняется `Step 6C — administration security audit completion`, чтобы закрыть уже обязательный audit значимых admin mutations до Step 7. Control mode остаётся Step 7.
 
 ## Рабочий процесс
 

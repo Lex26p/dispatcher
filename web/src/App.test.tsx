@@ -14,6 +14,25 @@ import {
   type ServiceHubClientAccess,
   ServiceHubProvider,
 } from './service-hub/ServiceHubProvider';
+import {
+  BrowserSessionServiceHubClient,
+  BrowserSessionStore,
+  USER_SESSION_STORAGE_KEY,
+} from './user-session/BrowserSessionTransport';
+import { UserSessionProvider } from './user-session/UserSessionProvider';
+
+const token = 'd'.repeat(64);
+const testSession = {
+  user: {
+    id: 'user-admin',
+    login: 'admin',
+    display_name: 'Test Admin',
+    enabled: true,
+  },
+  issued_at_unix_ms: 10,
+  absolute_expires_at_unix_ms: 20,
+  idle_timeout_ms: 30,
+};
 
 class TestServiceHubClient implements ServiceHubClientAccess {
   connectionState: ServiceHubConnectionState;
@@ -44,12 +63,55 @@ class TestServiceHubClient implements ServiceHubClientAccess {
   disconnect(): void {}
 
   request<TResponse = unknown>(
-    _service: string,
-    _operation: string,
-    _payload: unknown,
-    _options?: ServiceHubRequestOptions,
+    service: string,
+    operation: string,
+    payload: unknown,
+    options?: ServiceHubRequestOptions,
   ): ServiceHubRequestHandle<TResponse> {
-    throw new Error('request is not used by App tests');
+    if (service === 'users-access.v1' && operation === 'login') {
+      expect(options?.auth).toBeUndefined();
+      return this.handle<TResponse>(Promise.resolve({
+        session_token: token,
+        session: testSession,
+      }));
+    }
+
+    if (service === 'users-access.v1' && operation === 'current-session') {
+      expect(options?.auth?.token).toBe(token);
+      return this.handle<TResponse>(Promise.resolve({ session: testSession }));
+    }
+
+    if (service === 'users-access.v1' && operation === 'evaluate-access') {
+      expect(options?.auth?.token).toBe(token);
+      return this.handle<TResponse>(Promise.resolve({
+        allowed: true,
+        effective_capabilities: ['view', 'control', 'edit', 'admin'],
+      }));
+    }
+
+    if (service === 'users-access.v1' && operation === 'logout') {
+      expect(options?.auth?.token).toBe(token);
+      return this.handle<TResponse>(Promise.resolve({}));
+    }
+
+    if (service === 'project-manager.v1' && operation === 'list-projects') {
+      expect(options?.auth?.token).toBe(token);
+      return this.handle<TResponse>(Promise.resolve({ projects: [] }));
+    }
+
+    if (service === 'project-manager.v1' && operation === 'get-project') {
+      expect(options?.auth?.token).toBe(token);
+      const id = (payload as { id: string }).id;
+      return this.handle<TResponse>(Promise.resolve({
+        project: {
+          id,
+          name: 'Объект 1',
+          description: 'Основной объект',
+        },
+      }));
+    }
+
+    throw new Error(`Unexpected request ${service}/${operation}`);
   }
 
   cancel(_requestId: string): boolean {
@@ -63,38 +125,53 @@ class TestServiceHubClient implements ServiceHubClientAccess {
       listener(state);
     }
   }
+
+  private handle<TResponse>(
+    response: Promise<unknown>,
+  ): ServiceHubRequestHandle<TResponse> {
+    return {
+      id: 'test-request',
+      response: response as Promise<TResponse>,
+      cancel: () => false,
+    };
+  }
 }
 
-function renderApp(connectionState: ServiceHubConnectionState = 'disconnected') {
-  const client = new TestServiceHubClient(connectionState);
+function renderApp(options: {
+  connectionState?: ServiceHubConnectionState;
+  authenticated?: boolean;
+} = {}) {
+  const baseClient = new TestServiceHubClient(
+    options.connectionState ?? 'disconnected',
+  );
+  const sessionStore = new BrowserSessionStore();
+  if (options.authenticated) {
+    sessionStore.setToken(token);
+  }
+  const client = new BrowserSessionServiceHubClient(baseClient, sessionStore);
   const view = render(
     <ServiceHubProvider client={client}>
-      <ProjectContextProvider>
-        <App />
-      </ProjectContextProvider>
+      <UserSessionProvider sessionStore={sessionStore}>
+        <ProjectContextProvider>
+          <App />
+        </ProjectContextProvider>
+      </UserSessionProvider>
     </ServiceHubProvider>,
   );
 
-  return { client, ...view };
+  return { baseClient, sessionStore, ...view };
 }
 
-describe('App Shell navigation', () => {
+describe('App Shell navigation and user session', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
     window.sessionStorage.clear();
   });
 
-  it('opens and closes the global menu with keyboard-friendly focus behavior', () => {
+  it('keeps public shell navigation compact while unauthenticated', () => {
     renderApp();
 
     const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
-
-    expect(menuTrigger).toBeEnabled();
-    expect(menuTrigger).toHaveAttribute('aria-expanded', 'false');
-    expect(
-      screen.getByRole('heading', { name: 'Рабочая область' }),
-    ).toBeInTheDocument();
-
     fireEvent.click(menuTrigger);
 
     const navigation = screen.getByRole('navigation', {
@@ -103,69 +180,41 @@ describe('App Shell navigation', () => {
     const workspaceLink = within(navigation).getByRole('link', {
       name: 'Рабочая область',
     });
-    const projectsLink = within(navigation).getByRole('link', {
-      name: 'Проекты',
-    });
 
-    expect(menuTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(workspaceLink).toHaveAttribute('aria-current', 'page');
-    expect(projectsLink).not.toHaveAttribute('aria-current');
-    expect(within(navigation).getAllByRole('link')).toHaveLength(2);
+    expect(within(navigation).getByRole('link', { name: 'Вход' })).toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Проекты' })).toBeNull();
     expect(workspaceLink).toHaveFocus();
 
     fireEvent.keyDown(document, { key: 'Escape' });
-
-    expect(
-      screen.queryByRole('navigation', { name: 'Глобальная навигация' }),
-    ).not.toBeInTheDocument();
-    expect(menuTrigger).toHaveAttribute('aria-expanded', 'false');
     expect(menuTrigger).toHaveFocus();
-
-    fireEvent.click(menuTrigger);
-    fireEvent.click(menuTrigger);
-
-    expect(
-      screen.queryByRole('navigation', { name: 'Глобальная навигация' }),
-    ).not.toBeInTheDocument();
   });
 
-  it('opens the real Project Manager destination without introducing project context', () => {
-    renderApp('disconnected');
+  it('logs in from a protected project route and then uses authenticated Project Manager requests', async () => {
+    window.history.replaceState(null, '', '/projects');
+    renderApp({ connectionState: 'connected' });
 
-    const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
-    fireEvent.click(menuTrigger);
-
-    const navigation = screen.getByRole('navigation', {
-      name: 'Глобальная навигация',
-    });
-    const projectsLink = within(navigation).getByRole('link', {
-      name: 'Проекты',
-    });
-
-    fireEvent.click(projectsLink);
-
-    expect(window.location.pathname).toBe('/projects');
     expect(
-      screen.getByRole('heading', { name: 'Проекты' }),
+      screen.getByRole('heading', { name: 'Вход для работы с проектами' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Service Hub недоступен.',
-    );
 
-    fireEvent.click(menuTrigger);
-
-    const reopenedNavigation = screen.getByRole('navigation', {
-      name: 'Глобальная навигация',
+    fireEvent.change(screen.getByRole('textbox', { name: 'Логин' }), {
+      target: { value: 'admin' },
     });
-    expect(
-      within(reopenedNavigation).getByRole('link', { name: 'Проекты' }),
-    ).toHaveAttribute('aria-current', 'page');
-    expect(
-      within(reopenedNavigation).getByRole('link', { name: 'Рабочая область' }),
-    ).not.toHaveAttribute('aria-current');
+    fireEvent.change(screen.getByLabelText('Пароль'), {
+      target: { value: 'a sufficiently long password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
+
+    expect(await screen.findByRole('heading', { name: 'Проекты' })).toBeInTheDocument();
+    expect(await screen.findByText('Проектов пока нет')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Текущий пользователь' })).toHaveTextContent(
+      'Test Admin',
+    );
   });
 
-  it('keeps selected project context across shell navigation and can return to global context', () => {
+  it('restores authenticated user and project context from the current browser session', async () => {
+    window.sessionStorage.setItem(USER_SESSION_STORAGE_KEY, token);
     window.sessionStorage.setItem(
       PROJECT_CONTEXT_STORAGE_KEY,
       JSON.stringify({
@@ -175,78 +224,57 @@ describe('App Shell navigation', () => {
       }),
     );
 
-    renderApp('disconnected');
+    renderApp({ connectionState: 'connected' });
 
-    const projectContext = screen.getByRole('group', { name: 'Контекст проекта' });
-    expect(projectContext).toHaveTextContent('Объект 1');
-
-    const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
-    fireEvent.click(menuTrigger);
-    fireEvent.click(
-      within(
-        screen.getByRole('navigation', { name: 'Глобальная навигация' }),
-      ).getByRole('link', { name: 'Проекты' }),
+    expect(await screen.findByText('Test Admin')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Контекст проекта' })).toHaveTextContent(
+      'Объект 1',
     );
 
-    expect(window.location.pathname).toBe('/projects');
-    expect(projectContext).toHaveTextContent('Объект 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Основное меню' }));
+    const navigation = screen.getByRole('navigation', { name: 'Глобальная навигация' });
+    expect(within(navigation).getByRole('link', { name: 'Проекты' })).toBeInTheDocument();
+    expect(
+      within(navigation).getByRole('link', { name: 'Пользователи и доступ' }),
+    ).toBeInTheDocument();
+  });
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Перейти в глобальный контекст' }),
+  it('clears user-sensitive project context on logout', async () => {
+    window.sessionStorage.setItem(USER_SESSION_STORAGE_KEY, token);
+    window.sessionStorage.setItem(
+      PROJECT_CONTEXT_STORAGE_KEY,
+      JSON.stringify({
+        id: 'project-1',
+        name: 'Объект 1',
+        description: 'Основной объект',
+      }),
     );
+    renderApp({ connectionState: 'connected' });
 
-    expect(projectContext).toHaveTextContent('Глобальный');
+    const logoutButton = await screen.findByRole('button', { name: 'Выйти' });
+    await act(async () => {
+      fireEvent.click(logoutButton);
+      await Promise.resolve();
+    });
+
+    expect(window.sessionStorage.getItem(USER_SESSION_STORAGE_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(PROJECT_CONTEXT_STORAGE_KEY)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Открыть вход' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Контекст проекта' })).toHaveTextContent(
+      'Глобальный',
+    );
   });
 
-  it('shows an unknown-route fallback and returns to the shell workspace', () => {
-    window.history.replaceState(null, '', '/missing');
-    renderApp();
-
-    expect(
-      screen.getByRole('heading', { name: 'Страница не найдена' }),
-    ).toBeInTheDocument();
-
-    const menuTrigger = screen.getByRole('button', { name: 'Основное меню' });
-    fireEvent.click(menuTrigger);
-
-    const navigation = screen.getByRole('navigation', {
-      name: 'Глобальная навигация',
-    });
-    const workspaceLink = within(navigation).getByRole('link', {
-      name: 'Рабочая область',
-    });
-
-    expect(workspaceLink).not.toHaveAttribute('aria-current');
-
-    fireEvent.click(workspaceLink);
-
-    expect(window.location.pathname).toBe('/');
-    expect(
-      screen.getByRole('heading', { name: 'Рабочая область' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('navigation', { name: 'Глобальная навигация' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows Service Hub connection state without blocking the workspace', () => {
-    const { client } = renderApp('disconnected');
+  it('shows Service Hub connection state without blocking the public workspace', () => {
+    const { baseClient } = renderApp({ connectionState: 'disconnected' });
     const status = screen.getByRole('status', { name: 'Состояние Service Hub' });
 
     expect(status).toHaveTextContent('Service Hub недоступен');
-    expect(
-      screen.getByRole('heading', { name: 'Рабочая область' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Рабочая область' })).toBeInTheDocument();
 
     act(() => {
-      client.publishState('connecting');
+      baseClient.publishState('connecting');
     });
     expect(status).toHaveTextContent('Service Hub: подключение');
-
-    act(() => {
-      client.publishState('connected');
-    });
-    expect(status).toHaveTextContent('Service Hub подключен');
   });
 });

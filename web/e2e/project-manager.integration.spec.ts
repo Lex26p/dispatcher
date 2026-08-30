@@ -1,8 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-test('real Web Shell observes Project Manager authenticated boundary', async ({
+test('real Web Shell protects Project Manager route behind the user session UI', async ({
   page,
 }) => {
+  test.skip(
+    !process.env.VITE_SERVICE_HUB_URL,
+    'requires the real Project Manager integration runner',
+  );
+
   await page.goto('/projects');
 
   const serviceHubStatus = page.getByRole('status', {
@@ -14,21 +19,14 @@ test('real Web Shell observes Project Manager authenticated boundary', async ({
   });
 
   await expect(
-    page.getByRole('heading', { name: 'Проекты' }),
+    page.getByRole('heading', { name: 'Вход для работы с проектами' }),
   ).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Логин' })).toBeEnabled();
+  await expect(page.getByLabel('Пароль')).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Проекты' })).toHaveCount(0);
 
-  await expect(page.getByRole('alert')).toContainText(
-    'Project Manager вернул ошибку: auth.invalid_session.',
-    { timeout: 10_000 },
-  );
-
-  await page.getByRole('button', { name: 'Создать проект' }).click();
-  await page.getByRole('textbox', { name: 'Название' }).fill(
-    'Неаутентифицированный проект',
-  );
-  await page.getByRole('button', { name: 'Сохранить' }).click();
-
-  await expect(page.getByRole('alert')).toContainText(
-    'Project Manager вернул ошибку: auth.invalid_session.',
-  );
+  await page.getByRole('button', { name: 'Основное меню', exact: true }).click();
+  const navigation = page.getByRole('navigation', { name: 'Глобальная навигация' });
+  await expect(navigation.getByRole('link', { name: 'Проекты' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Вход' })).toBeVisible();
 });

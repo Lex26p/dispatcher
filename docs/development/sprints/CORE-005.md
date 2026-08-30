@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 5 завершён; Step 6 локально разделён, текущий подшаг — Step 6A.**
+**В разработке. Steps 1–5 и Step 6A завершены; текущий подшаг — Step 6B.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий подшаг — `Step 6A — Users & Access administration backend`.
+Текущий подшаг — `Step 6B — Web authenticated context и administration UI`.
 
 ## Цель
 
@@ -599,7 +599,7 @@ Documentation sync после Step 5 зафиксирован commit:
 
 `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`
 
-Этот commit является baseline для Step 6A.
+Этот commit был baseline для Step 6A.
 
 ## Step 6 — Web login, current user и access administration
 
@@ -608,9 +608,10 @@ Documentation sync после Step 5 зафиксирован commit:
 При входе в Step 6 подтверждено, что administration operation names/payloads уже зафиксированы `users-access.v1`, но production provider Steps 1–5 намеренно возвращал для них staged error. Поэтому Step 6 разделён без изменения его цели и без изменения roadmap-level sprint composition:
 
 - **Step 6A — Users & Access administration backend**: довести уже зарезервированные v1 operations до реального backend application/transport path, сохранить global `admin` enforcement и проверить реальный Service Hub transport;
-- **Step 6B — Web authenticated context и administration UI**: добавить browser session restoration, login/logout/current-user UX, auth propagation в Project Manager client и минимальный admin destination поверх Step 6A API.
+- **Step 6B — Web authenticated context и administration UI**: добавить browser session restoration, login/logout/current-user UX, authenticated request propagation и минимальный admin destination поверх Step 6A API;
+- **Step 6C — administration security audit completion**: завершить уже обязательный для CORE-005 локальный audit значимых administration mutations без изменения Web/auth contract.
 
-Это техническое разбиение одного согласованного шага, а не новый sprint и не расширение product scope. Control mode остаётся Step 7.
+Это техническое разбиение одного согласованного шага, а не новый sprint и не расширение product scope. Step 6C выделен отдельно, чтобы не смешивать backend audit semantics с Web-focused Step 6B. Control mode остаётся Step 7.
 
 ### Реализация Step 6A
 
@@ -635,6 +636,43 @@ SQLite administration store открывает ту же service-local database 
 Unit test покрывает atomic user+credential creation, duplicate login, password replacement, enable state, permission sets и assignment add/list/remove. Real interprocess integration поднимает Service Hub + Users & Access и проверяет unauthenticated deny, global-admin operations, non-admin `access.forbidden`, create/list user, permission set, assignment lifecycle, password reset и disabled-user login.
 
 Расширение security audit event taxonomy для create/reset/permission-set/assignment mutations остаётся обязательным completion item текущего `CORE-005` и должно быть закрыто до Sprint acceptance; Step 6A не подменяет его фиктивными event names.
+
+Step 6A завершён commit:
+
+`04e83879c73e298d1eac61acbd8e861f0ba5988d`
+
+### Решение и реализация Step 6B
+
+Step 6B вводит shared browser authenticated user context поверх уже существующего одного `ServiceHubClient`/WebSocket. Низкоуровневый Service Hub client и wire protocol не меняются.
+
+Browser session policy:
+
+- raw bearer хранится только в `sessionStorage` текущей browser session под ключом `dispatcher.user-session.v1`;
+- `localStorage`, cookie и self-contained user/permissions token не вводятся;
+- browser хранит только opaque bearer и не считает локальный user/permission snapshot доказательством доступа;
+- reload с сохранённым bearer выполняет authoritative `users-access.v1/current-session`;
+- `auth.invalid_session` / `auth.session_expired` очищают локальный bearer и authenticated React state;
+- temporary transport/provider failure не уничтожает bearer автоматически и допускает явный retry restoration;
+- logout пытается invalidate server-side session и в любом случае очищает локальный bearer/user-sensitive frontend state.
+
+`BrowserSessionServiceHubClient` является wrapper над существующим shared client: public `users-access.v1/login` остаётся без auth, а остальные protected requests автоматически получают текущее `{type: "session", token}`. При late error старого request wrapper не очищает уже заменённую новую session. Второй WebSocket не создаётся.
+
+React `UserSessionProvider` владеет состояниями unauthenticated/restoring/authenticated, current user и authoritative global effective capabilities. После `current-session` global capabilities запрашиваются через `evaluate-access` и используются только для presentation/navigation; backend остаётся security boundary.
+
+Web Shell получает:
+
+- `/login` и login form;
+- compact current-user area в global Header и logout;
+- protected `/projects`: unauthenticated caller видит login gate, authenticated Project Manager requests автоматически получают bearer;
+- `/access` только как реально полезный administration destination для authenticated global admin; non-admin при прямом переходе получает явный отказ без имитации доступа;
+- Users & Access admin UI для users, enabled state/password reset, permission sets и global/project assignments; project assignment принимает explicit project ID и не предполагает, что global admin автоматически имеет project `view`;
+- no new npm dependencies/router/state-manager.
+
+Project context остаётся navigation context в `sessionStorage`, но теперь связан с authenticated user lifecycle: unauthenticated/logout/user change очищают его, reload ждёт session restoration, а authoritative `project.not_found` или `access.forbidden` при revalidation удаляют больше недоступный project context. Temporary transport errors не превращаются в доказательство потери доступа.
+
+Backend-independent Playwright smoke проверяет public shell/login gating. Existing real Project Manager browser runner в Step 6B по-прежнему поднимает только Hub + Project Manager и проверяет unauthenticated login gate; полноценный authenticated multi-process browser path с Users & Access остаётся Step 7, как и было запланировано.
+
+После проверенного Step 6B SHA выполняется Step 6C — локальный administration security audit completion; только после него можно переходить к Step 7.
 
 ### Что делаем
 

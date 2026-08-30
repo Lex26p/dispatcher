@@ -42,7 +42,7 @@ Service Hub проверяет только transport shape. Он не вычи�
 
 Project Manager и другие providers не должны принимать `user_id`, roles или permissions из business payload как доказательство идентичности. `CORE-005 / Step 5` уже применил эту boundary к реальному Project Manager authorization.
 
-Raw bearer token не должен попадать в diagnostics/audit и не хранится Service Hub как durable state. Browser-side token storage/restoration фиксируется в `CORE-005 / Step 6B`.
+Raw bearer token не должен попадать в diagnostics/audit и не хранится Service Hub как durable state. `CORE-005 / Step 6B` хранит bearer только в browser `sessionStorage` текущей вкладки/session под ключом `dispatcher.user-session.v1`. Web не сохраняет user/permissions как security authority: reload выполняет authoritative `current-session`, а `auth.invalid_session` / `auth.session_expired` очищают bearer. Temporary transport failure допускает retry restoration и сам по себе не аннулирует durable server-side session.
 
 ## User
 
@@ -344,7 +344,7 @@ Disabled user при login получает `auth.invalid_credentials`; ране
 
 Текущий durable session/security audit уже включает bootstrap, authentication, logout, expiry и disabled-session rejection без password/raw bearer material.
 
-План CORE-005 также требует audit значимых administration mutations (user changes, password reset, permission-set/assignment changes). `Step 6A` не изобретает частично атомарный или ложный audit поверх отдельного SQLite connection; закрытие administration audit taxonomy/semantics остаётся явным completion item Step 6 до перехода к Step 7 и будет проверено до Sprint acceptance.
+План CORE-005 также требует audit значимых administration mutations (user changes, password reset, permission-set/assignment changes). `Step 6A` не изобретает частично атомарный или ложный audit поверх отдельного SQLite connection; `Step 6C` является явным completion item Step 6 для завершения administration audit taxonomy/semantics до перехода к Step 7.
 
 Публикация security audit в будущий Event Hub не входит в CORE-005.
 
@@ -356,4 +356,4 @@ Control mode не входит в Step 6A/6B session schema. Его реальн
 
 `users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations без несовместимого изменения wire contract. Несовместимое изменение требует нового service version.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, а Step 6B добавляет browser session ownership/restoration поверх того же transport без изменения wire contract. Несовместимое изменение требует нового service version.

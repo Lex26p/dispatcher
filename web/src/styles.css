@@ -145,8 +145,10 @@ a {
 .project-action:focus-visible,
 .project-list__item:focus-visible,
 .project-field input:focus-visible,
+.project-field select:focus-visible,
 .project-field textarea:focus-visible,
-.project-context-summary__clear:focus-visible {
+.project-context-summary__clear:focus-visible,
+.header-session-action:focus-visible {
   outline: 2px solid #315f9f;
   outline-offset: 2px;
 }
@@ -170,6 +172,7 @@ a {
   min-height: 34px;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
 }
 
 .service-hub-status {
@@ -198,6 +201,42 @@ a {
 
 .service-hub-status--connected .service-hub-status__indicator {
   background: #2f7a4c;
+}
+
+.user-session-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding-left: 10px;
+  border-left: 1px solid #d9dee5;
+}
+
+.user-session-summary__name,
+.user-session-summary__pending {
+  max-width: 160px;
+  overflow: hidden;
+  color: #4f5964;
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-session-action {
+  min-height: 30px;
+  cursor: pointer;
+  padding: 5px 9px;
+  border: 1px solid #cbd2da;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #34404b;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.header-session-action:hover {
+  background: #f1f4f7;
 }
 
 .navigation-layer {
@@ -311,14 +350,14 @@ a {
   text-underline-offset: 3px;
 }
 
-
 .project-manager {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.project-manager__header {
+.project-manager__header,
+.access-admin__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -363,12 +402,14 @@ a {
   gap: 14px;
 }
 
-.project-list-view__status {
+.project-list-view__status,
+.auth-status {
   margin: 0;
   color: #5b6570;
 }
 
-.project-list {
+.project-list,
+.access-list {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -428,7 +469,8 @@ a {
 }
 
 .project-empty h2,
-.project-editor h2 {
+.project-editor h2,
+.access-card h2 {
   margin: 0;
   font-size: 1rem;
   font-weight: 650;
@@ -439,7 +481,8 @@ a {
   color: #68727c;
 }
 
-.project-notice {
+.project-notice,
+.auth-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -452,7 +495,8 @@ a {
   font-size: 0.88rem;
 }
 
-.project-notice--error {
+.project-notice--error,
+.auth-notice--error {
   border-color: #e0c5c5;
   background: #fff8f8;
   color: #7b3838;
@@ -488,6 +532,7 @@ a {
 }
 
 .project-field input,
+.project-field select,
 .project-field textarea {
   width: 100%;
   padding: 9px 10px;
@@ -504,14 +549,124 @@ a {
 }
 
 .project-field input:disabled,
+.project-field select:disabled,
 .project-field textarea:disabled {
   background: #f1f4f7;
 }
 
-.project-editor__actions {
+.project-editor__actions,
+.auth-inline-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.auth-view {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.auth-form {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 14px;
+}
+
+.access-admin {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+
+.access-admin__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.access-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #dde2e8;
+  border-radius: 7px;
+  background: #fbfcfd;
+}
+
+.access-form,
+.access-inline-form,
+.assignment-form {
+  display: grid;
+  gap: 12px;
+}
+
+.assignment-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.access-capabilities {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d9dee5;
+  border-radius: 6px;
+}
+
+.access-capabilities legend {
+  padding: 0 5px;
+  color: #5b6570;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.access-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #3d4650;
+  font-size: 0.84rem;
+}
+
+.access-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #dde2e8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.access-list__content {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.access-list__content span {
+  color: #68727c;
+  font-size: 0.8rem;
+}
+
+.access-list__content code {
+  color: #737d87;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 820px) {
+  .access-admin__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assignment-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -521,7 +676,12 @@ a {
   }
 
   .service-hub-status {
-    font-size: 0.7rem;
+    display: none;
+  }
+
+  .user-session-summary__name,
+  .user-session-summary__pending {
+    max-width: 86px;
   }
 
   .project-context-summary {
@@ -542,15 +702,18 @@ a {
     padding: 18px;
   }
 
-  .project-manager__header {
+  .project-manager__header,
+  .access-admin__header {
     flex-direction: column;
   }
 
-  .project-manager__header .project-action {
+  .project-manager__header .project-action,
+  .access-admin__header .project-action {
     width: 100%;
   }
 
-  .project-list__entry {
+  .project-list__entry,
+  .assignment-form {
     grid-template-columns: 1fr;
   }
 
@@ -558,7 +721,9 @@ a {
     width: 100%;
   }
 
-  .project-notice {
+  .project-notice,
+  .auth-notice,
+  .access-list__item {
     align-items: stretch;
     flex-direction: column;
   }
