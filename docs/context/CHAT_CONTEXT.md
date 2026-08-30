@@ -218,6 +218,8 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
 - Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`.
 
+Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Это baseline текущего Step 6A.
+
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
 Step 2 зафиксировал локальный SQLite schema v1 только для Users & Access и OpenSSL scrypt password verifier (`N=2^17`, `r=8`, `p=1`) без plaintext storage. Explicit first-admin bootstrap читает password/confirmation через stdin и атомарно создаёт user + full explicit permission set + global assignment + credential verifier + audit record.
@@ -228,9 +230,9 @@ Step 4 совместимо добавил optional Service Hub v1 transport `au
 
 Step 5 защитил реальный Project Manager через Users & Access: unauthenticated deny, backend filtering `list-projects`, project-scoped `view`/`edit`/`admin`, global `admin` create, disabled/expired/revoked behavior, fail-closed при Users & Access outage и reconnect regression. Project v1 business payload не получил `user_id`, roles, permissions или auth token.
 
-**Текущий шаг — `CORE-005 / Step 6 — Web login, current user и access administration`.**
+**Текущий локальный подшаг — `CORE-005 / Step 6A — Users & Access administration backend`.**
 
-На Step 6 Web Shell должен получить реальный authenticated user context, login/logout/current-user UX, session restoration и invalid/expired-session handling. Минимальный Users & Access administration destination добавляется только для реально разрешённого admin и использует shared Service Hub connection; UI остаётся presentation layer, а не security boundary.
+Step 6 локально разделён после проверки baseline: production `users-access.v1` ещё не реализовывал зарезервированные admin operations. Step 6A сначала реализует этот backend API с global `admin` enforcement и real Service Hub integration; после проверенного SHA Step 6B добавит Web authenticated context, login/logout/current-user, session restoration и минимальный admin UI. Control mode остаётся Step 7.
 
 ## Рабочий процесс
 

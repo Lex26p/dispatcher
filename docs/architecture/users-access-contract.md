@@ -2,16 +2,16 @@
 
 ## Статус
 
-Контракт фиксируется в `CORE-005 / Step 3`.
+Versioned предметная boundary Users & Access зафиксирована в `CORE-005 / Step 3` и развивается совместимо в рамках `users-access.v1`.
 
-Он задаёт versioned предметную boundary Users & Access, необходимую для:
+Она используется для:
 
 - локальной аутентификации пользователя;
 - server-side session lifecycle;
 - получения текущего authenticated user;
 - backend-authoritative access evaluation;
 - минимального администрирования users/permission sets/assignments;
-- последующей authenticated Service Hub boundary в Step 4.
+- authenticated Service Hub request path без второго transport.
 
 Service address:
 
@@ -21,13 +21,13 @@ Machine-readable payload definitions:
 
 `services/users-access/protocol/dispatcher/users_access/v1/users_access.schema.json`
 
-Контракт является language-independent. C++ типы Users & Access являются реализацией сервиса, а не межсервисным API.
+Контракт language-independent. C++ типы Users & Access являются реализацией сервиса, а не межсервисным API.
 
 ## Service Hub transport binding
 
-Step 3 зафиксировал предметные operations/session semantics. `CORE-005 / Step 4` подключает их к существующему Service Hub v1 без второго transport и без изменения endpoint/subprotocol.
+`CORE-005 / Step 4` подключил контракт к существующему Service Hub v1 без изменения endpoint/subprotocol.
 
-Client может добавить к обычному Service Hub request transport field:
+Protected request передаёт bearer отдельно от business payload:
 
 ```json
 "auth": {
@@ -36,17 +36,15 @@ Client может добавить к обычному Service Hub request trans
 }
 ```
 
-Только `login` является публичной `users-access.v1` operation и отправляется без `auth`. Для `logout`, `current-session`, `evaluate-access` и последующих protected operations bearer приходит в forwarded Service Hub request **отдельно от business payload**. Production Users & Access provider перед выполнением protected operation authoritative валидирует token через `AuthenticationSessionService`.
+Только `login` является public operation и отправляется без `auth`. Остальные операции protected.
 
-Service Hub проверяет transport shape token, но не вычисляет user identity/permissions и не является authorization engine. Наличие syntactically valid `auth` не означает, что session действительна. Invalid/revoked/disabled session отвергается Users & Access provider.
+Service Hub проверяет только transport shape. Он не вычисляет user identity/permissions и не является authorization engine. Production Users & Access provider authoritative валидирует token внутри `AuthenticationSessionService`.
 
-Project Manager и другие providers не должны принимать `user_id`, roles или permissions из собственного business payload как доказательство идентичности. Step 5 применит эту boundary к реальному Project Manager authorization.
+Project Manager и другие providers не должны принимать `user_id`, roles или permissions из business payload как доказательство идентичности. `CORE-005 / Step 5` уже применил эту boundary к реальному Project Manager authorization.
 
-Raw bearer token не должен попадать в diagnostics/audit и не хранится Service Hub как durable state. Browser-side storage/lifecycle token остаётся Step 6.
+Raw bearer token не должен попадать в diagnostics/audit и не хранится Service Hub как durable state. Browser-side token storage/restoration фиксируется в `CORE-005 / Step 6B`.
 
 ## User
-
-Wire model пользователя:
 
 ```json
 {
@@ -57,9 +55,7 @@ Wire model пользователя:
 }
 ```
 
-`id` является стабильным opaque identifier и не зависит от mutable login/display properties.
-
-Password, credential verifier, session token digest и другие secrets никогда не входят в User response.
+`id` — stable opaque identifier, независимый от mutable login/display properties. Password, verifier, session digest и другие secrets никогда не входят в User response.
 
 ## Capabilities
 
@@ -70,19 +66,17 @@ Password, credential verifier, session token digest и другие secrets ни
 - `edit`;
 - `admin`.
 
-Они независимы. Контракт не задаёт скрытую иерархию `admin => edit => control => view`.
+Capabilities независимы. Скрытой иерархии `admin => edit => control => view` нет.
 
 ## Scope
 
-Global scope:
+Global:
 
 ```json
-{
-  "kind": "global"
-}
+{ "kind": "global" }
 ```
 
-Project scope:
+Project:
 
 ```json
 {
@@ -91,7 +85,7 @@ Project scope:
 }
 ```
 
-В CORE-005 v1 реально поддерживаются только global и project scope. Device/Dashboard/tenant/field scopes не создаются заранее.
+В первом CORE-005 реально поддерживаются только global и project scope.
 
 ## Permission set
 
@@ -103,36 +97,29 @@ Project scope:
 }
 ```
 
-Effective permissions являются union всех matching global/project assignments согласно domain semantics Step 1.
+Effective permissions — union всех matching global/project assignments согласно domain semantics Step 1.
 
 ## Session model
 
-Session token является opaque bearer secret.
+Session token — opaque bearer secret:
 
-Step 3 фиксирует:
-
-- token генерируется только server-side CSPRNG;
-- raw entropy — 256 bit;
-- wire representation — 64 lowercase hexadecimal characters;
-- token не содержит user ID, roles, permissions, timestamps или других данных;
-- SQLite хранит SHA-256 digest token, а не raw bearer token;
-- session state хранится server-side;
+- 256 bit CSPRNG entropy;
+- wire representation — 64 lowercase hex characters;
+- token не содержит user ID, roles, permissions или timestamps;
+- SQLite хранит только SHA-256 digest;
 - idle timeout — `1800000 ms` (30 минут);
 - absolute lifetime — `43200000 ms` (12 часов);
-- timeout enforcement выполняется server-side;
-- successful validation обновляет last-activity timestamp;
+- validation/expiration выполняются server-side;
+- successful validation обновляет last activity;
 - logout удаляет session;
-- expired session удаляется при authoritative validation;
-- disabled user не может получить новую session, а существующая session становится недействительной при следующей validation;
-- sessions сохраняются в durable Users & Access storage и могут пережить restart, пока не истекли или не отозваны.
+- sessions durable переживают restart до expiry/revocation;
+- disabled user не получает новую session, а existing session fail-closed при следующей validation.
 
-Browser storage mechanism для bearer token Step 3 не выбирает. Он фиксируется вместе с реальным Web/Service Hub security boundary, а production TLS/origin/deployment policy остаётся отдельной задачей.
-
-Raw session token нельзя писать в обычные diagnostics, audit records или test output.
+Raw session token нельзя писать в ordinary diagnostics, audit records или test output.
 
 ## Session summary
 
-Protected responses используют session summary без bearer secret:
+Protected responses используют summary без bearer:
 
 ```json
 {
@@ -148,9 +135,9 @@ Protected responses используют session summary без bearer secret:
 }
 ```
 
-Effective permissions намеренно не кэшируются внутри session token/summary: access должен вычисляться из актуальных assignments.
+Permissions не кэшируются в session summary/token: authoritative access вычисляется из актуальных assignments.
 
-## Operations
+## Session-core operations
 
 ### `login` — public
 
@@ -182,51 +169,15 @@ Success:
 }
 ```
 
-Unknown login, wrong password, missing credential и disabled user не должны давать caller различимые credential-specific ответы. Они возвращают generic `auth.invalid_credentials`.
-
-Password никогда не возвращается и не записывается в audit.
+Unknown login, wrong password, missing credential и disabled user возвращают generic `auth.invalid_credentials` без user-enumeration detail.
 
 ### `logout` — protected
 
-Request payload:
-
-```json
-{}
-```
-
-Success payload:
-
-```json
-{}
-```
-
-Logout относится к session из authenticated request context. Business payload не содержит token/user ID.
+Request `{}`. Success `{}`. Subject/token берутся только из authenticated request context.
 
 ### `current-session` — protected
 
-Request payload:
-
-```json
-{}
-```
-
-Success:
-
-```json
-{
-  "session": {
-    "user": {
-      "id": "opaque-user-id",
-      "login": "operator",
-      "display_name": "Operator",
-      "enabled": true
-    },
-    "issued_at_unix_ms": 1788060000000,
-    "absolute_expires_at_unix_ms": 1788103200000,
-    "idle_timeout_ms": 1800000
-  }
-}
-```
+Request `{}`. Success содержит `{ "session": <SessionSummary> }`.
 
 ### `evaluate-access` — protected
 
@@ -251,29 +202,31 @@ Success:
 }
 ```
 
-Subject user берётся только из trusted authenticated request context. `user_id` в этом request отсутствует.
-
-`evaluate-access` не заменяет service-specific policy. Например, Project Manager Step 5 сам определяет, какая capability требуется для create/update, а Users & Access authoritative вычисляет effective access.
+Subject берётся только из authenticated request context. `evaluate-access` не заменяет service-specific policy.
 
 ## Administration operations
 
-Эти operations являются protected и требуют global `admin` policy после появления authenticated Service Hub boundary.
+`CORE-005 / Step 6A` подключает все ранее зарезервированные v1 administration operations к реальному application/Service Hub path.
+
+Все они:
+
+- protected session auth;
+- требуют authoritative global `admin`;
+- не доверяют user identity из business payload;
+- используют существующий service-local SQLite schema v2;
+- не вводят новый transport или отдельную общую БД.
 
 ### `list-users`
 
-Request: `{}`.
+Request `{}`.
 
 Success:
 
 ```json
-{
-  "users": []
-}
+{ "users": [] }
 ```
 
 ### `create-user`
-
-Request:
 
 ```json
 {
@@ -284,7 +237,7 @@ Request:
 }
 ```
 
-User + credential должны создаваться fail-closed; password не возвращается.
+Success возвращает `{ "user": ... }`. User + credential создаются одной SQLite transaction; plaintext password не сохраняется и не возвращается.
 
 ### `set-user-enabled`
 
@@ -306,21 +259,11 @@ Success возвращает `{ "user": ... }`.
 }
 ```
 
-Success payload: `{}`.
-
-Password verifier остаётся внутренним Users & Access storage representation.
+Success `{}`. Verifier остаётся внутренним Users & Access representation.
 
 ### `list-permission-sets`
 
-Request: `{}`.
-
-Success:
-
-```json
-{
-  "permission_sets": []
-}
-```
+Request `{}`. Success `{ "permission_sets": [] }`.
 
 ### `create-permission-set`
 
@@ -335,21 +278,13 @@ Success возвращает `{ "permission_set": ... }`.
 
 ### `list-access-assignments`
 
-Request может быть пустым либо ограничивать список конкретным user:
+Request может быть `{}` либо:
 
 ```json
-{
-  "user_id": "opaque-user-id"
-}
+{ "user_id": "opaque-user-id" }
 ```
 
-Success:
-
-```json
-{
-  "assignments": []
-}
-```
+Success `{ "assignments": [] }`.
 
 ### `assign-access`
 
@@ -368,74 +303,57 @@ Success возвращает `{ "assignment": ... }`.
 
 ### `remove-access-assignment`
 
-Payload имеет ту же composite identity assignment (`user_id`, `permission_set_id`, `scope`).
-
-Success payload: `{}`.
+Payload имеет ту же composite identity (`user_id`, `permission_set_id`, `scope`). Success `{}`.
 
 Explicit deny, nested groups и arbitrary ACL expressions в v1 не добавляются.
 
 ## Validation limits
 
-Domain byte limits остаются authoritative и не подменяются JSON Schema character-count limits.
-
-Текущий baseline:
+Domain byte limits authoritative:
 
 - login: непустой по смыслу, до 256 UTF-8 bytes;
 - display name: до 256 UTF-8 bytes;
-- permission set name: непустой по смыслу, до 256 UTF-8 bytes;
-- password verifier implementation принимает до 1024 bytes;
-- first-admin bootstrap требует минимум 15 bytes;
-- project ID и stable IDs должны быть non-empty opaque strings.
+- permission-set name: непустой по смыслу, до 256 UTF-8 bytes;
+- ordinary admin create/reset password: 15..1024 bytes, без composition rule;
+- project ID и stable IDs: non-empty opaque strings.
 
-Password policy для обычного admin create/reset должна быть согласована с Step 2 local credential baseline; plaintext secret никогда не хранится.
+15-byte minimum согласован с first-admin bootstrap baseline. Plaintext secret никогда не хранится.
 
 ## Error codes
 
-Service-specific codes v1:
+Service-specific v1 codes:
 
-- `access.invalid_request` — malformed/unknown payload shape;
-- `access.unknown_operation` — unknown `users-access.v1` operation;
-- `auth.invalid_credentials` — login rejected без user-enumeration detail;
-- `auth.invalid_session` — bearer session отсутствует/отозвана/некорректна;
-- `auth.session_expired` — authoritative session timeout;
-- `access.forbidden` — authenticated user не имеет required capability;
-- `access.user_not_found` — target admin user не существует;
-- `access.permission_set_not_found` — target permission set не существует;
-- `access.conflict` — duplicate login/assignment или другой deterministic conflict;
-- `access.storage_error` — durable Users & Access operation failed;
-- `auth.crypto_error` — required cryptographic operation failed;
-- `access.internal_error` — unexpected Users & Access application failure.
+- `access.invalid_request`;
+- `access.unknown_operation`;
+- `auth.invalid_credentials`;
+- `auth.invalid_session`;
+- `auth.session_expired`;
+- `access.forbidden`;
+- `access.user_not_found`;
+- `access.permission_set_not_found`;
+- `access.conflict`;
+- `access.storage_error`;
+- `auth.crypto_error`;
+- `access.internal_error`.
 
-`hub.*` остаётся зарезервированным за Service Hub и не переименовывается.
+`hub.*` остаётся зарезервированным за Service Hub.
 
-Disabled user при `login` получает `auth.invalid_credentials`. При использовании ранее выданной session production Users & Access provider возвращает `auth.invalid_session`; expired session возвращает `auth.session_expired`. Service Hub не подменяет эти provider-specific errors.
+Disabled user при login получает `auth.invalid_credentials`; ранее выданная session при следующей validation — `auth.invalid_session`; expired session — `auth.session_expired`.
 
 ## Security audit
 
-Step 3 добавляет локальные durable event types:
+Текущий durable session/security audit уже включает bootstrap, authentication, logout, expiry и disabled-session rejection без password/raw bearer material.
 
-- `authentication_succeeded`;
-- `authentication_failed`;
-- `session_logged_out`;
-- `session_expired`;
-- `session_rejected_disabled_user`.
+План CORE-005 также требует audit значимых administration mutations (user changes, password reset, permission-set/assignment changes). `Step 6A` не изобретает частично атомарный или ложный audit поверх отдельного SQLite connection; закрытие administration audit taxonomy/semantics остаётся явным completion item Step 6 до перехода к Step 7 и будет проверено до Sprint acceptance.
 
-В audit не записываются password, raw session token или credential verifier.
-
-Публикация этих событий в будущий Event Hub не входит в CORE-005 Step 3.
+Публикация security audit в будущий Event Hub не входит в CORE-005.
 
 ## Control mode
 
-Control mode **не добавляется в session schema Step 3**.
-
-План CORE-005 разрешает определить его session representation позже. Реальный control-mode baseline фиксируется Step 7 после того, как authenticated Service Hub и Web session context уже проверены. Это позволяет не придумывать преждевременную Device/write semantics.
+Control mode не входит в Step 6A/6B session schema. Его реальный session baseline остаётся `CORE-005 / Step 7`.
 
 ## Versioning
 
-`users-access.v1` фиксирует предметные operation names и payload shapes.
+`users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо расширяет Service Hub v1 request optional `auth` context и не переносит user identity в business payload Users & Access/Project Manager.
-
-На Step 4 production provider реализует transport path для session-core operations `login`, `logout`, `current-session`, `evaluate-access`. Administration operation names/payloads выше уже зарезервированы v1 contract, но их production application implementation остаётся Step 6; до этого они не считаются готовым административным API.
-
-Несовместимое изменение Users & Access payload semantics требует нового service version, а не скрытого изменения v1.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations без несовместимого изменения wire contract. Несовместимое изменение требует нового service version.

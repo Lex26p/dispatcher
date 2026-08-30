@@ -1,11 +1,13 @@
+#include "dispatcher/users_access/administration.hpp"
 #include "dispatcher/users_access/application.hpp"
 #include "dispatcher/users_access/bootstrap.hpp"
 #include "dispatcher/users_access/openssl_scrypt_password_hasher.hpp"
 #include "dispatcher/users_access/openssl_session_token_codec.hpp"
 #include "dispatcher/users_access/service_hub_provider.hpp"
 #include "dispatcher/users_access/session.hpp"
-#include "dispatcher/users_access/users_access_manager.hpp"
+#include "dispatcher/users_access/sqlite_administration_store.hpp"
 #include "dispatcher/users_access/sqlite_users_access_repository.hpp"
+#include "dispatcher/users_access/users_access_manager.hpp"
 
 #include <openssl/crypto.h>
 
@@ -189,6 +191,14 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
+    dispatcher::users_access::SqliteUsersAccessAdministrationStore administration_store{
+        database_path};
+    if (!administration_store.ready()) {
+        std::cerr << "Failed to initialize Dispatcher Users & Access administration storage at "
+                  << database_path << ": " << administration_store.error_message() << '\n';
+        return 1;
+    }
+
     dispatcher::users_access::OpenSslScryptPasswordHasher password_hasher;
     dispatcher::users_access::OpenSslSessionTokenCodec token_codec;
     dispatcher::users_access::UsersAccessManager access_manager{repository};
@@ -205,8 +215,16 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    dispatcher::users_access::UsersAccessAdministrationService administration{
+        repository,
+        repository,
+        administration_store,
+        password_hasher,
+        access_manager};
+
     dispatcher::users_access::ServiceHubProvider provider{
         authentication,
+        administration,
         *endpoint};
 
     std::cout << "Dispatcher Users & Access SQLite storage ready at "

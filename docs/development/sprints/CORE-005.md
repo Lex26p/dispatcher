@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Step 5 завершён; текущий шаг — Step 6.**
+**В разработке. Step 5 завершён; Step 6 локально разделён, текущий подшаг — Step 6A.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий шаг — `Step 6 — Web login, current user и access administration`.
+Текущий подшаг — `Step 6A — Users & Access administration backend`.
 
 ## Цель
 
@@ -591,11 +591,50 @@ Project Manager использует отдельное client-role Service Hub 
 
 Integration coverage подтверждает unauthenticated deny, filtered project visibility, allowed/denied get/update/create, project-scoped admin без implicit capability hierarchy, Users & Access outage/recovery, access revocation, disabled/expired session и Service Hub reconnect. Existing Project Manager durable behavior сохраняется.
 
-Step 5 завершён commit:
+Step 5 завершён functional commit:
 
 `ebe98d1f16e55d4024438300c1670ec3a19b1d72`
 
+Documentation sync после Step 5 зафиксирован commit:
+
+`ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`
+
+Этот commit является baseline для Step 6A.
+
 ## Step 6 — Web login, current user и access administration
+
+### Локальное разбиение Step 6
+
+При входе в Step 6 подтверждено, что administration operation names/payloads уже зафиксированы `users-access.v1`, но production provider Steps 1–5 намеренно возвращал для них staged error. Поэтому Step 6 разделён без изменения его цели и без изменения roadmap-level sprint composition:
+
+- **Step 6A — Users & Access administration backend**: довести уже зарезервированные v1 operations до реального backend application/transport path, сохранить global `admin` enforcement и проверить реальный Service Hub transport;
+- **Step 6B — Web authenticated context и administration UI**: добавить browser session restoration, login/logout/current-user UX, auth propagation в Project Manager client и минимальный admin destination поверх Step 6A API.
+
+Это техническое разбиение одного согласованного шага, а не новый sprint и не расширение product scope. Control mode остаётся Step 7.
+
+### Реализация Step 6A
+
+Step 6A добавляет отдельную application boundary `UsersAccessAdministrationService` и SQLite administration store, не меняя schema version v2. Production `users-access.v1` provider реализует все уже зарезервированные administration operations:
+
+- `list-users`;
+- `create-user`;
+- `set-user-enabled`;
+- `set-user-password`;
+- `list-permission-sets`;
+- `create-permission-set`;
+- `list-access-assignments`;
+- `assign-access`;
+- `remove-access-assignment`.
+
+Все эти operations остаются protected и до business parsing требуют authoritative global `admin` через существующий session/evaluate-access boundary. `login`, `logout`, `current-session` и `evaluate-access` semantics не меняются.
+
+Обычный admin create/reset password использует тот же локальный baseline, что first-admin bootstrap: 15..1024 bytes без composition rule; OpenSSL scrypt verifier остаётся внутренним и plaintext не сохраняется. `create-user` записывает user + credential verifier атомарно одной SQLite transaction.
+
+SQLite administration store открывает ту же service-local database отдельным FULLMUTEX connection, требует уже инициализированную schema v2 и не создаёт новую общую persistence boundary. Existing `SqliteUsersAccessRepository` остаётся source of truth для session/domain paths.
+
+Unit test покрывает atomic user+credential creation, duplicate login, password replacement, enable state, permission sets и assignment add/list/remove. Real interprocess integration поднимает Service Hub + Users & Access и проверяет unauthenticated deny, global-admin operations, non-admin `access.forbidden`, create/list user, permission set, assignment lifecycle, password reset и disabled-user login.
+
+Расширение security audit event taxonomy для create/reset/permission-set/assignment mutations остаётся обязательным completion item текущего `CORE-005` и должно быть закрыто до Sprint acceptance; Step 6A не подменяет его фиктивными event names.
 
 ### Что делаем
 

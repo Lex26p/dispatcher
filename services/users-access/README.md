@@ -1,52 +1,28 @@
 # Users & Access
 
-Users & Access is the core backend responsibility for stable user identity, access configuration, authentication/session state and authorization decisions.
+Users & Access is the core backend responsibility for stable user identity, access configuration, authentication/session state and authoritative access decisions.
 
 ## Current implementation stage
 
-`CORE-005 / Step 1` established the domain/application boundary and standalone C++ service skeleton.
+- `CORE-005 / Step 1`: domain/application boundary and standalone C++ service skeleton.
+- `Step 2`: durable local SQLite storage, scrypt credential verifier and explicit first-admin bootstrap.
+- `Step 3`: versioned `users-access.v1` authentication/session contract and server-side session engine.
+- `Step 4`: authenticated Service Hub request boundary and production session-core provider.
+- `Step 5`: Project Manager uses Users & Access as authoritative authorization dependency.
+- current local substep `Step 6A`: the administration operations already reserved by `users-access.v1` are connected to a real backend/Service Hub path.
+- after a verified Step 6A SHA, `Step 6B` adds Web login/logout/current-user, session restoration and administration UI.
 
-`CORE-005 / Step 2` established durable local users/access persistence, password-verifier storage and explicit first-administrator bootstrap.
+Control mode remains Step 7.
 
-`CORE-005 / Step 3` established the versioned `users-access.v1` authentication/session contract and server-side session engine.
+## Domain and access model
 
-`CORE-005 / Step 4` binds the session credential to the existing Service Hub v1 request path and adds the production `users-access.v1` provider. Web login/session state remains Step 6.
+A user has stable opaque `id`, `login`, mutable `display_name` and `enabled` state.
 
-## Domain model
-
-A user contains:
-
-- stable opaque `id` independent of login/display properties;
-- `login` as the local credential identity key;
-- mutable human-readable `display_name`;
-- `enabled` state.
-
-The minimal independent capabilities remain:
-
-- `view`;
-- `control`;
-- `edit`;
-- `admin`.
-
-There is no hidden hierarchy such as `admin => edit => control => view`.
-
-A `PermissionSet` is a named assignable set of capabilities with its own stable opaque ID. An assignment links one user and permission set to either global scope or one project scope.
-
-Effective permissions are the union of matching global/project assignments. Disabled users fail closed with no effective capabilities.
+Independent capabilities are `view`, `control`, `edit`, `admin`; there is no implicit hierarchy. Permission sets are named capability collections. Assignments link a user and permission set to global scope or one project scope. Effective capabilities are the union of matching assignments. Disabled users fail closed.
 
 ## Durable persistence
 
-Step 2 selects SQLite specifically as the local Users & Access storage.
-
-The choice is service-local:
-
-- users/access configuration is small transactional metadata;
-- credentials, assignments and bootstrap state must survive restart;
-- SQLite adds no separate database process;
-- the database file remains an internal Users & Access implementation detail;
-- this does not select a common Dispatcher database for other services or future history.
-
-Schema version is tracked with `PRAGMA user_version`.
+SQLite is service-local Users & Access storage, not a platform-wide database choice.
 
 Schema v2 stores:
 
@@ -57,118 +33,107 @@ Schema v2 stores:
 - `security_audit`;
 - `sessions`.
 
-Step 3 migrates an existing schema v1 database in-place by adding only the `sessions` table/index and advancing `PRAGMA user_version` to `2`.
+Foreign keys are enabled. Unsupported newer schema versions are rejected.
 
-Foreign-key checking is enabled. A database with a schema version newer than the executable supports is rejected.
+Step 6A adds `SqliteUsersAccessAdministrationStore`, which opens the same already-initialized schema v2 through a separate FULLMUTEX connection. It does not add a schema migration or a second persistence technology. User + initial credential creation is one SQLite transaction.
 
 ## Password verifier baseline
 
-Step 2 uses OpenSSL `EVP_PBE_scrypt` rather than custom cryptography.
+OpenSSL `EVP_PBE_scrypt` parameters remain:
 
-Current stored verifier parameters:
-
-- algorithm: `scrypt`;
 - `N = 2^17`;
 - `r = 8`;
 - `p = 1`;
-- 16-byte cryptographically random salt;
-- 32-byte derived digest.
+- 16-byte random salt;
+- 32-byte digest.
 
-The database stores only algorithm parameters, salt and derived verifier. Plaintext passwords are never persisted.
-
-The verifier format is internal to Users & Access and can be evolved later.
-
+Plaintext passwords are never persisted. Ordinary administrator create/reset follows the same local baseline as first-admin bootstrap: 15..1024 bytes, no composition rule.
 
 ## Authentication/session baseline
 
-Step 3 uses server-side opaque sessions.
-
-- the bearer token contains 256 bits of CSPRNG entropy and is represented as 64 lowercase hex characters;
-- the token contains no user ID, permissions or timestamps;
-- SQLite stores only SHA-256 token digest, never the raw bearer token;
-- idle timeout is 30 minutes and absolute lifetime is 12 hours;
-- validation and expiration are server-side;
-- successful validation refreshes last activity;
+- opaque 256-bit bearer token, 64 lowercase hex on wire;
+- SQLite stores SHA-256 token digest only;
+- 30-minute idle timeout;
+- 12-hour absolute lifetime;
+- server-side validation and activity refresh;
 - logout removes the session;
-- sessions survive Users & Access restart until expiry/revocation;
-- disabled users cannot authenticate and an already-issued session fails closed at the next validation;
-- authentication success/failure, logout, expiry and disabled-session rejection are recorded in the local security audit without password/token material.
+- durable sessions survive restart until expiry/revocation;
+- disabled users fail closed;
+- raw password/session token material is excluded from normal diagnostics/audit.
 
-The external service address is:
-
-    users-access.v1
+Service address: `users-access.v1`.
 
 Payload contract: `docs/architecture/users-access-contract.md`.
 Machine-readable definitions: `services/users-access/protocol/dispatcher/users_access/v1/users_access.schema.json`.
 
-The session token is never placed inside protected business payloads. `login` is public. Protected requests carry a separate Service Hub `auth` context; the Users & Access provider authoritative validates that token before session/access operations. Browser token storage is not selected yet.
+`login` is public. Every other operation uses Service Hub transport `auth` separately from business payload.
+
+## Administration backend — Step 6A
+
+All previously reserved v1 operations are implemented on the real provider path:
+
+- `list-users`;
+- `create-user`;
+- `set-user-enabled`;
+- `set-user-password`;
+- `list-permission-sets`;
+- `create-permission-set`;
+- `list-access-assignments`;
+- `assign-access`;
+- `remove-access-assignment`.
+
+Every administration request requires an authenticated session with authoritative **global `admin`** capability. A non-admin request returns `access.forbidden`; missing/invalid session fails before administration work.
+
+The backend keeps existing independent capability and global/project scope semantics. No Device/Dashboard-specific ACL, fixed role hierarchy or arbitrary policy language is added.
+
+Step 6A tests cover the application/storage path and a real Service Hub path including unauthenticated denial, non-admin denial, user creation, password reset, enable/disable, permission sets and assignments.
+
+The broader CORE-005 security-audit requirement for administration mutations remains explicit: the existing audit covers bootstrap/session/security actions, while the final administration mutation taxonomy/semantics must be closed during Step 6 before Step 7. No fake Event Hub/audit mechanism is introduced in Step 6A.
 
 ## Secure first-administrator bootstrap
 
-Bootstrap is explicit and separate from normal service startup:
+```text
+dispatcher-users-access --bootstrap-admin <login> <display-name> [database-path]
+```
 
-    dispatcher-users-access --bootstrap-admin <login> <display-name> [database-path]
-
-The bootstrap password and confirmation are read from standard input, not command-line arguments or environment variables. Interactive terminal input disables echo while the secret is read.
-
-Bootstrap rules:
-
-- storage must not already contain a user;
-- login follows the existing Users & Access validation;
-- display name is limited to the existing 256-byte domain limit;
-- bootstrap password is 15..1024 bytes and has no composition rule;
-- a new enabled user is created with stable opaque ID;
-- a `Bootstrap administrators` permission set is created with explicit `view`, `control`, `edit`, `admin`;
-- a global assignment links the user to that permission set;
-- the scrypt verifier is stored;
-- a `bootstrap_admin_created` security-audit record is stored;
-- all bootstrap writes happen in one SQLite transaction;
-- a second bootstrap is rejected.
-
-Bootstrap remains separate from remote authentication. Step 4 exposes real login/session/access-evaluation transport; administrative operation shapes are reserved by the v1 contract but their production application implementation remains Step 6.
+Password + confirmation come from stdin; terminal echo is disabled for interactive input. Bootstrap requires empty users storage and atomically creates enabled admin user, `Bootstrap administrators` permission set with all four explicit capabilities, global assignment, scrypt verifier and bootstrap audit record.
 
 ## Lifecycle
 
-Normal service startup:
+Normal startup:
 
-    dispatcher-users-access [database-path] [service-hub-address]
+```text
+dispatcher-users-access [database-path] [service-hub-address]
+```
 
 Defaults:
 
-    database-path       dispatcher-users-access.db
-    service-hub-address 127.0.0.1:50052
+```text
+database-path       dispatcher-users-access.db
+service-hub-address 127.0.0.1:50052
+```
 
-On normal startup the executable opens/initializes SQLite and the authentication/session engine, then starts a reconnecting `users-access.v1` provider on the existing Service Hub boundary before entering the SIGINT/SIGTERM lifecycle. Storage/session initialization failure prevents startup. Provider connection loss does not destroy SQLite/session state; the provider retries and re-registers.
-
-Step 4 production provider implements the session-core operations `login`, `logout`, `current-session` and `evaluate-access`. The administration operations already named by the v1 contract are intentionally staged for Step 6 and are not yet considered implemented.
+Storage/session/administration adapters initialize before the reconnecting `users-access.v1` provider enters the SIGINT/SIGTERM lifecycle. Initialization failure prevents startup.
 
 ## Dependencies
 
 Ubuntu/WSL development dependencies:
 
-    libsqlite3-dev
-    libssl-dev
-    libboost-dev
-    libjson-c-dev
-
-OpenSSL provides scrypt and session-token cryptographic primitives. Boost.Beast + json-c provide the same Service Hub WebSocket/JSON provider boundary used by existing backend services. No standalone SQLite server is required.
+```text
+libsqlite3-dev
+libssl-dev
+libboost-dev
+libjson-c-dev
+```
 
 ## Build and test in WSL
 
-From the repository root:
+From repository root:
 
-    cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-    cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_tests dispatcher_users_access_persistence_tests dispatcher_users_access_session_tests dispatcher_users_access_service_hub_test_client
-    ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
+```text
+cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
+cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_administration_tests dispatcher_users_access_administration_integration_client
+ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
+```
 
-Current CTest checks:
-
-- `users-access.domain-and-application`;
-- `users-access.persistence-and-credentials`;
-- `users-access.bootstrap-cli`;
-- `users-access.authentication-and-session`;
-- `users-access.signal-term`;
-- `users-access.signal-int`;
-- `users-access.service-hub-integration` when the root Service Hub target is available.
-
-The tests use temporary database paths and do not write credential databases into the repository.
+Current Users & Access CTests include domain, persistence/credentials, bootstrap, authentication/session, administration, lifecycle and Service Hub integration. Tests use temporary database paths and do not write credential databases into the repository.

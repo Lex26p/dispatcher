@@ -15,6 +15,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace dispatcher::users_access {
 namespace {
@@ -54,6 +55,20 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     return true;
 }
 
+[[nodiscard]] bool boolean_field(
+    json_object* object,
+    const char* name,
+    bool& value) {
+    json_object* field = nullptr;
+    if (!json_object_object_get_ex(object, name, &field) ||
+        field == nullptr ||
+        !json_object_is_type(field, json_type_boolean)) {
+        return false;
+    }
+    value = json_object_get_boolean(field) != 0;
+    return true;
+}
+
 [[nodiscard]] bool object_has_only_fields(
     json_object* object,
     const std::initializer_list<std::string_view> allowed) {
@@ -85,7 +100,9 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     json_object_object_add(
         response.get(),
         "id",
-        json_object_new_string_len(request_id.data(), static_cast<int>(request_id.size())));
+        json_object_new_string_len(
+            request_id.data(),
+            static_cast<int>(request_id.size())));
     json_object_object_add(response.get(), "ok", json_object_new_boolean(1));
     json_object_object_add(response.get(), "payload", payload);
     return serialize(response.get());
@@ -115,7 +132,9 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     json_object_object_add(
         response.get(),
         "id",
-        json_object_new_string_len(request_id.data(), static_cast<int>(request_id.size())));
+        json_object_new_string_len(
+            request_id.data(),
+            static_cast<int>(request_id.size())));
     json_object_object_add(response.get(), "ok", json_object_new_boolean(0));
     json_object_object_add(response.get(), "error", error.release());
     return serialize(response.get());
@@ -130,6 +149,58 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
         "display_name",
         json_object_new_string(user.display_name.c_str()));
     json_object_object_add(object, "enabled", json_object_new_boolean(user.enabled));
+    return object;
+}
+
+[[nodiscard]] json_object* scope_json(const AccessScope& scope) {
+    json_object* object = json_object_new_object();
+    if (scope.kind == AccessScopeKind::global) {
+        json_object_object_add(object, "kind", json_object_new_string("global"));
+    } else {
+        json_object_object_add(object, "kind", json_object_new_string("project"));
+        json_object_object_add(
+            object,
+            "project_id",
+            json_object_new_string(scope.project_id.c_str()));
+    }
+    return object;
+}
+
+[[nodiscard]] json_object* permission_set_json(
+    const PermissionSet& permission_set) {
+    json_object* object = json_object_new_object();
+    json_object_object_add(
+        object,
+        "id",
+        json_object_new_string(permission_set.id.c_str()));
+    json_object_object_add(
+        object,
+        "name",
+        json_object_new_string(permission_set.name.c_str()));
+
+    json_object* capabilities = json_object_new_array();
+    for (const auto capability : permission_set.capabilities) {
+        const auto name = capability_name(capability);
+        json_object_array_add(
+            capabilities,
+            json_object_new_string_len(name.data(), static_cast<int>(name.size())));
+    }
+    json_object_object_add(object, "capabilities", capabilities);
+    return object;
+}
+
+[[nodiscard]] json_object* assignment_json(
+    const AccessAssignment& assignment) {
+    json_object* object = json_object_new_object();
+    json_object_object_add(
+        object,
+        "user_id",
+        json_object_new_string(assignment.user_id.c_str()));
+    json_object_object_add(
+        object,
+        "permission_set_id",
+        json_object_new_string(assignment.permission_set_id.c_str()));
+    json_object_object_add(object, "scope", scope_json(assignment.scope));
     return object;
 }
 
@@ -179,6 +250,54 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     return error_response(request_id, code, message);
 }
 
+[[nodiscard]] std::pair<std::string_view, std::string_view> administration_error_info(
+    const UsersAccessAdministrationError error) {
+    switch (error) {
+    case UsersAccessAdministrationError::invalid_login:
+        return {"access.invalid_request", "User login must contain a non-whitespace character"};
+    case UsersAccessAdministrationError::login_too_long:
+        return {"access.invalid_request", "User login exceeds the supported UTF-8 payload size"};
+    case UsersAccessAdministrationError::display_name_too_long:
+        return {"access.invalid_request", "User display name exceeds the supported UTF-8 payload size"};
+    case UsersAccessAdministrationError::invalid_password:
+        return {"access.invalid_request", "Password is outside the supported Users & Access limits"};
+    case UsersAccessAdministrationError::password_too_short:
+        return {"access.invalid_request", "Password must contain at least 15 bytes"};
+    case UsersAccessAdministrationError::login_conflict:
+    case UsersAccessAdministrationError::assignment_conflict:
+    case UsersAccessAdministrationError::assignment_not_found:
+        return {"access.conflict", "Users & Access administration conflict"};
+    case UsersAccessAdministrationError::invalid_permission_set_name:
+        return {"access.invalid_request", "Permission set name must contain a non-whitespace character"};
+    case UsersAccessAdministrationError::permission_set_name_too_long:
+        return {"access.invalid_request", "Permission set name exceeds the supported UTF-8 payload size"};
+    case UsersAccessAdministrationError::invalid_scope:
+        return {"access.invalid_request", "Access assignment scope is invalid"};
+    case UsersAccessAdministrationError::invalid_capability:
+        return {"access.invalid_request", "Capability name is invalid"};
+    case UsersAccessAdministrationError::user_not_found:
+        return {"access.user_not_found", "Target user does not exist"};
+    case UsersAccessAdministrationError::permission_set_not_found:
+        return {"access.permission_set_not_found", "Target permission set does not exist"};
+    case UsersAccessAdministrationError::storage_error:
+        return {"access.storage_error", "Users & Access storage operation failed"};
+    case UsersAccessAdministrationError::crypto_error:
+        return {"auth.crypto_error", "Credential hashing failed"};
+    case UsersAccessAdministrationError::id_generation_failed:
+        return {"access.internal_error", "Stable identifier generation failed"};
+    case UsersAccessAdministrationError::none:
+        break;
+    }
+    return {"access.internal_error", "Users & Access administration failed"};
+}
+
+[[nodiscard]] std::string administration_error_response(
+    const std::string_view request_id,
+    const UsersAccessAdministrationError error) {
+    const auto [code, message] = administration_error_info(error);
+    return error_response(request_id, code, message);
+}
+
 [[nodiscard]] bool session_auth_token(
     json_object* message,
     std::string& token) {
@@ -189,7 +308,8 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     }
 
     std::string type;
-    return string_field(auth, "type", type) && type == "session" &&
+    return string_field(auth, "type", type) &&
+           type == "session" &&
            string_field(auth, "token", token);
 }
 
@@ -201,6 +321,29 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] bool parse_capabilities(
+    json_object* value,
+    std::vector<Capability>& capabilities) {
+    if (value == nullptr || !json_object_is_type(value, json_type_array)) {
+        return false;
+    }
+
+    capabilities.clear();
+    const auto count = json_object_array_length(value);
+    for (std::size_t index = 0; index < count; ++index) {
+        json_object* item = json_object_array_get_idx(value, index);
+        if (item == nullptr || !json_object_is_type(item, json_type_string)) {
+            return false;
+        }
+        const auto parsed = parse_capability(json_object_get_string(item));
+        if (!parsed.has_value()) {
+            return false;
+        }
+        capabilities.push_back(*parsed);
+    }
+    return true;
 }
 
 [[nodiscard]] std::optional<AccessScope> parse_scope(json_object* value) {
@@ -223,7 +366,6 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
         }
         return AccessScope::global();
     }
-
     if (kind != "project" || !has_project_id ||
         !json_object_is_type(project_id_value, json_type_string)) {
         return std::nullopt;
@@ -255,8 +397,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     return object;
 }
 
-[[nodiscard]] bool is_staged_administration_operation(
-    const std::string_view operation) {
+[[nodiscard]] bool is_administration_operation(const std::string_view operation) {
     return operation == contract::list_users ||
            operation == contract::create_user ||
            operation == contract::set_user_enabled ||
@@ -268,8 +409,241 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
            operation == contract::remove_access_assignment;
 }
 
+[[nodiscard]] std::optional<std::string> require_global_admin(
+    AuthenticationSessionService& authentication,
+    const std::string_view request_id,
+    const std::string_view token) {
+    auto result = authentication.evaluate_access(
+        token,
+        AccessScope::global(),
+        Capability::admin);
+    if (!result.ok()) {
+        return session_error_response(request_id, result.error);
+    }
+    if (!result.value->allowed) {
+        return error_response(
+            request_id,
+            "access.forbidden",
+            "Global admin capability is required");
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::string handle_administration_request(
+    UsersAccessAdministrationService& administration,
+    const std::string_view request_id,
+    const std::string_view operation,
+    json_object* payload) {
+    if (operation == contract::list_users) {
+        if (!object_has_only_fields(payload, {})) {
+            return error_response(request_id, "access.invalid_request", "list-users payload must be empty");
+        }
+        auto result = administration.list_users();
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object* users = json_object_new_array();
+        for (const auto& user : *result.value) {
+            json_object_array_add(users, user_json(user));
+        }
+        json_object_object_add(response.get(), "users", users);
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::create_user) {
+        if (!object_has_only_fields(payload, {"login", "display_name", "enabled", "password"})) {
+            return error_response(request_id, "access.invalid_request", "create-user payload shape is invalid");
+        }
+        std::string login;
+        std::string display_name;
+        std::string password;
+        bool enabled = true;
+        if (!string_field(payload, "login", login) ||
+            !string_field(payload, "display_name", display_name) ||
+            !boolean_field(payload, "enabled", enabled) ||
+            !string_field(payload, "password", password)) {
+            return error_response(request_id, "access.invalid_request", "create-user requires login, display_name, enabled and password");
+        }
+        auto result = administration.create_user(CreateAdministrationUserInput{
+            .login = std::move(login),
+            .display_name = std::move(display_name),
+            .enabled = enabled,
+            .password = std::move(password),
+        });
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object_object_add(response.get(), "user", user_json(*result.value));
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::set_user_enabled) {
+        if (!object_has_only_fields(payload, {"user_id", "enabled"})) {
+            return error_response(request_id, "access.invalid_request", "set-user-enabled payload shape is invalid");
+        }
+        std::string user_id;
+        bool enabled = true;
+        if (!string_field(payload, "user_id", user_id) || user_id.empty() ||
+            !boolean_field(payload, "enabled", enabled)) {
+            return error_response(request_id, "access.invalid_request", "set-user-enabled requires user_id and enabled");
+        }
+        auto result = administration.set_user_enabled(user_id, enabled);
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object_object_add(response.get(), "user", user_json(*result.value));
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::set_user_password) {
+        if (!object_has_only_fields(payload, {"user_id", "password"})) {
+            return error_response(request_id, "access.invalid_request", "set-user-password payload shape is invalid");
+        }
+        std::string user_id;
+        std::string password;
+        if (!string_field(payload, "user_id", user_id) || user_id.empty() ||
+            !string_field(payload, "password", password)) {
+            return error_response(request_id, "access.invalid_request", "set-user-password requires user_id and password");
+        }
+        const auto error = administration.set_user_password(user_id, password);
+        return error == UsersAccessAdministrationError::none
+            ? empty_success_response(request_id)
+            : administration_error_response(request_id, error);
+    }
+
+    if (operation == contract::list_permission_sets) {
+        if (!object_has_only_fields(payload, {})) {
+            return error_response(request_id, "access.invalid_request", "list-permission-sets payload must be empty");
+        }
+        auto result = administration.list_permission_sets();
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object* values = json_object_new_array();
+        for (const auto& permission_set : *result.value) {
+            json_object_array_add(values, permission_set_json(permission_set));
+        }
+        json_object_object_add(response.get(), "permission_sets", values);
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::create_permission_set) {
+        if (!object_has_only_fields(payload, {"name", "capabilities"})) {
+            return error_response(request_id, "access.invalid_request", "create-permission-set payload shape is invalid");
+        }
+        std::string name;
+        json_object* capabilities_value = nullptr;
+        std::vector<Capability> capabilities;
+        if (!string_field(payload, "name", name) ||
+            !json_object_object_get_ex(payload, "capabilities", &capabilities_value) ||
+            !parse_capabilities(capabilities_value, capabilities)) {
+            return error_response(request_id, "access.invalid_request", "create-permission-set requires name and valid capabilities");
+        }
+        auto result = administration.create_permission_set(CreatePermissionSetInput{
+            .name = std::move(name),
+            .capabilities = std::move(capabilities),
+        });
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object_object_add(
+            response.get(),
+            "permission_set",
+            permission_set_json(*result.value));
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::list_access_assignments) {
+        if (!object_has_only_fields(payload, {"user_id"})) {
+            return error_response(request_id, "access.invalid_request", "list-access-assignments payload shape is invalid");
+        }
+        std::string user_id;
+        std::optional<std::string_view> filter;
+        json_object* user_id_value = nullptr;
+        if (json_object_object_get_ex(payload, "user_id", &user_id_value)) {
+            if (user_id_value == nullptr ||
+                !json_object_is_type(user_id_value, json_type_string)) {
+                return error_response(request_id, "access.invalid_request", "user_id must be a string when present");
+            }
+            user_id = json_object_get_string(user_id_value);
+            if (user_id.empty()) {
+                return error_response(request_id, "access.invalid_request", "user_id must not be empty");
+            }
+            filter = user_id;
+        }
+        auto result = administration.list_assignments(filter);
+        if (!result.ok()) {
+            return administration_error_response(request_id, result.error);
+        }
+        auto response = adopt_json(json_object_new_object());
+        json_object* values = json_object_new_array();
+        for (const auto& assignment : *result.value) {
+            json_object_array_add(values, assignment_json(assignment));
+        }
+        json_object_object_add(response.get(), "assignments", values);
+        return success_response(request_id, response.release());
+    }
+
+    if (operation == contract::assign_access ||
+        operation == contract::remove_access_assignment) {
+        if (!object_has_only_fields(payload, {"user_id", "permission_set_id", "scope"})) {
+            return error_response(request_id, "access.invalid_request", "access assignment payload shape is invalid");
+        }
+        std::string user_id;
+        std::string permission_set_id;
+        json_object* scope_value = nullptr;
+        if (!string_field(payload, "user_id", user_id) || user_id.empty() ||
+            !string_field(payload, "permission_set_id", permission_set_id) ||
+            permission_set_id.empty() ||
+            !json_object_object_get_ex(payload, "scope", &scope_value)) {
+            return error_response(request_id, "access.invalid_request", "access assignment requires user_id, permission_set_id and scope");
+        }
+        const auto scope = parse_scope(scope_value);
+        if (!scope.has_value()) {
+            return error_response(request_id, "access.invalid_request", "access assignment scope is invalid");
+        }
+
+        if (operation == contract::assign_access) {
+            auto result = administration.assign(CreateAccessAssignmentInput{
+                .user_id = std::move(user_id),
+                .permission_set_id = std::move(permission_set_id),
+                .scope = *scope,
+            });
+            if (!result.ok()) {
+                return administration_error_response(request_id, result.error);
+            }
+            auto response = adopt_json(json_object_new_object());
+            json_object_object_add(
+                response.get(),
+                "assignment",
+                assignment_json(*result.value));
+            return success_response(request_id, response.release());
+        }
+
+        const auto error = administration.remove_assignment(AccessAssignment{
+            .user_id = std::move(user_id),
+            .permission_set_id = std::move(permission_set_id),
+            .scope = *scope,
+        });
+        return error == UsersAccessAdministrationError::none
+            ? empty_success_response(request_id)
+            : administration_error_response(request_id, error);
+    }
+
+    return error_response(
+        request_id,
+        "access.unknown_operation",
+        "Users & Access does not support the requested administration operation");
+}
+
 [[nodiscard]] std::string handle_request(
     AuthenticationSessionService& authentication,
+    UsersAccessAdministrationService& administration,
     const std::string_view request_id,
     const std::string_view operation,
     json_object* message,
@@ -385,24 +759,19 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             access_evaluation_json(*result.value));
     }
 
-    if (is_staged_administration_operation(operation)) {
-        auto admin = authentication.evaluate_access(
-            token,
-            AccessScope::global(),
-            Capability::admin);
-        if (!admin.ok()) {
-            return session_error_response(request_id, admin.error);
-        }
-        if (!admin.value->allowed) {
-            return error_response(
+    if (is_administration_operation(operation)) {
+        if (const auto denied = require_global_admin(
+                authentication,
                 request_id,
-                "access.forbidden",
-                "Global admin capability is required");
+                token);
+            denied.has_value()) {
+            return *denied;
         }
-        return error_response(
+        return handle_administration_request(
+            administration,
             request_id,
-            "access.internal_error",
-            "Administration operation implementation is staged for CORE-005 Step 6");
+            operation,
+            payload);
     }
 
     return error_response(
@@ -508,7 +877,8 @@ private:
     json_object_object_add(
         registration.get(),
         "service",
-        json_object_new_string(std::string(ServiceHubProvider::service_address).c_str()));
+        json_object_new_string(
+            std::string(ServiceHubProvider::service_address).c_str()));
     if (!connection.write(serialize(registration.get()))) {
         return false;
     }
@@ -525,7 +895,8 @@ private:
 
     std::string type;
     std::string service;
-    return string_field(response.get(), "type", type) && type == "registered" &&
+    return string_field(response.get(), "type", type) &&
+           type == "registered" &&
            string_field(response.get(), "service", service) &&
            service == ServiceHubProvider::service_address;
 }
@@ -533,6 +904,7 @@ private:
 [[nodiscard]] bool handle_hub_message(
     HubConnection& connection,
     AuthenticationSessionService& authentication,
+    UsersAccessAdministrationService& administration,
     const std::string& message_text) {
     auto message = adopt_json(json_tokener_parse(message_text.c_str()));
     if (!message || !json_object_is_type(message.get(), json_type_object)) {
@@ -564,6 +936,7 @@ private:
 
     return connection.write(handle_request(
         authentication,
+        administration,
         request_id,
         operation,
         message.get(),
@@ -594,7 +967,8 @@ std::optional<ServiceHubEndpoint> parse_service_hub_address(
         if (!std::isdigit(character)) {
             return std::nullopt;
         }
-        port_value = port_value * 10U + static_cast<unsigned int>(character - '0');
+        port_value = port_value * 10U +
+                     static_cast<unsigned int>(character - '0');
         if (port_value > 65535U) {
             return std::nullopt;
         }
@@ -611,8 +985,10 @@ std::optional<ServiceHubEndpoint> parse_service_hub_address(
 
 ServiceHubProvider::ServiceHubProvider(
     AuthenticationSessionService& authentication,
+    UsersAccessAdministrationService& administration,
     ServiceHubEndpoint endpoint)
     : authentication_(authentication),
+      administration_(administration),
       endpoint_(std::move(endpoint)) {}
 
 ServiceHubProvider::~ServiceHubProvider() {
@@ -658,7 +1034,11 @@ void ServiceHubProvider::run() {
                 healthy = false;
                 break;
             case HubConnection::ReadResult::message:
-                healthy = handle_hub_message(connection, authentication_, message);
+                healthy = handle_hub_message(
+                    connection,
+                    authentication_,
+                    administration_,
+                    message);
                 break;
             }
         }

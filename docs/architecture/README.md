@@ -236,7 +236,7 @@ Project Manager — самостоятельный сервис проектов
 
 Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
 
-В `CORE-005 / Steps 1–5` уже зафиксированы:
+В `CORE-005 / Steps 1–5` и текущем `Step 6A` уже зафиксированы:
 
 - stable opaque user ID, независимый от login/display properties;
 - enabled/disabled user state;
@@ -252,9 +252,12 @@ Users & Access — самостоятельная backend responsibility для 
 - versioned service address `users-access.v1`;
 - production provider через существующий Service Hub v1;
 - public `login` и protected session-core operations `logout`, `current-session`, `evaluate-access`;
+- Step 6A administration operations `list/create user`, enable/password reset, permission-set list/create и assignment list/add/remove;
+- все administration operations требуют authoritative global `admin` и получают identity только из authenticated request context;
+- create-user сохраняет user + scrypt credential atomically, а ordinary admin password baseline совпадает с bootstrap: 15..1024 bytes;
 - authoritative validation bearer credential внутри Users & Access, а не в Service Hub;
 - Project Manager authorization использует `users-access.v1/evaluate-access` и не читает Users & Access SQLite напрямую;
-- local security audit baseline без записи password/raw session token.
+- local security audit baseline без записи password/raw session token; расширение audit taxonomy для новых admin mutations должно быть закрыто до CORE-005 acceptance.
 
 В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.
 
@@ -355,7 +358,7 @@ Node.js используется как инструментальная сре�
 - точный набор state-значений;
 - внешний межпроцессный путь регистрации write-provider/Driver Runtime;
 - формат Driver Runtime API;
-- browser-side session-token storage/restoration policy до `CORE-005 / Step 6`;
+- browser-side session-token storage/restoration policy до `CORE-005 / Step 6B`;
 - точная representation/expiration policy control mode до `CORE-005 / Step 7`;
 - production TLS/origin policy для Service Hub;
 - окончательные process/container/deployment-модели;
