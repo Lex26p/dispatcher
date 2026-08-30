@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Steps 1–5 и Step 6A завершены; текущий подшаг — Step 6B.**
+**В разработке. Steps 1–5 и Step 6A/6B завершены; текущий подшаг — Step 6C.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий подшаг — `Step 6B — Web authenticated context и administration UI`.
+Текущий подшаг — `Step 6C — administration security audit completion`.
 
 ## Цель
 
@@ -672,7 +672,30 @@ Project context остаётся navigation context в `sessionStorage`, но т
 
 Backend-independent Playwright smoke проверяет public shell/login gating. Existing real Project Manager browser runner в Step 6B по-прежнему поднимает только Hub + Project Manager и проверяет unauthenticated login gate; полноценный authenticated multi-process browser path с Users & Access остаётся Step 7, как и было запланировано.
 
-После проверенного Step 6B SHA выполняется Step 6C — локальный administration security audit completion; только после него можно переходить к Step 7.
+Step 6B завершён commit:
+
+`ccde3a262d92ace53069d6e7740108b84f14aad9`
+
+### Решение и реализация Step 6C
+
+Step 6C завершает уже обязательный local security audit administration mutations без нового wire operation, schema migration или Event Hub imitation. Существующая SQLite `security_audit` остаётся единственным durable audit storage текущего Users & Access baseline.
+
+Administration taxonomy расширяется событиями:
+
+- `user_created`;
+- `user_enabled` / `user_disabled`;
+- `user_password_reset`;
+- `permission_set_created`;
+- `access_assignment_added`;
+- `access_assignment_removed`.
+
+Authenticated actor определяется production provider только из authoritative validated session после global `admin` enforcement и передаётся внутрь administration application boundary отдельно от business payload. Для user и assignment mutations `subject_user_id` содержит target user. Для `permission_set_created` user-specific subject оставляется пустым — permission-set ID не записывается в поле с ложной user semantics.
+
+Mutation paths выполняются через `SqliteUsersAccessAdministrationStore` как одна `BEGIN IMMEDIATE ... COMMIT` transaction вместе с audit insert. Это относится к create user + credential, enable/disable, password reset, permission-set creation и assignment add/remove. Audit write failure приводит к rollback всей mutation и `access.storage_error`; failed validation/conflict и повторный enable-state no-op не создают successful-mutation event. Plaintext password/raw bearer в audit не записываются. SQLite schema остаётся v2.
+
+Administration test проверяет event order, actor/subject semantics, injected timestamps и rollback через test-only SQLite trigger, принудительно отклоняющий audit insert. Existing session/bootstrap audit parser расширяется новыми event names и сохраняет backward compatibility с уже записанными событиями.
+
+После проверенного Step 6C SHA следующим будет Step 7 — control mode и real security integration.
 
 ### Что делаем
 

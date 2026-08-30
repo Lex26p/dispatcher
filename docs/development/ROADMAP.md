@@ -473,6 +473,8 @@ Step 1 зафиксировал отдельный C++ Users & Access skeleton, 
 
 `CORE-005 / Step 6A` завершён commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`: все ранее зарезервированные `users-access.v1` administration operations подключены к реальному backend/Service Hub path с global `admin`, atomic user+credential creation и integration coverage.
 
-Текущий локальный подшаг — `Step 6B — Web authenticated context и administration UI`: browser session restoration, login/logout/current-user, authenticated Project Manager path и минимальный Users & Access administration UI поверх shared Service Hub client. После проверенного Step 6B SHA выполняется `Step 6C — administration security audit completion`, закрывающий уже обязательный audit administration mutations до Step 7. Это локальное разбиение Step 6 не меняет sprint/roadmap scope.
+`CORE-005 / Step 6B` завершён commit `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web получил browser session restoration, login/logout/current-user, authenticated Project Manager path и минимальный Users & Access administration UI поверх shared Service Hub client.
+
+Текущий локальный подшаг — `Step 6C — administration security audit completion`: administration mutation + audit фиксируются atomically в существующем Users & Access SQLite storage с authoritative authenticated actor и без изменения `users-access.v1`. После проверенного Step 6C SHA следующим будет `Step 7 — Control mode и real security integration`. Локальное разбиение Step 6 не меняет sprint/roadmap scope.
 
 План CORE-005 сознательно ограничивает первый real enforcement существующими global/project scopes и Project Manager. Device/Dashboard-specific ACL, внешние identity providers, MFA, Event Hub audit publication и production deployment security не добавляются раньше соответствующих реальных требований.

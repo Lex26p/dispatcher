@@ -8,8 +8,13 @@ namespace dispatcher::users_access {
 
 enum class SecurityAuditEventType {
     bootstrap_admin_created,
+    user_created,
     user_enabled,
     user_disabled,
+    user_password_reset,
+    permission_set_created,
+    access_assignment_added,
+    access_assignment_removed,
     authentication_succeeded,
     authentication_failed,
     session_logged_out,
@@ -22,10 +27,20 @@ enum class SecurityAuditEventType {
     switch (event) {
     case SecurityAuditEventType::bootstrap_admin_created:
         return "bootstrap_admin_created";
+    case SecurityAuditEventType::user_created:
+        return "user_created";
     case SecurityAuditEventType::user_enabled:
         return "user_enabled";
     case SecurityAuditEventType::user_disabled:
         return "user_disabled";
+    case SecurityAuditEventType::user_password_reset:
+        return "user_password_reset";
+    case SecurityAuditEventType::permission_set_created:
+        return "permission_set_created";
+    case SecurityAuditEventType::access_assignment_added:
+        return "access_assignment_added";
+    case SecurityAuditEventType::access_assignment_removed:
+        return "access_assignment_removed";
     case SecurityAuditEventType::authentication_succeeded:
         return "authentication_succeeded";
     case SecurityAuditEventType::authentication_failed:

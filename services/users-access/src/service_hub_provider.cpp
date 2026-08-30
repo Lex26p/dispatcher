@@ -412,7 +412,13 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
 [[nodiscard]] std::optional<std::string> require_global_admin(
     AuthenticationSessionService& authentication,
     const std::string_view request_id,
-    const std::string_view token) {
+    const std::string_view token,
+    std::string& actor_user_id) {
+    auto session = authentication.validate(token);
+    if (!session.ok()) {
+        return session_error_response(request_id, session.error);
+    }
+
     auto result = authentication.evaluate_access(
         token,
         AccessScope::global(),
@@ -426,11 +432,14 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             "access.forbidden",
             "Global admin capability is required");
     }
+
+    actor_user_id = session.value->user.id;
     return std::nullopt;
 }
 
 [[nodiscard]] std::string handle_administration_request(
     UsersAccessAdministrationService& administration,
+    const std::string_view actor_user_id,
     const std::string_view request_id,
     const std::string_view operation,
     json_object* payload) {
@@ -465,7 +474,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             !string_field(payload, "password", password)) {
             return error_response(request_id, "access.invalid_request", "create-user requires login, display_name, enabled and password");
         }
-        auto result = administration.create_user(CreateAdministrationUserInput{
+        auto result = administration.create_user(actor_user_id, CreateAdministrationUserInput{
             .login = std::move(login),
             .display_name = std::move(display_name),
             .enabled = enabled,
@@ -489,7 +498,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             !boolean_field(payload, "enabled", enabled)) {
             return error_response(request_id, "access.invalid_request", "set-user-enabled requires user_id and enabled");
         }
-        auto result = administration.set_user_enabled(user_id, enabled);
+        auto result = administration.set_user_enabled(actor_user_id, user_id, enabled);
         if (!result.ok()) {
             return administration_error_response(request_id, result.error);
         }
@@ -508,7 +517,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             !string_field(payload, "password", password)) {
             return error_response(request_id, "access.invalid_request", "set-user-password requires user_id and password");
         }
-        const auto error = administration.set_user_password(user_id, password);
+        const auto error = administration.set_user_password(actor_user_id, user_id, password);
         return error == UsersAccessAdministrationError::none
             ? empty_success_response(request_id)
             : administration_error_response(request_id, error);
@@ -543,7 +552,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             !parse_capabilities(capabilities_value, capabilities)) {
             return error_response(request_id, "access.invalid_request", "create-permission-set requires name and valid capabilities");
         }
-        auto result = administration.create_permission_set(CreatePermissionSetInput{
+        auto result = administration.create_permission_set(actor_user_id, CreatePermissionSetInput{
             .name = std::move(name),
             .capabilities = std::move(capabilities),
         });
@@ -609,7 +618,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
         }
 
         if (operation == contract::assign_access) {
-            auto result = administration.assign(CreateAccessAssignmentInput{
+            auto result = administration.assign(actor_user_id, CreateAccessAssignmentInput{
                 .user_id = std::move(user_id),
                 .permission_set_id = std::move(permission_set_id),
                 .scope = *scope,
@@ -625,7 +634,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
             return success_response(request_id, response.release());
         }
 
-        const auto error = administration.remove_assignment(AccessAssignment{
+        const auto error = administration.remove_assignment(actor_user_id, AccessAssignment{
             .user_id = std::move(user_id),
             .permission_set_id = std::move(permission_set_id),
             .scope = *scope,
@@ -760,15 +769,18 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     }
 
     if (is_administration_operation(operation)) {
+        std::string actor_user_id;
         if (const auto denied = require_global_admin(
                 authentication,
                 request_id,
-                token);
+                token,
+                actor_user_id);
             denied.has_value()) {
             return *denied;
         }
         return handle_administration_request(
             administration,
+            actor_user_id,
             request_id,
             operation,
             payload);

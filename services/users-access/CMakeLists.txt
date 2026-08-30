@@ -293,6 +293,7 @@ if(DISPATCHER_BUILD_TESTS)
             dispatcher_users_access_crypto
             dispatcher_users_access_sqlite
             dispatcher_users_access_sqlite_administration
+            SQLite::SQLite3
     )
     set_target_properties(
         dispatcher_users_access_administration_tests

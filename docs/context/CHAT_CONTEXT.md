@@ -216,9 +216,10 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 3 — `02a2d86e730a6c73ee0c33250bb9d4dc14791681`;
 - Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
 - Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
-- Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`.
+- Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
+- Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`.
 
-Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6A functional commit `04e83879c73e298d1eac61acbd8e861f0ba5988d` является baseline текущего Step 6B.
+Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6B functional commit `ccde3a262d92ace53069d6e7740108b84f14aad9` является baseline текущего Step 6C.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
@@ -232,11 +233,11 @@ Step 5 защитил реальный Project Manager через Users & Access
 
 Step 6A завершён commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`: production `users-access.v1` реализует зарезервированные administration operations с global `admin`, atomic user+credential creation и real Service Hub tests.
 
-**Текущий локальный подшаг — `CORE-005 / Step 6B — Web authenticated context и administration UI`.**
+Step 6B завершён commit `ccde3a262d92ace53069d6e7740108b84f14aad9`: browser session policy хранит opaque bearer только в текущем `sessionStorage`, reload authoritative восстанавливается через `current-session`, invalid/expired session очищается, protected Web requests используют shared session-aware Service Hub wrapper; Web получил login/logout/current user, authenticated Project Manager path и global-admin `/access`.
 
-Step 6B фиксирует browser session policy: opaque bearer хранится только в текущем browser `sessionStorage` (`dispatcher.user-session.v1`), reload authoritative восстанавливается через `current-session`, invalid/expired session очищается, а protected Web requests получают bearer через shared session-aware Service Hub wrapper без второго WebSocket. Web получает login/logout/current user, authenticated Project Manager path и global-admin `/access`; project context очищается при logout/user change и authoritative access revocation.
+**Текущий локальный подшаг — `CORE-005 / Step 6C — administration security audit completion`.**
 
-После проверенного Step 6B SHA выполняется `Step 6C — administration security audit completion`, чтобы закрыть уже обязательный audit значимых admin mutations до Step 7. Control mode остаётся Step 7.
+Step 6C расширяет существующий local `security_audit` administration events без schema/wire changes. Authenticated global-admin user ID является actor; user/assignment mutations сохраняют target user как subject, permission-set create оставляет user-specific subject пустым. Mutation + audit row выполняются одной SQLite transaction и fail-closed откатываются вместе при audit failure. После проверенного Step 6C SHA следующим будет Step 7 — control mode и real security integration.
 
 ## Рабочий процесс
 

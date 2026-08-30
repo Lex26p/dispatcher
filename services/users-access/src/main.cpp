@@ -217,10 +217,8 @@ int main(int argc, char* argv[]) {
 
     dispatcher::users_access::UsersAccessAdministrationService administration{
         repository,
-        repository,
         administration_store,
-        password_hasher,
-        access_manager};
+        password_hasher};
 
     dispatcher::users_access::ServiceHubProvider provider{
         authentication,

@@ -74,6 +74,28 @@ private:
         static_cast<std::size_t>(bytes));
 }
 
+[[nodiscard]] std::uint32_t capability_mask(
+    const std::vector<Capability>& capabilities) noexcept {
+    std::uint32_t mask = 0;
+    for (const auto capability : capabilities) {
+        switch (capability) {
+        case Capability::view:
+            mask |= 1U << 0U;
+            break;
+        case Capability::control:
+            mask |= 1U << 1U;
+            break;
+        case Capability::edit:
+            mask |= 1U << 2U;
+            break;
+        case Capability::admin:
+            mask |= 1U << 3U;
+            break;
+        }
+    }
+    return mask;
+}
+
 [[nodiscard]] bool capabilities_from_mask(
     const std::uint32_t mask,
     std::vector<Capability>& capabilities) {
@@ -189,6 +211,41 @@ bool SqliteUsersAccessAdministrationStore::execute(const std::string_view sql) {
     return false;
 }
 
+AdministrationStoreStatus SqliteUsersAccessAdministrationStore::insert_audit(
+    const SecurityAuditRecord& audit) {
+    Statement statement(
+        database_,
+        "INSERT INTO security_audit("
+        "occurred_at_unix_ms, event_type, actor_user_id, subject_user_id"
+        ") VALUES(?1, ?2, ?3, ?4);");
+    if (!statement ||
+        sqlite3_bind_int64(statement.get(), 1, audit.occurred_at_unix_ms) != SQLITE_OK ||
+        !bind_text(statement.get(), 2, security_audit_event_name(audit.event)) ||
+        !bind_text(statement.get(), 3, audit.actor_user_id) ||
+        !bind_text(statement.get(), 4, audit.subject_user_id)) {
+        set_error(sqlite3_errmsg(database_));
+        return AdministrationStoreStatus::error;
+    }
+    if (sqlite3_step(statement.get()) != SQLITE_DONE) {
+        set_error(sqlite3_errmsg(database_));
+        return AdministrationStoreStatus::error;
+    }
+    return AdministrationStoreStatus::ok;
+}
+
+AdministrationStoreStatus SqliteUsersAccessAdministrationStore::finish_transaction(
+    const AdministrationStoreStatus status) {
+    if (status != AdministrationStoreStatus::ok) {
+        (void)execute("ROLLBACK;");
+        return status;
+    }
+    if (!execute("COMMIT;")) {
+        (void)execute("ROLLBACK;");
+        return AdministrationStoreStatus::error;
+    }
+    return AdministrationStoreStatus::ok;
+}
+
 void SqliteUsersAccessAdministrationStore::set_error(std::string message) const {
     error_message_ = std::move(message);
 }
@@ -230,7 +287,8 @@ AdministrationStoreStatus SqliteUsersAccessAdministrationStore::list_users(
 AdministrationStoreStatus
 SqliteUsersAccessAdministrationStore::insert_user_with_credential(
     const User& user,
-    const CredentialVerifier& verifier) {
+    const CredentialVerifier& verifier,
+    const SecurityAuditRecord& audit) {
     if (!ready_ || verifier.user_id != user.id) {
         return AdministrationStoreStatus::error;
     }
@@ -238,9 +296,7 @@ SqliteUsersAccessAdministrationStore::insert_user_with_credential(
         return AdministrationStoreStatus::error;
     }
 
-    bool success = false;
-    AdministrationStoreStatus status = AdministrationStoreStatus::error;
-
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
     {
         Statement statement(
             database_,
@@ -252,21 +308,20 @@ SqliteUsersAccessAdministrationStore::insert_user_with_credential(
             !bind_text(statement.get(), 3, user.display_name) ||
             sqlite3_bind_int(statement.get(), 4, user.enabled ? 1 : 0) != SQLITE_OK) {
             set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
         } else {
             const int result = sqlite3_step(statement.get());
-            if (result == SQLITE_DONE) {
-                success = true;
-            } else if (
-                result == SQLITE_CONSTRAINT_PRIMARYKEY ||
+            if (result == SQLITE_CONSTRAINT_PRIMARYKEY ||
                 result == SQLITE_CONSTRAINT_UNIQUE) {
                 status = AdministrationStoreStatus::conflict;
-            } else {
+            } else if (result != SQLITE_DONE) {
                 set_error(sqlite3_errmsg(database_));
+                status = AdministrationStoreStatus::error;
             }
         }
     }
 
-    if (success) {
+    if (status == AdministrationStoreStatus::ok) {
         Statement statement(
             database_,
             "INSERT INTO credential_verifiers("
@@ -282,24 +337,95 @@ SqliteUsersAccessAdministrationStore::insert_user_with_credential(
             sqlite3_bind_int64(statement.get(), 4, verifier.block_size_r) != SQLITE_OK ||
             sqlite3_bind_int64(statement.get(), 5, verifier.parallelization_p) != SQLITE_OK ||
             !bind_blob(statement.get(), 6, verifier.salt) ||
-            !bind_blob(statement.get(), 7, verifier.digest)) {
+            !bind_blob(statement.get(), 7, verifier.digest) ||
+            sqlite3_step(statement.get()) != SQLITE_DONE) {
             set_error(sqlite3_errmsg(database_));
-            success = false;
-        } else if (sqlite3_step(statement.get()) != SQLITE_DONE) {
-            set_error(sqlite3_errmsg(database_));
-            success = false;
+            status = AdministrationStoreStatus::error;
         }
     }
 
-    if (!success) {
-        (void)execute("ROLLBACK;");
-        return status;
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
     }
-    if (!execute("COMMIT;")) {
-        (void)execute("ROLLBACK;");
+    return finish_transaction(status);
+}
+
+AdministrationStoreStatus SqliteUsersAccessAdministrationStore::update_user_enabled(
+    const User& user,
+    const SecurityAuditRecord& audit) {
+    if (!ready_) {
         return AdministrationStoreStatus::error;
     }
-    return AdministrationStoreStatus::ok;
+    if (!execute("BEGIN IMMEDIATE;")) {
+        return AdministrationStoreStatus::error;
+    }
+
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
+    {
+        Statement statement(
+            database_,
+            "UPDATE users SET enabled=?2 WHERE id=?1;");
+        if (!statement ||
+            !bind_text(statement.get(), 1, user.id) ||
+            sqlite3_bind_int(statement.get(), 2, user.enabled ? 1 : 0) != SQLITE_OK ||
+            sqlite3_step(statement.get()) != SQLITE_DONE) {
+            set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
+        } else if (sqlite3_changes(database_) == 0) {
+            status = AdministrationStoreStatus::not_found;
+        }
+    }
+
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
+    }
+    return finish_transaction(status);
+}
+
+AdministrationStoreStatus
+SqliteUsersAccessAdministrationStore::set_credential_verifier(
+    const CredentialVerifier& verifier,
+    const SecurityAuditRecord& audit) {
+    if (!ready_) {
+        return AdministrationStoreStatus::error;
+    }
+    if (!execute("BEGIN IMMEDIATE;")) {
+        return AdministrationStoreStatus::error;
+    }
+
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
+    {
+        Statement statement(
+            database_,
+            "INSERT INTO credential_verifiers("
+            "user_id, algorithm, cost_n, block_size_r, parallelization_p, salt, digest"
+            ") VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "algorithm=excluded.algorithm, cost_n=excluded.cost_n, "
+            "block_size_r=excluded.block_size_r, "
+            "parallelization_p=excluded.parallelization_p, "
+            "salt=excluded.salt, digest=excluded.digest;");
+        if (!statement ||
+            !bind_text(statement.get(), 1, verifier.user_id) ||
+            !bind_text(statement.get(), 2, verifier.algorithm) ||
+            sqlite3_bind_int64(
+                statement.get(),
+                3,
+                static_cast<sqlite3_int64>(verifier.cost_n)) != SQLITE_OK ||
+            sqlite3_bind_int64(statement.get(), 4, verifier.block_size_r) != SQLITE_OK ||
+            sqlite3_bind_int64(statement.get(), 5, verifier.parallelization_p) != SQLITE_OK ||
+            !bind_blob(statement.get(), 6, verifier.salt) ||
+            !bind_blob(statement.get(), 7, verifier.digest) ||
+            sqlite3_step(statement.get()) != SQLITE_DONE) {
+            set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
+        }
+    }
+
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
+    }
+    return finish_transaction(status);
 }
 
 AdministrationStoreStatus
@@ -345,6 +471,50 @@ SqliteUsersAccessAdministrationStore::list_permission_sets(
             .capabilities = std::move(capabilities),
         });
     }
+}
+
+AdministrationStoreStatus
+SqliteUsersAccessAdministrationStore::insert_permission_set(
+    const PermissionSet& permission_set,
+    const SecurityAuditRecord& audit) {
+    if (!ready_) {
+        return AdministrationStoreStatus::error;
+    }
+    if (!execute("BEGIN IMMEDIATE;")) {
+        return AdministrationStoreStatus::error;
+    }
+
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
+    {
+        Statement statement(
+            database_,
+            "INSERT INTO permission_sets(id, name, capabilities) VALUES(?1, ?2, ?3);");
+        if (!statement ||
+            !bind_text(statement.get(), 1, permission_set.id) ||
+            !bind_text(statement.get(), 2, permission_set.name) ||
+            sqlite3_bind_int64(
+                statement.get(),
+                3,
+                static_cast<sqlite3_int64>(capability_mask(permission_set.capabilities))) !=
+                SQLITE_OK) {
+            set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
+        } else {
+            const int result = sqlite3_step(statement.get());
+            if (result == SQLITE_CONSTRAINT_PRIMARYKEY ||
+                result == SQLITE_CONSTRAINT_UNIQUE) {
+                status = AdministrationStoreStatus::conflict;
+            } else if (result != SQLITE_DONE) {
+                set_error(sqlite3_errmsg(database_));
+                status = AdministrationStoreStatus::error;
+            }
+        }
+    }
+
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
+    }
+    return finish_transaction(status);
 }
 
 AdministrationStoreStatus SqliteUsersAccessAdministrationStore::list_assignments(
@@ -394,37 +564,87 @@ AdministrationStoreStatus SqliteUsersAccessAdministrationStore::list_assignments
     }
 }
 
-AdministrationStoreStatus SqliteUsersAccessAdministrationStore::erase_assignment(
-    const AccessAssignment& assignment) {
+AdministrationStoreStatus SqliteUsersAccessAdministrationStore::insert_assignment(
+    const AccessAssignment& assignment,
+    const SecurityAuditRecord& audit) {
     if (!ready_) {
         return AdministrationStoreStatus::error;
     }
-
-    Statement statement(
-        database_,
-        "DELETE FROM access_assignments "
-        "WHERE user_id=?1 AND permission_set_id=?2 "
-        "AND scope_kind=?3 AND project_id=?4;");
-    if (!statement ||
-        !bind_text(statement.get(), 1, assignment.user_id) ||
-        !bind_text(statement.get(), 2, assignment.permission_set_id) ||
-        sqlite3_bind_int(
-            statement.get(),
-            3,
-            scope_kind_value(assignment.scope.kind)) != SQLITE_OK ||
-        !bind_text(statement.get(), 4, assignment.scope.project_id)) {
-        set_error(sqlite3_errmsg(database_));
+    if (!execute("BEGIN IMMEDIATE;")) {
         return AdministrationStoreStatus::error;
     }
 
-    if (sqlite3_step(statement.get()) != SQLITE_DONE) {
-        set_error(sqlite3_errmsg(database_));
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
+    {
+        Statement statement(
+            database_,
+            "INSERT INTO access_assignments("
+            "user_id, permission_set_id, scope_kind, project_id"
+            ") VALUES(?1, ?2, ?3, ?4);");
+        if (!statement ||
+            !bind_text(statement.get(), 1, assignment.user_id) ||
+            !bind_text(statement.get(), 2, assignment.permission_set_id) ||
+            sqlite3_bind_int(
+                statement.get(),
+                3,
+                scope_kind_value(assignment.scope.kind)) != SQLITE_OK ||
+            !bind_text(statement.get(), 4, assignment.scope.project_id)) {
+            set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
+        } else {
+            const int result = sqlite3_step(statement.get());
+            if (result == SQLITE_CONSTRAINT_UNIQUE) {
+                status = AdministrationStoreStatus::conflict;
+            } else if (result != SQLITE_DONE) {
+                set_error(sqlite3_errmsg(database_));
+                status = AdministrationStoreStatus::error;
+            }
+        }
+    }
+
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
+    }
+    return finish_transaction(status);
+}
+
+AdministrationStoreStatus SqliteUsersAccessAdministrationStore::erase_assignment(
+    const AccessAssignment& assignment,
+    const SecurityAuditRecord& audit) {
+    if (!ready_) {
+        return AdministrationStoreStatus::error;
+    }
+    if (!execute("BEGIN IMMEDIATE;")) {
         return AdministrationStoreStatus::error;
     }
 
-    return sqlite3_changes(database_) == 0
-        ? AdministrationStoreStatus::not_found
-        : AdministrationStoreStatus::ok;
+    AdministrationStoreStatus status = AdministrationStoreStatus::ok;
+    {
+        Statement statement(
+            database_,
+            "DELETE FROM access_assignments "
+            "WHERE user_id=?1 AND permission_set_id=?2 "
+            "AND scope_kind=?3 AND project_id=?4;");
+        if (!statement ||
+            !bind_text(statement.get(), 1, assignment.user_id) ||
+            !bind_text(statement.get(), 2, assignment.permission_set_id) ||
+            sqlite3_bind_int(
+                statement.get(),
+                3,
+                scope_kind_value(assignment.scope.kind)) != SQLITE_OK ||
+            !bind_text(statement.get(), 4, assignment.scope.project_id) ||
+            sqlite3_step(statement.get()) != SQLITE_DONE) {
+            set_error(sqlite3_errmsg(database_));
+            status = AdministrationStoreStatus::error;
+        } else if (sqlite3_changes(database_) == 0) {
+            status = AdministrationStoreStatus::not_found;
+        }
+    }
+
+    if (status == AdministrationStoreStatus::ok) {
+        status = insert_audit(audit);
+    }
+    return finish_transaction(status);
 }
 
 }  // namespace dispatcher::users_access

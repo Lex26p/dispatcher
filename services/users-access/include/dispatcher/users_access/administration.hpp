@@ -2,10 +2,11 @@
 
 #include "dispatcher/users_access/access.hpp"
 #include "dispatcher/users_access/credential.hpp"
+#include "dispatcher/users_access/security_audit.hpp"
 #include "dispatcher/users_access/user.hpp"
-#include "dispatcher/users_access/users_access_manager.hpp"
 #include "dispatcher/users_access/users_access_repository.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -29,14 +30,30 @@ public:
     virtual AdministrationStoreStatus list_users(std::vector<User>& users) const = 0;
     virtual AdministrationStoreStatus insert_user_with_credential(
         const User& user,
-        const CredentialVerifier& verifier) = 0;
+        const CredentialVerifier& verifier,
+        const SecurityAuditRecord& audit) = 0;
+    virtual AdministrationStoreStatus update_user_enabled(
+        const User& user,
+        const SecurityAuditRecord& audit) = 0;
+    virtual AdministrationStoreStatus set_credential_verifier(
+        const CredentialVerifier& verifier,
+        const SecurityAuditRecord& audit) = 0;
+
     virtual AdministrationStoreStatus list_permission_sets(
         std::vector<PermissionSet>& permission_sets) const = 0;
+    virtual AdministrationStoreStatus insert_permission_set(
+        const PermissionSet& permission_set,
+        const SecurityAuditRecord& audit) = 0;
+
     virtual AdministrationStoreStatus list_assignments(
         std::optional<std::string_view> user_id,
         std::vector<AccessAssignment>& assignments) const = 0;
+    virtual AdministrationStoreStatus insert_assignment(
+        const AccessAssignment& assignment,
+        const SecurityAuditRecord& audit) = 0;
     virtual AdministrationStoreStatus erase_assignment(
-        const AccessAssignment& assignment) = 0;
+        const AccessAssignment& assignment,
+        const SecurityAuditRecord& audit) = 0;
 };
 
 enum class UsersAccessAdministrationError {
@@ -89,52 +106,64 @@ struct CreateAdministrationUserInput final {
 };
 
 using AdministrationIdGenerator = std::function<std::string()>;
+using AdministrationClock = std::function<std::int64_t()>;
 
 class UsersAccessAdministrationService final {
 public:
     UsersAccessAdministrationService(
         UsersAccessRepository& users_repository,
-        CredentialRepository& credential_repository,
         UsersAccessAdministrationStore& administration_store,
         const PasswordHasher& password_hasher,
-        UsersAccessManager& access_manager,
-        AdministrationIdGenerator id_generator = {});
+        AdministrationIdGenerator id_generator = {},
+        AdministrationClock clock = {});
 
     [[nodiscard]] UsersAccessAdministrationResult<std::vector<User>> list_users() const;
     [[nodiscard]] UsersAccessAdministrationResult<User> create_user(
+        std::string_view actor_user_id,
         const CreateAdministrationUserInput& input);
     [[nodiscard]] UsersAccessAdministrationResult<User> set_user_enabled(
+        std::string_view actor_user_id,
         std::string_view user_id,
         bool enabled);
     [[nodiscard]] UsersAccessAdministrationError set_user_password(
+        std::string_view actor_user_id,
         std::string_view user_id,
         std::string_view password);
 
     [[nodiscard]] UsersAccessAdministrationResult<std::vector<PermissionSet>>
     list_permission_sets() const;
     [[nodiscard]] UsersAccessAdministrationResult<PermissionSet>
-    create_permission_set(const CreatePermissionSetInput& input);
+    create_permission_set(
+        std::string_view actor_user_id,
+        const CreatePermissionSetInput& input);
 
     [[nodiscard]] UsersAccessAdministrationResult<std::vector<AccessAssignment>>
     list_assignments(std::optional<std::string_view> user_id) const;
     [[nodiscard]] UsersAccessAdministrationResult<AccessAssignment> assign(
+        std::string_view actor_user_id,
         const CreateAccessAssignmentInput& input);
     [[nodiscard]] UsersAccessAdministrationError remove_assignment(
+        std::string_view actor_user_id,
         const AccessAssignment& assignment);
 
 private:
-    [[nodiscard]] static UsersAccessAdministrationError map_manager_error(
-        UsersAccessManagerError error) noexcept;
     [[nodiscard]] static bool has_non_whitespace(std::string_view value) noexcept;
     [[nodiscard]] static bool valid_scope(const AccessScope& scope) noexcept;
     [[nodiscard]] static bool valid_password(std::string_view password) noexcept;
+    [[nodiscard]] static bool canonical_capabilities(
+        const std::vector<Capability>& capabilities,
+        std::vector<Capability>& canonical);
+
+    [[nodiscard]] SecurityAuditRecord audit_record(
+        SecurityAuditEventType event,
+        std::string_view actor_user_id,
+        std::string_view subject_user_id) const;
 
     UsersAccessRepository& users_repository_;
-    CredentialRepository& credential_repository_;
     UsersAccessAdministrationStore& administration_store_;
     const PasswordHasher& password_hasher_;
-    UsersAccessManager& access_manager_;
     AdministrationIdGenerator id_generator_;
+    AdministrationClock clock_;
 };
 
 }  // namespace dispatcher::users_access

@@ -10,8 +10,8 @@ Users & Access is the core backend responsibility for stable user identity, acce
 - `Step 4`: authenticated Service Hub request boundary and production session-core provider.
 - `Step 5`: Project Manager uses Users & Access as authoritative authorization dependency.
 - `Step 6A` completed in `04e83879c73e298d1eac61acbd8e861f0ba5988d`: all reserved administration operations are connected to the real backend/Service Hub path.
-- current `Step 6B`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
-- next `Step 6C`: complete local security audit semantics for administration mutations before Step 7.
+- `Step 6B` completed in `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
+- current `Step 6C`: administration mutations are coupled atomically with durable local security audit before Step 7.
 
 Control mode remains Step 7.
 
@@ -89,7 +89,9 @@ The backend keeps existing independent capability and global/project scope seman
 
 Step 6A tests cover the application/storage path and a real Service Hub path including unauthenticated denial, non-admin denial, user creation, password reset, enable/disable, permission sets and assignments.
 
-The broader CORE-005 security-audit requirement for administration mutations remains explicit: the existing audit covers bootstrap/session/security actions, while `Step 6C` completes the administration mutation taxonomy/semantics before Step 7. No fake Event Hub/audit mechanism is introduced.
+Step 6C extends the same local `security_audit` table with `user_created`, `user_enabled`, `user_disabled`, `user_password_reset`, `permission_set_created`, `access_assignment_added` and `access_assignment_removed`. The actor is the authoritative authenticated global-admin user; user/assignment events store the target user as subject, while permission-set creation leaves the user-specific subject empty.
+
+Each administration mutation and its audit row share one SQLite transaction. If audit insertion fails, the mutation rolls back and the operation fails closed. No plaintext password/raw bearer is recorded, schema remains v2, and no fake Event Hub/audit mechanism is introduced.
 
 ## Browser session integration — Step 6B
 

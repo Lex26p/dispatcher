@@ -342,18 +342,30 @@ Disabled user при login получает `auth.invalid_credentials`; ране
 
 ## Security audit
 
-Текущий durable session/security audit уже включает bootstrap, authentication, logout, expiry и disabled-session rejection без password/raw bearer material.
+Текущий durable session/security audit включает bootstrap, authentication, logout, expiry и disabled-session rejection без password/raw bearer material.
 
-План CORE-005 также требует audit значимых administration mutations (user changes, password reset, permission-set/assignment changes). `Step 6A` не изобретает частично атомарный или ложный audit поверх отдельного SQLite connection; `Step 6C` является явным completion item Step 6 для завершения administration audit taxonomy/semantics до перехода к Step 7.
+`CORE-005 / Step 6C` расширяет ту же локальную SQLite audit boundary для administration mutations без schema migration и без изменения `users-access.v1`:
+
+- `user_created`;
+- `user_enabled`;
+- `user_disabled`;
+- `user_password_reset`;
+- `permission_set_created`;
+- `access_assignment_added`;
+- `access_assignment_removed`.
+
+Для administration events `actor_user_id` берётся только из authoritative validated session global-admin caller. User create/enable-disable/password reset и assignment add/remove используют target user как `subject_user_id`. `permission_set_created` оставляет user-specific `subject_user_id` пустым: permission-set ID намеренно не маскируется под user ID.
+
+Каждая успешная administration mutation и её audit row записываются **в одной SQLite transaction**. Если audit insert не может быть выполнен, mutation откатывается и operation fail-closed возвращает storage error. Failed validation/conflict/no-op не создают ложный successful-mutation audit. Plaintext password и raw bearer в audit не попадают.
 
 Публикация security audit в будущий Event Hub не входит в CORE-005.
 
 ## Control mode
 
-Control mode не входит в Step 6A/6B session schema. Его реальный session baseline остаётся `CORE-005 / Step 7`.
+Control mode не входит в Step 6A/6B/6C. Его реальный session baseline остаётся `CORE-005 / Step 7`.
 
 ## Versioning
 
 `users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, а Step 6B добавляет browser session ownership/restoration поверх того же transport без изменения wire contract. Несовместимое изменение требует нового service version.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, а Step 6C завершает внутренний durable administration audit без изменения wire contract. Несовместимое изменение требует нового service version.

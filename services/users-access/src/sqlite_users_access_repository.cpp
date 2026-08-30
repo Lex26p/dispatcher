@@ -158,12 +158,32 @@ private:
         event = SecurityAuditEventType::bootstrap_admin_created;
         return true;
     }
+    if (value == "user_created") {
+        event = SecurityAuditEventType::user_created;
+        return true;
+    }
     if (value == "user_enabled") {
         event = SecurityAuditEventType::user_enabled;
         return true;
     }
     if (value == "user_disabled") {
         event = SecurityAuditEventType::user_disabled;
+        return true;
+    }
+    if (value == "user_password_reset") {
+        event = SecurityAuditEventType::user_password_reset;
+        return true;
+    }
+    if (value == "permission_set_created") {
+        event = SecurityAuditEventType::permission_set_created;
+        return true;
+    }
+    if (value == "access_assignment_added") {
+        event = SecurityAuditEventType::access_assignment_added;
+        return true;
+    }
+    if (value == "access_assignment_removed") {
+        event = SecurityAuditEventType::access_assignment_removed;
         return true;
     }
     if (value == "authentication_succeeded") {
