@@ -133,9 +133,11 @@ Step 8 не добавляет новый Web API. Он только фикси�
 
 **Источник:** `docs/architecture/data-hub-contract.md`, `CORE-001`.
 
-### Device Manager — заполнить в CORE-006
+### Device Manager — CORE-006 в разработке
 
-Зафиксировать после реализации:
+План `CORE-006` обязуется заполнить этот раздел по мере подтверждения реального backend contract. До соответствующих Step 1–5 нельзя считать перечисленные ниже поля/operations утверждёнными только из этого backlog. Web-код в CORE-006 не разрабатывается.
+
+Зафиксировать по фактической реализации:
 
 - device/metric metadata, которые реально нужны Web;
 - read/write/state relationships;

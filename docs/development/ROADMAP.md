@@ -226,9 +226,13 @@ Modbus и SNMP разрабатываются вместе с ядром, что
 
 ### CORE-006 — Device Manager
 
+**Статус:** в разработке.
+
 **Цель:** создать источник истины об устройствах и описании их метрик.
 
-**Результат:** Device Manager знает устройства, метрики, read/write свойства, state-связи и метаданные, а Data Hub остаётся источником текущих runtime-значений.
+**Результат:** Device Manager знает stable устройства/метрики, read/write свойства, state-связи и durable metadata через отдельную versioned service boundary, а Data Hub остаётся источником текущих runtime-значений. Project/resource access semantics определяются без превращения Project в владельца Device; Web-интеграция документируется и откладывается до `CORE-014`.
+
+План и живой отчёт: [`sprints/CORE-006.md`](sprints/CORE-006.md).
 
 ### CORE-007 — Package Manager
 

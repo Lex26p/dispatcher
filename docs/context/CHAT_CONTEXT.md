@@ -199,17 +199,18 @@ Plan CORE-005:
 - Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`;
 - Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`;
 - Step 7A — `f25aef1d3ff721f86487662289661409f72d3e57`;
-- backend-first staging — `bd52d4a5b651bef6685ed2b3a3292c3af841182b`.
+- backend-first staging — `bd52d4a5b651bef6685ed2b3a3292c3af841182b`;
+- final CORE-005 closure — `b8fed81d9f68e47e7635a283e1b2803166ca5bf8`.
 
 CORE-005 даёт stable user identity; independent `view/control/edit/admin`; global/project assignments; local SQLite schema v2; OpenSSL scrypt credentials; explicit first-admin bootstrap; opaque durable server-side sessions; authenticated Service Hub request boundary; production `users-access.v1`; backend-authoritative Project Manager authorization; administration API + atomic security audit; project-scoped ephemeral control mode.
 
 Step 8 закрыл audit explicit control-mode enable/disable без schema/wire migration и прошёл backend acceptance: полный `^users-access\.` CTest selection и `project-manager.service-hub-integration`, включая fail-closed outage/recovery, revoked/disabled/expired paths, restart/re-registration и secret-leakage regression.
 
-Final CORE-005 baseline — documentation-closure commit, содержащий Step 8 fix и этот отчёт. Его SHA не записывается рекурсивно в тот же commit: перед началом CORE-006 агент обязан проверить присланный пользователем closure SHA в GitHub.
+Final CORE-005 baseline проверен в GitHub: `b8fed81d9f68e47e7635a283e1b2803166ca5bf8` (`Complete CORE-005 Users and Access`).
 
 Незакоммиченный Step 7B Web control-mode/security integration не является source of truth. Web feature-разработка заморожена до завершения backend foundation через `CORE-013`; накопительный handoff ведётся в `docs/development/WEB_IMPLEMENTATION.md`.
 
-**Следующая задача — `CORE-006 — Device Manager`.** Перед первым кодовым шагом нужно перечитать `AGENTS.md`, текущий roadmap/architecture/device concept, затем создать/актуализировать `docs/development/sprints/CORE-006.md` с полным планом шагов. React + TypeScript не пересматриваются; Web в CORE-006 не развивается, но будущие Web requirements Device Manager должны фиксироваться в `WEB_IMPLEMENTATION.md`.
+**Текущий спринт — `CORE-006 — Device Manager`.** План зафиксирован в `docs/development/sprints/CORE-006.md`. После подтверждения plan commit текущий шаг — Step 1: domain model и отдельный C++20 service skeleton. CORE-006 хранит device/metric metadata, а Data Hub остаётся источником runtime values. Project/resource access model должна быть определена до persistence/contract без превращения Project в owner. React + TypeScript не пересматриваются; Web в CORE-006 не развивается, а будущий handoff обновляется в `WEB_IMPLEMENTATION.md`.
 
 ## Рабочий процесс
 

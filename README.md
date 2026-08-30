@@ -18,7 +18,7 @@
 
 `CORE-005 — Users & Access` завершён: существует stable user/access domain, локальная authentication/session boundary, durable SQLite users/access/session storage, secure first-admin bootstrap, global/project permission assignments, administration + durable security audit, backend-authoritative Project Manager authorization и project-scoped ephemeral control mode. Финальный Step 8 backend acceptance прошёл Users & Access CTests и реальный Project Manager authorization integration; дальнейшая Web control-mode/security UX остаётся отложенной до `CORE-014`.
 
-Следующая backend-задача — `CORE-006 — Device Manager`. Перед реализацией его шаги должны быть отдельно зафиксированы в sprint-файле.
+`CORE-006 — Device Manager` находится в разработке. План спринта зафиксирован в `docs/development/sprints/CORE-006.md`; текущий шаг после подтверждения plan commit — Step 1: domain model и отдельный backend service skeleton. Web-код в CORE-006 не развивается.
 
 Внутри `L1-01` действует backend-first порядок: новые Web features заморожены до завершения `CORE-013 — System & Administration`. React + TypeScript остаются выбранным Web-стеком. Каждый backend-спринт документирует будущую Web-интеграцию в `docs/development/WEB_IMPLEMENTATION.md`; после backend foundation отдельный `CORE-014 — Web Integration & Core Operations UI` подключит накопленные стабильные контракты к Web без reverse engineering всего backend-кода.
 
@@ -49,5 +49,7 @@
 Итог `CORE-004`: [`docs/development/sprints/CORE-004.md`](docs/development/sprints/CORE-004.md).
 
 Итог `CORE-005`: [`docs/development/sprints/CORE-005.md`](docs/development/sprints/CORE-005.md).
+
+Текущий спринт `CORE-006`: [`docs/development/sprints/CORE-006.md`](docs/development/sprints/CORE-006.md).
 
 Контекст текущего обсуждения для продолжения работы в другом чате: [`docs/context/CHAT_CONTEXT.md`](docs/context/CHAT_CONTEXT.md).
