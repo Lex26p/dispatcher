@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Steps 1–5 и Step 6A/6B завершены; текущий подшаг — Step 6C.**
+**В разработке. Steps 1–6 завершены; текущий подшаг — Step 7A.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -16,7 +16,7 @@ Plan commit зафиксирован и проверен в репозитори
 
 `d05cba25981599baaeadd9ad452d1f68dbabd834`
 
-Текущий подшаг — `Step 6C — administration security audit completion`.
+Текущий подшаг — `Step 7A — authoritative session control mode backend/contract`.
 
 ## Цель
 
@@ -695,7 +695,9 @@ Mutation paths выполняются через `SqliteUsersAccessAdministratio
 
 Administration test проверяет event order, actor/subject semantics, injected timestamps и rollback через test-only SQLite trigger, принудительно отклоняющий audit insert. Existing session/bootstrap audit parser расширяется новыми event names и сохраняет backward compatibility с уже записанными событиями.
 
-После проверенного Step 6C SHA следующим будет Step 7 — control mode и real security integration.
+Step 6C завершён commit:
+
+`382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`
 
 ### Что делаем
 
@@ -726,6 +728,41 @@ UI отражает effective access, но не считается security boun
 Пользователь реально входит в Web Shell, видит свой контекст и администратор может настроить минимальные права.
 
 ## Step 7 — Control mode и real security integration
+
+### Локальное разбиение Step 7
+
+Step 7 объединяет новую security-state boundary и большой multi-process browser acceptance. Чтобы сохранить правило одного проверяемого изменения на commit, шаг локально разделён без изменения sprint scope:
+
+- **Step 7A — authoritative session control mode backend/contract**: зафиксировать server-side semantics, versioned operations, C++ application boundary и real Service Hub integration;
+- **Step 7B — Web control-mode UX и real security integration**: подключить режим к authenticated Web/project context и выполнить запланированный Browser → Service Hub → Users & Access → Project Manager acceptance.
+
+Control mode в 7A является intentional ephemeral guard, а не новой permission grant. Durable session переживает restart, но control mode после restart всегда сбрасывается в `inactive`. Это fail-safe поведение и не требует schema migration.
+
+### Решение и реализация Step 7A
+
+`users-access.v1` совместимо получает три protected operations:
+
+- `enable-control-mode` с `{ "project_id": "..." }`;
+- `disable-control-mode` с `{}`;
+- `current-control-mode` с `{}`.
+
+Control mode:
+
+- привязан к одной authenticated server-side session и одному project ID;
+- включается только после authoritative проверки effective `control` для этого project scope;
+- имеет фиксированный absolute lifetime `600000 ms` (10 минут);
+- status/read не продлевает deadline;
+- не живёт в SQLite и после Users & Access restart возвращается в `inactive`;
+- logout удаляет session и очищает соответствующий mode entry; expired/disabled/invalid session не может использовать mode;
+- `current-control-mode` повторно проверяет актуальный `control`, поэтому отзыв assignment сбрасывает mode с reason `access_revoked`; ошибка authoritative evaluation также очищает entry и возвращается fail-closed;
+- истечение mode сбрасывает его с reason `expired`;
+- normal off state имеет reason `inactive`; active state — `enabled`.
+
+`ControlModeService` хранит только session-token digest как in-memory key; raw bearer не сохраняется. Control mode не заменяет обычную authorization: будущая write operation должна независимо проверить capability/предметную policy и, если для неё требуется accidental-write guard, authoritative mode state.
+
+Machine-readable schema и C++ contract constants расширяются без изменения Service Hub transport. Unit coverage проверяет deny без `control`, enable, fixed expiry, access revocation, explicit disable, logout invalidation и restart reset. Отдельный real Service Hub integration client проверяет wire operations на bootstrap admin session.
+
+После проверенного Step 7A SHA выполняется Step 7B; только Step 7B добавляет Web control-mode presentation и полный browser security acceptance.
 
 ### Что делаем
 

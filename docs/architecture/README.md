@@ -236,7 +236,7 @@ Project Manager — самостоятельный сервис проектов
 
 Users & Access — самостоятельная backend responsibility для stable user identity, access configuration, authentication/session state и authoritative access evaluation.
 
-В `CORE-005 / Steps 1–5`, завершённых `Step 6A/6B` и текущем `Step 6C` уже зафиксированы:
+В `CORE-005 / Steps 1–6` и текущем `Step 7A` уже зафиксированы:
 
 - stable opaque user ID, независимый от login/display properties;
 - enabled/disabled user state;
@@ -257,13 +257,16 @@ Users & Access — самостоятельная backend responsibility для 
 - create-user сохраняет user + scrypt credential atomically, а ordinary admin password baseline совпадает с bootstrap: 15..1024 bytes;
 - authoritative validation bearer credential внутри Users & Access, а не в Service Hub;
 - Project Manager authorization использует `users-access.v1/evaluate-access` и не читает Users & Access SQLite напрямую;
-- local security audit без password/raw session token; текущий Step 6C добавляет атомарный audit administration mutations в существующую SQLite `security_audit` без schema migration.
+- local security audit без password/raw session token; Step 6C добавил атомарный audit administration mutations в существующую SQLite `security_audit` без schema migration;
+- Step 7A добавляет ephemeral project-scoped control mode: authoritative `control` check, fixed 10-minute absolute lifetime, no refresh on status, access-revocation fail-closed и reset на Users & Access restart.
 
 В первом `CORE-005` реально поддерживаются только global и project scope. Device/Dashboard-specific ACL, external identity providers, MFA, произвольный ABAC и публикация audit events в будущий Event Hub намеренно не моделируются заранее.
 
 `CORE-005 / Step 6B` фиксирует browser session boundary без изменения Service Hub protocol: Web хранит только opaque bearer текущей browser session в `sessionStorage`, authoritative восстанавливает identity через `current-session` после reload и очищает bearer при `auth.invalid_session`/`auth.session_expired`. Session-aware wrapper над существующим shared `ServiceHubClient` добавляет transport `auth` к protected requests; `login` остаётся public. User/permissions из browser storage не являются security authority. Production TLS/Origin/cookie/reverse-proxy policy этим решением не объявляется.
 
 `CORE-005 / Step 6C` завершает local administration audit semantics без изменения wire contract: успешные create/enable-disable/password-reset/permission-set/assignment mutations записывают actor из authoritative authenticated session; mutation и audit row выполняются одной SQLite transaction и вместе откатываются при audit failure. Для user/assignment events `subject_user_id` — target user; `permission_set_created` оставляет user-specific subject пустым.
+
+`CORE-005 / Step 7A` фиксирует control mode как ephemeral accidental-write guard поверх authenticated session, а не как authorization grant. Mode привязан к project, требует effective `control`, живёт 600000 ms без продления и не переживает Users & Access restart; current status повторно проверяет capability и сбрасывается при access revocation. Три новые protected operations добавляются совместимо в `users-access.v1`.
 
 Подробный контракт: [`users-access-contract.md`](users-access-contract.md).
 
@@ -362,7 +365,6 @@ Node.js используется как инструментальная сре�
 - точный набор state-значений;
 - внешний межпроцессный путь регистрации write-provider/Driver Runtime;
 - формат Driver Runtime API;
-- точная representation/expiration policy control mode до `CORE-005 / Step 7`;
 - production TLS/origin policy для Service Hub;
 - окончательные process/container/deployment-модели;
 - frontend state manager и UI-библиотеки.

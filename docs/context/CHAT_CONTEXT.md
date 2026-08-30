@@ -163,7 +163,6 @@ Node.js — frontend toolchain, а не обязательный backend-сер�
 - внешний Driver Runtime API и межпроцессный путь write-provider;
 - механизм восстановления runtime state Data Hub;
 - точный state enum;
-- exact control-mode representation/expiration policy до `CORE-005 / Step 7`;
 - production TLS/origin policy Service Hub;
 - frontend state manager и UI-библиотеки.
 
@@ -217,9 +216,10 @@ CORE-005 должен дать stable user identity, durable users/access config
 - Step 4 — `eb5f876e4a35dcbc5b5597e456a1197cc0d9dd1b`;
 - Step 5 — `ebe98d1f16e55d4024438300c1670ec3a19b1d72`;
 - Step 6A — `04e83879c73e298d1eac61acbd8e861f0ba5988d`;
-- Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`.
+- Step 6B — `ccde3a262d92ace53069d6e7740108b84f14aad9`;
+- Step 6C — `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`.
 
-Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6B functional commit `ccde3a262d92ace53069d6e7740108b84f14aad9` является baseline текущего Step 6C.
+Documentation sync после Step 5: `ef0b94ce88af77a7032b7e34f1d7a141cf16cd60`. Step 6C functional commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59` является baseline текущего Step 7A.
 
 Step 1 зафиксировал stable user ID, `login`/`display_name`/`enabled`, independent capabilities `view/control/edit/admin`, named permission sets, global/project assignments и effective permissions как union matching assignments. Disabled user fail-closed; explicit deny/groups/ABAC не добавлены.
 
@@ -235,9 +235,11 @@ Step 6A завершён commit `04e83879c73e298d1eac61acbd8e861f0ba5988d`: prod
 
 Step 6B завершён commit `ccde3a262d92ace53069d6e7740108b84f14aad9`: browser session policy хранит opaque bearer только в текущем `sessionStorage`, reload authoritative восстанавливается через `current-session`, invalid/expired session очищается, protected Web requests используют shared session-aware Service Hub wrapper; Web получил login/logout/current user, authenticated Project Manager path и global-admin `/access`.
 
-**Текущий локальный подшаг — `CORE-005 / Step 6C — administration security audit completion`.**
+Step 6C завершён commit `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: local `security_audit` покрывает administration mutations, authenticated global-admin user ID является actor, mutation + audit row выполняются одной SQLite transaction и fail-closed откатываются вместе при audit failure.
 
-Step 6C расширяет существующий local `security_audit` administration events без schema/wire changes. Authenticated global-admin user ID является actor; user/assignment mutations сохраняют target user как subject, permission-set create оставляет user-specific subject пустым. Mutation + audit row выполняются одной SQLite transaction и fail-closed откатываются вместе при audit failure. После проверенного Step 6C SHA следующим будет Step 7 — control mode и real security integration.
+**Текущий локальный подшаг — `CORE-005 / Step 7A — authoritative session control mode backend/contract`.**
+
+Step 7 локально разделён на 7A backend/contract и 7B Web + real browser security integration. 7A вводит project-scoped ephemeral `ControlModeService`: enable требует authoritative `control`, absolute lifetime 10 минут и не продлевается status reads; logout/invalid session делают mode unusable, access revocation сбрасывает его, а Users & Access restart всегда возвращает `inactive`. Raw bearer не хранится; in-memory key — token digest. После проверенного Step 7A SHA выполняется Step 7B.
 
 ## Рабочий процесс
 

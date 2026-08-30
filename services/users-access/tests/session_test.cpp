@@ -61,11 +61,16 @@ void test_contract_constants() {
         ua::contract::service_address == "users-access.v1",
         "Users & Access v1 service address should be stable");
     expect(
-        ua::contract::operations.size() == 13,
+        ua::contract::operations.size() == 16,
         "Users & Access v1 operation set should stay explicit");
     expect(
         ua::contract::operations.front() == ua::contract::login,
         "login should remain the explicit public entry operation");
+    expect(
+        ua::contract::enable_control_mode == "enable-control-mode" &&
+            ua::contract::disable_control_mode == "disable-control-mode" &&
+            ua::contract::current_control_mode == "current-control-mode",
+        "control-mode operation names should remain stable");
 }
 
 void test_authentication_session_lifecycle() {

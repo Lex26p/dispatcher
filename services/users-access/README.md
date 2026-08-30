@@ -11,9 +11,8 @@ Users & Access is the core backend responsibility for stable user identity, acce
 - `Step 5`: Project Manager uses Users & Access as authoritative authorization dependency.
 - `Step 6A` completed in `04e83879c73e298d1eac61acbd8e861f0ba5988d`: all reserved administration operations are connected to the real backend/Service Hub path.
 - `Step 6B` completed in `ccde3a262d92ace53069d6e7740108b84f14aad9`: Web owns the browser session lifecycle, login/logout/current user and administration UI over that API.
-- current `Step 6C`: administration mutations are coupled atomically with durable local security audit before Step 7.
-
-Control mode remains Step 7.
+- `Step 6C` completed in `382e4be446dbc3a4cf8b76cc4a88a67eaff6ba59`: administration mutations are coupled atomically with durable local security audit.
+- current `Step 7A`: authoritative project-scoped control mode backend/contract.
 
 ## Domain and access model
 
@@ -93,6 +92,19 @@ Step 6C extends the same local `security_audit` table with `user_created`, `user
 
 Each administration mutation and its audit row share one SQLite transaction. If audit insertion fails, the mutation rolls back and the operation fails closed. No plaintext password/raw bearer is recorded, schema remains v2, and no fake Event Hub/audit mechanism is introduced.
 
+
+## Control mode — Step 7A
+
+Users & Access now owns an ephemeral session-scoped accidental-write guard through protected `users-access.v1` operations:
+
+- `enable-control-mode` with a project ID;
+- `disable-control-mode`;
+- `current-control-mode`.
+
+Enable requires authoritative effective `control` for the target project. The mode has a fixed 10-minute absolute lifetime, status reads do not extend it, access revocation resets it, and logout/invalid session makes it unusable. The mode is intentionally in-memory: durable sessions survive service restart, while control mode resets to `inactive`. Only the session-token digest is used as the in-memory key; raw bearer material is not stored.
+
+Control mode is not authorization by itself. Future write-capable services must still evaluate their normal capability/subject policy.
+
 ## Browser session integration — Step 6B
 
 The backend contract remains unchanged. Web keeps only the opaque bearer for the current browser session in `sessionStorage`, restores identity through authoritative `current-session`, and sends protected operations through the same Service Hub WebSocket. Invalid/expired session errors clear the browser bearer; browser user/permission presentation never replaces backend authorization.
@@ -141,8 +153,8 @@ From repository root:
 
 ```text
 cmake -S . -B "$HOME/.cache/dispatcher/build/debug" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DDISPATCHER_BUILD_TESTS=ON
-cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_administration_tests dispatcher_users_access_administration_integration_client
+cmake --build "$HOME/.cache/dispatcher/build/debug" --target dispatcher_users_access dispatcher_users_access_administration_tests dispatcher_users_access_control_mode_tests dispatcher_users_access_control_mode_integration_client dispatcher_users_access_administration_integration_client
 ctest --test-dir "$HOME/.cache/dispatcher/build/debug" --output-on-failure -R "^users-access\\."
 ```
 
-Current Users & Access CTests include domain, persistence/credentials, bootstrap, authentication/session, administration, lifecycle and Service Hub integration. Tests use temporary database paths and do not write credential databases into the repository.
+Current Users & Access CTests include domain, persistence/credentials, bootstrap, authentication/session, control mode, administration, lifecycle and Service Hub integration. Tests use temporary database paths and do not write credential databases into the repository.

@@ -11,6 +11,9 @@ inline constexpr std::string_view login = "login";
 inline constexpr std::string_view logout = "logout";
 inline constexpr std::string_view current_session = "current-session";
 inline constexpr std::string_view evaluate_access = "evaluate-access";
+inline constexpr std::string_view enable_control_mode = "enable-control-mode";
+inline constexpr std::string_view disable_control_mode = "disable-control-mode";
+inline constexpr std::string_view current_control_mode = "current-control-mode";
 inline constexpr std::string_view list_users = "list-users";
 inline constexpr std::string_view create_user = "create-user";
 inline constexpr std::string_view set_user_enabled = "set-user-enabled";
@@ -21,11 +24,14 @@ inline constexpr std::string_view list_access_assignments = "list-access-assignm
 inline constexpr std::string_view assign_access = "assign-access";
 inline constexpr std::string_view remove_access_assignment = "remove-access-assignment";
 
-inline constexpr std::array<std::string_view, 13> operations{
+inline constexpr std::array<std::string_view, 16> operations{
     login,
     logout,
     current_session,
     evaluate_access,
+    enable_control_mode,
+    disable_control_mode,
+    current_control_mode,
     list_users,
     create_user,
     set_user_enabled,

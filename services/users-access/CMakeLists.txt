@@ -131,6 +131,29 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(dispatcher_users_access_session PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(dispatcher_users_access_control_mode STATIC
+    src/control_mode.cpp
+)
+
+target_include_directories(
+    dispatcher_users_access_control_mode
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+    dispatcher_users_access_control_mode
+    PUBLIC
+        dispatcher_users_access_core
+        dispatcher_users_access_session
+)
+
+target_compile_features(dispatcher_users_access_control_mode PUBLIC cxx_std_20)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dispatcher_users_access_control_mode PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(dispatcher_users_access_administration STATIC
     src/administration.cpp
 )
@@ -193,6 +216,7 @@ target_link_libraries(
     dispatcher_users_access_service_hub
     PUBLIC
         dispatcher_users_access_administration
+        dispatcher_users_access_control_mode
         dispatcher_users_access_session
     PRIVATE
         Threads::Threads
@@ -221,6 +245,7 @@ target_link_libraries(
         dispatcher_users_access_administration
         dispatcher_users_access_bootstrap
         dispatcher_users_access_core
+        dispatcher_users_access_control_mode
         dispatcher_users_access_crypto
         dispatcher_users_access_session
         dispatcher_users_access_service_hub
@@ -279,6 +304,25 @@ if(DISPATCHER_BUILD_TESTS)
     set_target_properties(
         dispatcher_users_access_session_tests
         PROPERTIES OUTPUT_NAME "dispatcher-users-access-session-tests"
+    )
+
+    add_executable(dispatcher_users_access_control_mode_tests
+        tests/control_mode_test.cpp
+    )
+    target_link_libraries(
+        dispatcher_users_access_control_mode_tests
+        PRIVATE
+            dispatcher_users_access_bootstrap
+            dispatcher_users_access_control_mode
+            dispatcher_users_access_core
+            dispatcher_users_access_crypto
+            dispatcher_users_access_session
+            dispatcher_users_access_sqlite
+            dispatcher_users_access_sqlite_administration
+    )
+    set_target_properties(
+        dispatcher_users_access_control_mode_tests
+        PROPERTIES OUTPUT_NAME "dispatcher-users-access-control-mode-tests"
     )
 
     add_executable(dispatcher_users_access_administration_tests
@@ -345,6 +389,34 @@ if(DISPATCHER_BUILD_TESTS)
         PROPERTIES OUTPUT_NAME "dispatcher-users-access-service-hub-test-client"
     )
 
+    add_executable(dispatcher_users_access_control_mode_integration_client
+        tests/control_mode_integration_client.cpp
+    )
+    target_include_directories(
+        dispatcher_users_access_control_mode_integration_client
+        PRIVATE
+            ${USERS_ACCESS_BOOST_INCLUDE_DIR}
+    )
+    target_link_libraries(
+        dispatcher_users_access_control_mode_integration_client
+        PRIVATE
+            Threads::Threads
+            PkgConfig::USERS_ACCESS_JSONC
+    )
+    target_compile_definitions(
+        dispatcher_users_access_control_mode_integration_client
+        PRIVATE
+            BOOST_ERROR_CODE_HEADER_ONLY
+    )
+    target_compile_features(
+        dispatcher_users_access_control_mode_integration_client
+        PRIVATE cxx_std_20
+    )
+    set_target_properties(
+        dispatcher_users_access_control_mode_integration_client
+        PROPERTIES OUTPUT_NAME "dispatcher-users-access-control-mode-integration-client"
+    )
+
     add_executable(dispatcher_users_access_administration_integration_client
         tests/administration_integration_client.cpp
     )
@@ -377,9 +449,11 @@ if(DISPATCHER_BUILD_TESTS)
         target_compile_options(dispatcher_users_access_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_persistence_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_session_tests PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(dispatcher_users_access_control_mode_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_administration_tests PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_project_manager_authorization_fixture PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_service_hub_test_client PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(dispatcher_users_access_control_mode_integration_client PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(dispatcher_users_access_administration_integration_client PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
@@ -399,6 +473,10 @@ if(DISPATCHER_BUILD_TESTS)
     add_test(
         NAME users-access.authentication-and-session
         COMMAND dispatcher_users_access_session_tests
+    )
+    add_test(
+        NAME users-access.control-mode
+        COMMAND dispatcher_users_access_control_mode_tests
     )
     add_test(
         NAME users-access.administration
@@ -422,6 +500,11 @@ if(DISPATCHER_BUILD_TESTS)
             dispatcher_users_access
         )
         add_dependencies(
+            dispatcher_users_access_control_mode_integration_client
+            dispatcher_service_hub
+            dispatcher_users_access
+        )
+        add_dependencies(
             dispatcher_users_access_administration_integration_client
             dispatcher_service_hub
             dispatcher_users_access
@@ -434,6 +517,15 @@ if(DISPATCHER_BUILD_TESTS)
                 $<TARGET_FILE:dispatcher_users_access_service_hub_test_client>
         )
         set_tests_properties(users-access.service-hub-integration PROPERTIES TIMEOUT 45)
+
+        add_test(
+            NAME users-access.control-mode-integration
+            COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/service_hub_integration_test.sh
+                $<TARGET_FILE:dispatcher_service_hub>
+                $<TARGET_FILE:dispatcher_users_access>
+                $<TARGET_FILE:dispatcher_users_access_control_mode_integration_client>
+        )
+        set_tests_properties(users-access.control-mode-integration PROPERTIES TIMEOUT 45)
 
         add_test(
             NAME users-access.administration-integration
@@ -450,6 +542,7 @@ if(DISPATCHER_BUILD_TESTS)
         users-access.persistence-and-credentials
         users-access.bootstrap-cli
         users-access.authentication-and-session
+        users-access.control-mode
         users-access.administration
         users-access.signal-term
         users-access.signal-int

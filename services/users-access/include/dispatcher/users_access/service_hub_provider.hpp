@@ -2,6 +2,7 @@
 
 #include "dispatcher/users_access/administration.hpp"
 #include "dispatcher/users_access/contract.hpp"
+#include "dispatcher/users_access/control_mode.hpp"
 #include "dispatcher/users_access/session.hpp"
 #include "dispatcher/users_access/users_access_service_provider.hpp"
 
@@ -27,6 +28,7 @@ public:
 
     ServiceHubProvider(
         AuthenticationSessionService& authentication,
+        ControlModeService& control_mode,
         UsersAccessAdministrationService& administration,
         ServiceHubEndpoint endpoint);
     ~ServiceHubProvider() override;
@@ -41,6 +43,7 @@ private:
     void run();
 
     AuthenticationSessionService& authentication_;
+    ControlModeService& control_mode_;
     UsersAccessAdministrationService& administration_;
     ServiceHubEndpoint endpoint_;
     std::atomic<bool> stop_requested_{false};

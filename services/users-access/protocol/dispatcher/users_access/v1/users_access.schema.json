@@ -6,75 +6,149 @@
   "$defs": {
     "capability": {
       "type": "string",
-      "enum": ["view", "control", "edit", "admin"]
+      "enum": [
+        "view",
+        "control",
+        "edit",
+        "admin"
+      ]
     },
     "user": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "login", "display_name", "enabled"],
+      "required": [
+        "id",
+        "login",
+        "display_name",
+        "enabled"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "login": {"type": "string"},
-        "display_name": {"type": "string"},
-        "enabled": {"type": "boolean"}
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "login": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
       }
     },
     "global_scope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": {"const": "global"}
+        "kind": {
+          "const": "global"
+        }
       }
     },
     "project_scope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "project_id"],
+      "required": [
+        "kind",
+        "project_id"
+      ],
       "properties": {
-        "kind": {"const": "project"},
-        "project_id": {"type": "string", "minLength": 1}
+        "kind": {
+          "const": "project"
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "scope": {
       "oneOf": [
-        {"$ref": "#/$defs/global_scope"},
-        {"$ref": "#/$defs/project_scope"}
+        {
+          "$ref": "#/$defs/global_scope"
+        },
+        {
+          "$ref": "#/$defs/project_scope"
+        }
       ]
     },
     "permission_set": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "capabilities"],
+      "required": [
+        "id",
+        "name",
+        "capabilities"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "name": {"type": "string"},
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
         "capabilities": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/capability"}
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
         }
       }
     },
     "access_assignment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user_id", "permission_set_id", "scope"],
+      "required": [
+        "user_id",
+        "permission_set_id",
+        "scope"
+      ],
       "properties": {
-        "user_id": {"type": "string", "minLength": 1},
-        "permission_set_id": {"type": "string", "minLength": 1},
-        "scope": {"$ref": "#/$defs/scope"}
+        "user_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permission_set_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        }
       }
     },
     "session_summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user", "issued_at_unix_ms", "absolute_expires_at_unix_ms", "idle_timeout_ms"],
+      "required": [
+        "user",
+        "issued_at_unix_ms",
+        "absolute_expires_at_unix_ms",
+        "idle_timeout_ms"
+      ],
       "properties": {
-        "user": {"$ref": "#/$defs/user"},
-        "issued_at_unix_ms": {"type": "integer", "minimum": 0},
-        "absolute_expires_at_unix_ms": {"type": "integer", "minimum": 0},
-        "idle_timeout_ms": {"type": "integer", "minimum": 1}
+        "user": {
+          "$ref": "#/$defs/user"
+        },
+        "issued_at_unix_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "absolute_expires_at_unix_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "idle_timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "empty_request": {
@@ -85,165 +159,367 @@
     "login_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["login", "password"],
+      "required": [
+        "login",
+        "password"
+      ],
       "properties": {
-        "login": {"type": "string"},
-        "password": {"type": "string"}
+        "login": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
       }
     },
     "login_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["session_token", "session"],
+      "required": [
+        "session_token",
+        "session"
+      ],
       "properties": {
         "session_token": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
-        "session": {"$ref": "#/$defs/session_summary"}
+        "session": {
+          "$ref": "#/$defs/session_summary"
+        }
       }
     },
     "current_session_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["session"],
+      "required": [
+        "session"
+      ],
       "properties": {
-        "session": {"$ref": "#/$defs/session_summary"}
+        "session": {
+          "$ref": "#/$defs/session_summary"
+        }
       }
     },
     "evaluate_access_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["scope", "capability"],
+      "required": [
+        "scope",
+        "capability"
+      ],
       "properties": {
-        "scope": {"$ref": "#/$defs/scope"},
-        "capability": {"$ref": "#/$defs/capability"}
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "capability": {
+          "$ref": "#/$defs/capability"
+        }
       }
     },
     "evaluate_access_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["allowed", "effective_capabilities"],
+      "required": [
+        "allowed",
+        "effective_capabilities"
+      ],
       "properties": {
-        "allowed": {"type": "boolean"},
+        "allowed": {
+          "type": "boolean"
+        },
         "effective_capabilities": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/capability"}
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        }
+      }
+    },
+    "control_mode_reason": {
+      "type": "string",
+      "enum": [
+        "enabled",
+        "inactive",
+        "expired",
+        "access_revoked"
+      ]
+    },
+    "control_mode_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "reason"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "reason": {
+          "$ref": "#/$defs/control_mode_reason"
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expires_at_unix_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "project_id",
+              "expires_at_unix_ms"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "project_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "expires_at_unix_ms"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "control_mode_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_mode"
+      ],
+      "properties": {
+        "control_mode": {
+          "$ref": "#/$defs/control_mode_state"
+        }
+      }
+    },
+    "enable_control_mode_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id"
+      ],
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
     "list_users_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["users"],
+      "required": [
+        "users"
+      ],
       "properties": {
-        "users": {"type": "array", "items": {"$ref": "#/$defs/user"}}
+        "users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/user"
+          }
+        }
       }
     },
     "create_user_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["login", "display_name", "enabled", "password"],
+      "required": [
+        "login",
+        "display_name",
+        "enabled",
+        "password"
+      ],
       "properties": {
-        "login": {"type": "string"},
-        "display_name": {"type": "string"},
-        "enabled": {"type": "boolean"},
-        "password": {"type": "string"}
+        "login": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "password": {
+          "type": "string"
+        }
       }
     },
     "user_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user"],
+      "required": [
+        "user"
+      ],
       "properties": {
-        "user": {"$ref": "#/$defs/user"}
+        "user": {
+          "$ref": "#/$defs/user"
+        }
       }
     },
     "set_user_enabled_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user_id", "enabled"],
+      "required": [
+        "user_id",
+        "enabled"
+      ],
       "properties": {
-        "user_id": {"type": "string", "minLength": 1},
-        "enabled": {"type": "boolean"}
+        "user_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        }
       }
     },
     "set_user_password_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user_id", "password"],
+      "required": [
+        "user_id",
+        "password"
+      ],
       "properties": {
-        "user_id": {"type": "string", "minLength": 1},
-        "password": {"type": "string"}
+        "user_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string"
+        }
       }
     },
     "list_permission_sets_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["permission_sets"],
+      "required": [
+        "permission_sets"
+      ],
       "properties": {
         "permission_sets": {
           "type": "array",
-          "items": {"$ref": "#/$defs/permission_set"}
+          "items": {
+            "$ref": "#/$defs/permission_set"
+          }
         }
       }
     },
     "create_permission_set_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "capabilities"],
+      "required": [
+        "name",
+        "capabilities"
+      ],
       "properties": {
-        "name": {"type": "string"},
+        "name": {
+          "type": "string"
+        },
         "capabilities": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/capability"}
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
         }
       }
     },
     "permission_set_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["permission_set"],
+      "required": [
+        "permission_set"
+      ],
       "properties": {
-        "permission_set": {"$ref": "#/$defs/permission_set"}
+        "permission_set": {
+          "$ref": "#/$defs/permission_set"
+        }
       }
     },
     "list_access_assignments_request": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "user_id": {"type": "string", "minLength": 1}
+        "user_id": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "list_access_assignments_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assignments"],
+      "required": [
+        "assignments"
+      ],
       "properties": {
         "assignments": {
           "type": "array",
-          "items": {"$ref": "#/$defs/access_assignment"}
+          "items": {
+            "$ref": "#/$defs/access_assignment"
+          }
         }
       }
     },
     "access_assignment_request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user_id", "permission_set_id", "scope"],
+      "required": [
+        "user_id",
+        "permission_set_id",
+        "scope"
+      ],
       "properties": {
-        "user_id": {"type": "string", "minLength": 1},
-        "permission_set_id": {"type": "string", "minLength": 1},
-        "scope": {"$ref": "#/$defs/scope"}
+        "user_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permission_set_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        }
       }
     },
     "access_assignment_response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assignment"],
+      "required": [
+        "assignment"
+      ],
       "properties": {
-        "assignment": {"$ref": "#/$defs/access_assignment"}
+        "assignment": {
+          "$ref": "#/$defs/access_assignment"
+        }
       }
     }
   }

@@ -397,6 +397,81 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
     return object;
 }
 
+[[nodiscard]] json_object* control_mode_json(const ControlModeState& state) {
+    json_object* object = json_object_new_object();
+    json_object_object_add(object, "enabled", json_object_new_boolean(state.enabled));
+    const auto reason = control_mode_reason_name(state.reason);
+    json_object_object_add(
+        object,
+        "reason",
+        json_object_new_string_len(reason.data(), static_cast<int>(reason.size())));
+    if (state.enabled) {
+        json_object_object_add(
+            object,
+            "project_id",
+            json_object_new_string(state.project_id.c_str()));
+        json_object_object_add(
+            object,
+            "expires_at_unix_ms",
+            json_object_new_int64(state.expires_at_unix_ms));
+    }
+    return object;
+}
+
+[[nodiscard]] std::string control_mode_response(
+    const std::string_view request_id,
+    const ControlModeState& state) {
+    auto payload = adopt_json(json_object_new_object());
+    json_object_object_add(
+        payload.get(),
+        "control_mode",
+        control_mode_json(state));
+    return success_response(request_id, payload.release());
+}
+
+[[nodiscard]] std::string control_mode_error_response(
+    const std::string_view request_id,
+    const ControlModeError error) {
+    switch (error) {
+    case ControlModeError::invalid_project:
+        return error_response(
+            request_id,
+            "access.invalid_request",
+            "Control mode requires a non-empty project id");
+    case ControlModeError::forbidden:
+        return error_response(
+            request_id,
+            "access.forbidden",
+            "Control capability is required for the requested project");
+    case ControlModeError::invalid_session:
+        return error_response(
+            request_id,
+            "auth.invalid_session",
+            "Authenticated session is invalid");
+    case ControlModeError::session_expired:
+        return error_response(
+            request_id,
+            "auth.session_expired",
+            "Authenticated session has expired");
+    case ControlModeError::storage_error:
+        return error_response(
+            request_id,
+            "access.storage_error",
+            "Users & Access control-mode evaluation failed");
+    case ControlModeError::crypto_error:
+        return error_response(
+            request_id,
+            "auth.crypto_error",
+            "Session credential processing failed");
+    case ControlModeError::none:
+        break;
+    }
+    return error_response(
+        request_id,
+        "access.internal_error",
+        "Users & Access control-mode operation failed");
+}
+
 [[nodiscard]] bool is_administration_operation(const std::string_view operation) {
     return operation == contract::list_users ||
            operation == contract::create_user ||
@@ -652,6 +727,7 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
 
 [[nodiscard]] std::string handle_request(
     AuthenticationSessionService& authentication,
+    ControlModeService& control_mode,
     UsersAccessAdministrationService& administration,
     const std::string_view request_id,
     const std::string_view operation,
@@ -708,9 +784,11 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
                 "logout payload must be an empty object");
         }
         const auto error = authentication.logout(token);
-        return error == AuthenticationSessionError::none
-            ? empty_success_response(request_id)
-            : session_error_response(request_id, error);
+        if (error == AuthenticationSessionError::none) {
+            control_mode.forget(token);
+            return empty_success_response(request_id);
+        }
+        return session_error_response(request_id, error);
     }
 
     if (operation == contract::current_session) {
@@ -766,6 +844,52 @@ using JsonPtr = std::unique_ptr<json_object, decltype(&json_object_put)>;
         return success_response(
             request_id,
             access_evaluation_json(*result.value));
+    }
+
+    if (operation == contract::enable_control_mode) {
+        if (!object_has_only_fields(payload, {"project_id"})) {
+            return error_response(
+                request_id,
+                "access.invalid_request",
+                "enable-control-mode requires only project_id");
+        }
+        std::string project_id;
+        if (!string_field(payload, "project_id", project_id)) {
+            return error_response(
+                request_id,
+                "access.invalid_request",
+                "enable-control-mode requires string project_id");
+        }
+        auto result = control_mode.enable(token, project_id);
+        return result.ok()
+            ? control_mode_response(request_id, *result.value)
+            : control_mode_error_response(request_id, result.error);
+    }
+
+    if (operation == contract::disable_control_mode) {
+        if (!object_has_only_fields(payload, {})) {
+            return error_response(
+                request_id,
+                "access.invalid_request",
+                "disable-control-mode payload must be empty");
+        }
+        auto result = control_mode.disable(token);
+        return result.ok()
+            ? control_mode_response(request_id, *result.value)
+            : control_mode_error_response(request_id, result.error);
+    }
+
+    if (operation == contract::current_control_mode) {
+        if (!object_has_only_fields(payload, {})) {
+            return error_response(
+                request_id,
+                "access.invalid_request",
+                "current-control-mode payload must be empty");
+        }
+        auto result = control_mode.current(token);
+        return result.ok()
+            ? control_mode_response(request_id, *result.value)
+            : control_mode_error_response(request_id, result.error);
     }
 
     if (is_administration_operation(operation)) {
@@ -916,6 +1040,7 @@ private:
 [[nodiscard]] bool handle_hub_message(
     HubConnection& connection,
     AuthenticationSessionService& authentication,
+    ControlModeService& control_mode,
     UsersAccessAdministrationService& administration,
     const std::string& message_text) {
     auto message = adopt_json(json_tokener_parse(message_text.c_str()));
@@ -948,6 +1073,7 @@ private:
 
     return connection.write(handle_request(
         authentication,
+        control_mode,
         administration,
         request_id,
         operation,
@@ -997,9 +1123,11 @@ std::optional<ServiceHubEndpoint> parse_service_hub_address(
 
 ServiceHubProvider::ServiceHubProvider(
     AuthenticationSessionService& authentication,
+    ControlModeService& control_mode,
     UsersAccessAdministrationService& administration,
     ServiceHubEndpoint endpoint)
     : authentication_(authentication),
+      control_mode_(control_mode),
       administration_(administration),
       endpoint_(std::move(endpoint)) {}
 
@@ -1049,6 +1177,7 @@ void ServiceHubProvider::run() {
                 healthy = handle_hub_message(
                     connection,
                     authentication_,
+                    control_mode_,
                     administration_,
                     message);
                 break;

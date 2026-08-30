@@ -10,6 +10,7 @@ Versioned предметная boundary Users & Access зафиксирован�
 - server-side session lifecycle;
 - получения текущего authenticated user;
 - backend-authoritative access evaluation;
+- session-scoped project control mode как accidental-write guard;
 - минимального администрирования users/permission sets/assignments;
 - authenticated Service Hub request path без второго transport.
 
@@ -362,10 +363,75 @@ Disabled user при login получает `auth.invalid_credentials`; ране
 
 ## Control mode
 
-Control mode не входит в Step 6A/6B/6C. Его реальный session baseline остаётся `CORE-005 / Step 7`.
+`CORE-005 / Step 7A` добавляет server-side accidental-write guard поверх существующей authenticated session. Control mode **не является новой permission grant** и не заменяет service-specific authorization.
+
+Baseline semantics:
+
+- mode принадлежит одной authenticated session и одному project ID;
+- включение требует effective `control` для указанного project scope;
+- lifetime фиксирован: `600000 ms` (10 минут) от успешного enable;
+- `current-control-mode` не продлевает lifetime;
+- mode хранится только in-memory внутри текущего Users & Access process по session-token digest, raw bearer не сохраняется;
+- durable session может пережить restart, но control mode после restart намеренно становится `inactive`;
+- logout очищает mode; invalid/expired/disabled session не может использовать mode;
+- status повторно проверяет текущую effective `control`; отзыв access сбрасывает mode с reason `access_revoked`, а ошибка authoritative evaluation очищает entry и возвращает fail-closed error;
+- expiration сбрасывает mode с reason `expired`; обычное выключенное состояние — `inactive`.
+
+### `enable-control-mode` — protected
+
+Request:
+
+```json
+{
+  "project_id": "opaque-project-id"
+}
+```
+
+При отсутствии effective project `control` возвращается `access.forbidden`.
+
+Success:
+
+```json
+{
+  "control_mode": {
+    "enabled": true,
+    "reason": "enabled",
+    "project_id": "opaque-project-id",
+    "expires_at_unix_ms": 1788060600000
+  }
+}
+```
+
+### `disable-control-mode` — protected
+
+Request `{}`. Success возвращает inactive state:
+
+```json
+{
+  "control_mode": {
+    "enabled": false,
+    "reason": "inactive"
+  }
+}
+```
+
+Disable не требует `control` capability: authenticated user всегда может выключить собственный guard.
+
+### `current-control-mode` — protected
+
+Request `{}`. Возвращает current authoritative mode state. Возможные `reason` значения v1:
+
+- `enabled`;
+- `inactive`;
+- `expired`;
+- `access_revoked`.
+
+Когда `enabled=false`, `project_id` и `expires_at_unix_ms` отсутствуют.
+
+Будущие write-capable services не должны считать один факт `enabled` достаточной authorization: обычная capability/subject policy остаётся отдельной обязательной проверкой.
 
 ## Versioning
 
 `users-access.v1` сохраняет уже зафиксированные operation names/payload shapes.
 
-Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, а Step 6C завершает внутренний durable administration audit без изменения wire contract. Несовместимое изменение требует нового service version.
+Step 4 совместимо добавил Service Hub `auth`, Step 5 применил его к Project Manager, Step 6A активировал уже зарезервированные administration operations, Step 6B добавил browser session ownership/restoration, Step 6C завершил внутренний durable administration audit, а Step 7A совместимо добавляет три protected control-mode operations без изменения Service Hub transport. Несовместимое изменение требует нового service version.

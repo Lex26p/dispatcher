@@ -1,6 +1,7 @@
 #include "dispatcher/users_access/administration.hpp"
 #include "dispatcher/users_access/application.hpp"
 #include "dispatcher/users_access/bootstrap.hpp"
+#include "dispatcher/users_access/control_mode.hpp"
 #include "dispatcher/users_access/openssl_scrypt_password_hasher.hpp"
 #include "dispatcher/users_access/openssl_session_token_codec.hpp"
 #include "dispatcher/users_access/service_hub_provider.hpp"
@@ -215,6 +216,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    dispatcher::users_access::ControlModeService control_mode{
+        authentication,
+        token_codec,
+        access_manager};
+
     dispatcher::users_access::UsersAccessAdministrationService administration{
         repository,
         administration_store,
@@ -222,6 +228,7 @@ int main(int argc, char* argv[]) {
 
     dispatcher::users_access::ServiceHubProvider provider{
         authentication,
+        control_mode,
         administration,
         *endpoint};
 
