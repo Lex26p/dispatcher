@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. План спринта зафиксирован; текущий шаг после подтверждения plan commit — Step 1: domain model и отдельный service skeleton.**
+**В разработке. Plan commit подтверждён; Step 1 domain model/service skeleton реализован в текущем рабочем шаге. После подтверждения Step 1 commit следующий шаг — Step 2: project/resource scope и authorization semantics.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -11,6 +11,10 @@
 `b8fed81d9f68e47e7635a283e1b2803166ca5bf8`
 
 Это финальный documentation-closure commit завершённого `CORE-005 — Users & Access`.
+
+Plan commit проверен в GitHub:
+
+`e6259e9564d31df3bb677a1cced63e64c99ba534`
 
 ## Цель
 
@@ -187,6 +191,35 @@ Step 1 обязан определить invariants state relationship: что �
 На этом шаге нет durable storage, Service Hub provider или Web.
 
 **Результат:** domain/application core отдельно собирается и тестами доказывает базовые invariants без зависимости от Data Hub implementation.
+
+#### Решение и реализация Step 1
+
+Step 1 сознательно остаётся узким и не создаёт временный CRUD/storage/network API. Добавлен отдельный `services/device-manager/` C++20 service target и domain library без зависимости от Data Hub implementation.
+
+Domain baseline:
+
+- `Device`: stable opaque bounded `id`, `name`, `description`, `location`;
+- `Metric`: stable opaque bounded `id`, optional `device_id`, `name`, `description`, semantic value type, `unit`, `writable`, `working/state` kind и optional state-link field;
+- отсутствие `device_id` является нормальной representation standalone metric;
+- value types семантически соответствуют текущему Data Hub `MetricValue`: `bool`, `int64`, `uint64`, `double`, `string`, `bytes`, но wire representation Device Manager пока не выбрана;
+- каждая working metric обязана ссылаться на state metric;
+- state metric read-only и не может иметь собственную state-link;
+- catalog validation отклоняет неизвестный Device, dangling state target, ссылку на working metric вместо state metric и несовпадающую device association working/state пары;
+- окончательный enum/encoding runtime state не выбран и остаётся вне Step 1.
+
+Validation limits Step 1 выражены как UTF-8 byte-oriented storage/contract guardrails: opaque ID 256 bytes, name 256, description 4096, location 1024, unit 128. Они не являются решением о wire schema; Step 4 должен отразить фактическую domain semantics без второго несовместимого type system.
+
+Standalone executable `dispatcher-device-manager` на Step 1 не принимает configuration arguments и только подтверждает независимую process boundary с clean `SIGINT`/`SIGTERM` lifecycle. CTest selection `^device-manager\.` содержит domain и два lifecycle tests.
+
+На Step 1 намеренно отсутствуют:
+
+- persistence/schema;
+- project/resource association и access policy;
+- Service Hub provider/contract;
+- Users & Access integration;
+- Data Hub calls/runtime values;
+- Driver Runtime/protocol configuration;
+- Web code.
 
 ### Step 2 — Project/resource scope и authorization semantics
 

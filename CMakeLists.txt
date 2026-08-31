@@ -16,6 +16,7 @@ add_subdirectory(services/data-hub)
 add_subdirectory(services/service-hub)
 add_subdirectory(services/project-manager)
 add_subdirectory(services/users-access)
+add_subdirectory(services/device-manager)
 
 if(
     DISPATCHER_BUILD_TESTS

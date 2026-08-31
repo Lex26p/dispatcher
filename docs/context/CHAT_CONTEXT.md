@@ -210,7 +210,7 @@ Final CORE-005 baseline проверен в GitHub: `b8fed81d9f68e47e7635a283e1b
 
 Незакоммиченный Step 7B Web control-mode/security integration не является source of truth. Web feature-разработка заморожена до завершения backend foundation через `CORE-013`; накопительный handoff ведётся в `docs/development/WEB_IMPLEMENTATION.md`.
 
-**Текущий спринт — `CORE-006 — Device Manager`.** План зафиксирован в `docs/development/sprints/CORE-006.md`. После подтверждения plan commit текущий шаг — Step 1: domain model и отдельный C++20 service skeleton. CORE-006 хранит device/metric metadata, а Data Hub остаётся источником runtime values. Project/resource access model должна быть определена до persistence/contract без превращения Project в owner. React + TypeScript не пересматриваются; Web в CORE-006 не развивается, а будущий handoff обновляется в `WEB_IMPLEMENTATION.md`.
+**Текущий спринт — `CORE-006 — Device Manager`.** Plan commit проверен: `e6259e9564d31df3bb677a1cced63e64c99ba534`. Step 1 реализует минимальную Device/Metric domain model и отдельный C++20 Linux service skeleton: opaque IDs, Device `name/description/location`, optional metric→device association, Data-Hub-compatible semantic value types, unit/writable, working/state kind и state-link invariants. Persistence, Service Hub, Users & Access, Data Hub calls, drivers и Web на Step 1 отсутствуют. После подтверждения Step 1 commit следующий шаг — Step 2: project/resource scope и authorization semantics до выбора persistence и wire contract.
 
 ## Рабочий процесс
 
