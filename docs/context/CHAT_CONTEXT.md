@@ -210,7 +210,7 @@ Final CORE-005 baseline проверен в GitHub: `b8fed81d9f68e47e7635a283e1b
 
 Незакоммиченный Step 7B Web control-mode/security integration не является source of truth. Web feature-разработка заморожена до завершения backend foundation через `CORE-013`; накопительный handoff ведётся в `docs/development/WEB_IMPLEMENTATION.md`.
 
-**Текущий спринт — `CORE-006 — Device Manager`.** Plan commit проверен: `e6259e9564d31df3bb677a1cced63e64c99ba534`. Step 1 реализует минимальную Device/Metric domain model и отдельный C++20 Linux service skeleton: opaque IDs, Device `name/description/location`, optional metric→device association, Data-Hub-compatible semantic value types, unit/writable, working/state kind и state-link invariants. Persistence, Service Hub, Users & Access, Data Hub calls, drivers и Web на Step 1 отсутствуют. После подтверждения Step 1 commit следующий шаг — Step 2: project/resource scope и authorization semantics до выбора persistence и wire contract.
+**Текущий спринт — `CORE-006 — Device Manager`.** Plan commit `e6259e9564d31df3bb677a1cced63e64c99ba534`; Step 1 подтверждён commit `c79ff405284dbed1d0dc9ac3340f97dbcfa217cd`. Step 2 фиксирует без кода project/resource semantics: Device Manager хранит associations; Device может участвовать в нескольких projects; attached metrics наследуют associations Device; standalone metrics имеют собственные; shared/global metadata mutation требует global `edit`/`admin`, association changes — global `admin`, `control` для metadata не используется. Security-dependent operations должны fail closed. После подтверждения Step 2 следующий шаг — Step 3 durable metadata storage; Service Hub contract всё ещё не проектируется до Step 4.
 
 ## Рабочий процесс
 

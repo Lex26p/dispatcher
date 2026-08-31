@@ -135,16 +135,24 @@ Step 8 не добавляет новый Web API. Он только фикси�
 
 ### Device Manager — CORE-006 в разработке
 
-План `CORE-006` обязуется заполнить этот раздел по мере подтверждения реального backend contract. До соответствующих Step 1–5 нельзя считать перечисленные ниже поля/operations утверждёнными только из этого backlog. Web-код в CORE-006 не разрабатывается.
+**Подтверждённый backend baseline:** Step 1 commit `c79ff405284dbed1d0dc9ac3340f97dbcfa217cd`; Step 2 project/resource semantics фиксируются следующим documentation-only commit. Web-код в CORE-006 не разрабатывается.
 
-Зафиксировать по фактической реализации:
+Уже определено для будущего Web:
 
-- device/metric metadata, которые реально нужны Web;
-- read/write/state relationships;
-- операции list/get/configure;
-- project scope и permissions, если они реально вводятся;
-- связь metadata с Data Hub runtime values;
-- user-visible errors/validation.
+- Device/Metric metadata отделена от Data Hub runtime values;
+- Device может использоваться в нескольких projects без копирования и без ownership со стороны Project;
+- attached metrics наследуют project associations Device; standalone metrics имеют собственные associations; standalone working/state pair использует одинаковый project set;
+- project-context read требует backend project `view`; global catalog — global `view`; browser context сам по себе не является authority;
+- metadata shared между несколькими projects нельзя редактировать правами только одного project: для shared/global metadata нужен global `edit` или `admin`; изменение project associations требует global `admin`;
+- `control` не используется для metadata editing и останется частью runtime write/control-mode UX;
+- при security dependency outage backend должен fail closed, поэтому Web должен отличать недоступность сервиса от «пустого списка».
+
+Ещё определить по фактической реализации Step 3–5:
+
+- versioned operations list/get/create/update и точные payload;
+- persistence-driven validation/error semantics;
+- связь metadata surfaces с Data Hub current values;
+- user-visible error codes и recovery states.
 
 ### Package Manager — заполнить в CORE-007
 

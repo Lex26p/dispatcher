@@ -4,7 +4,7 @@ Device Manager is the core backend responsibility for durable device and metric 
 
 ## Current implementation stage
 
-`CORE-006 / Step 1` establishes only the C++20 domain model and standalone process skeleton.
+`CORE-006 / Step 1` establishes the C++20 domain model and standalone process skeleton. Step 2 adds only documented project/resource authorization semantics; no persistence, wire API or security client code is added yet.
 
 Implemented domain baseline:
 
@@ -18,7 +18,7 @@ Implemented domain baseline:
 - catalog validation rejects unknown device references, dangling/non-state targets and working/state device-association mismatch;
 - the exact runtime state enum/value encoding is intentionally not selected here.
 
-Step 1 does **not** implement persistence, Service Hub operations, authorization, Data Hub calls, driver configuration or Web UI.
+Step 1 does **not** implement persistence, Service Hub operations, authorization code, Data Hub calls, driver configuration or Web UI. Step 2 defines the future authorization model: Device can participate in multiple projects; attached metrics inherit Device project associations; standalone metrics have their own associations; shared/global metadata mutations require global edit/admin and association changes require global admin. `control` is not a metadata capability.
 
 ## Build and test
 

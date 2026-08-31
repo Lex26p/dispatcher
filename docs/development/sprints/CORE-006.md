@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Plan commit подтверждён; Step 1 domain model/service skeleton реализован в текущем рабочем шаге. После подтверждения Step 1 commit следующий шаг — Step 2: project/resource scope и authorization semantics.**
+**В разработке. Plan commit и Step 1 подтверждены; Step 2 фиксирует project/resource scope и authorization semantics. После подтверждения Step 2 следующий шаг — Step 3: durable metadata storage.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -15,6 +15,10 @@
 Plan commit проверен в GitHub:
 
 `e6259e9564d31df3bb677a1cced63e64c99ba534`
+
+Step 1 commit проверен в GitHub:
+
+`c79ff405284dbed1d0dc9ac3340f97dbcfa217cd`
 
 ## Цель
 
@@ -238,6 +242,30 @@ Standalone executable `dispatcher-device-manager` на Step 1 не приним�
 Не создаём Device-specific capability names, если существующих четырёх достаточно.
 
 **Результат:** project/resource/access semantics определены до persistence и wire contract, Project не превращён в owner.
+
+#### Решение Step 2
+
+Step 2 является documentation-only архитектурным решением: persistence, wire operations и security client code ещё не создаются.
+
+Project/resource model:
+
+- project association хранится внутри Device Manager metadata, а не в Project Manager; Project остаётся контекстом, не владельцем ресурса;
+- один Device может быть связан с несколькими projects; отсутствие associations допустимо и означает ресурс global catalog, а не «принадлежность глобальному проекту»;
+- Metric, принадлежащая Device, наследует project associations Device и не может иметь отдельный независимый набор project associations;
+- standalone Metric хранит собственный набор project associations; standalone working/state pair должна иметь одинаковый набор associations;
+- association не меняет stable Device/Metric identity и не создаёт копий ресурса.
+
+Authorization semantics для будущих protected metadata operations:
+
+- project-context read/list требует effective `view` соответствующего project и возвращает только связанные с ним ресурсы;
+- global catalog read/list требует global `view`; одни только project-scoped permissions не открывают global catalog;
+- metadata mutation ресурса, связанного ровно с одним project, может быть разрешена effective project `edit` **или** project `admin`; capabilities остаются независимыми, поэтому проверяются явно;
+- metadata mutation unassociated global-catalog ресурса или ресурса, shared между несколькими projects, требует global `edit` **или** global `admin`; это предотвращает cross-project privilege escalation через изменение общей metadata;
+- изменение самих project associations требует global `admin`, поскольку оно меняет границу видимости/доступа между проектами;
+- `control` не применяется к Device Manager metadata operations. Runtime write policy и control mode остаются отдельной будущей границей;
+- при недоступности authoritative Users & Access любая authorization-dependent read/mutation должна fail closed: metadata не раскрывается и не изменяется.
+
+Точные operation names, request payload и error codes остаются Step 4. Step 2 не расширяет `users-access.v1` и не вводит Device-specific capabilities.
 
 ### Step 3 — Durable metadata storage
 
