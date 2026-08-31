@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dispatcher::device_manager {
 
@@ -51,6 +52,22 @@ struct Metric final {
     friend bool operator==(const Metric&, const Metric&) = default;
 };
 
+struct ProjectAssociation final {
+    std::string resource_id;
+    std::string project_id;
+
+    friend bool operator==(const ProjectAssociation&, const ProjectAssociation&) = default;
+};
+
+struct DeviceCatalog final {
+    std::vector<Device> devices;
+    std::vector<Metric> metrics;
+    std::vector<ProjectAssociation> device_projects;
+    std::vector<ProjectAssociation> standalone_metric_projects;
+
+    friend bool operator==(const DeviceCatalog&, const DeviceCatalog&) = default;
+};
+
 enum class DomainError {
     none,
     invalid_id,
@@ -61,8 +78,11 @@ enum class DomainError {
     unit_too_long,
     invalid_device_id,
     invalid_state_metric_id,
+    invalid_project_id,
     duplicate_device_id,
     duplicate_metric_id,
+    duplicate_device_project_association,
+    duplicate_standalone_metric_project_association,
     device_not_found,
     state_metric_required,
     state_metric_link_forbidden,
@@ -71,6 +91,10 @@ enum class DomainError {
     state_metric_not_found,
     state_metric_role_required,
     state_metric_device_mismatch,
+    project_device_not_found,
+    project_metric_not_found,
+    project_metric_not_standalone,
+    standalone_state_project_mismatch,
 };
 
 struct DomainValidationResult final {
@@ -97,6 +121,8 @@ struct DomainValidationResult final {
 [[nodiscard]] DomainValidationResult validate_catalog(
     std::span<const Device> devices,
     std::span<const Metric> metrics);
+
+[[nodiscard]] DomainValidationResult validate_catalog(const DeviceCatalog& catalog);
 
 [[nodiscard]] constexpr std::string_view metric_value_type_name(
     const MetricValueType type) noexcept {

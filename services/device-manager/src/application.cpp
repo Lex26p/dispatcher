@@ -69,7 +69,7 @@ int Application::run(std::ostream& output) const {
         return 1;
     }
 
-    output << "Dispatcher Device Manager started (domain skeleton)\n";
+    output << "Dispatcher Device Manager started\n";
     output.flush();
 
     const auto signal_number = shutdown_signal.wait();

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -211,6 +212,53 @@ void test_identity_and_metadata_validation() {
         "duplicate metric ids must fail");
 }
 
+void test_project_association_invariants() {
+    dm::DeviceCatalog catalog{
+        .devices = {
+            dm::Device{.id = "device", .name = "Device", .description = {}, .location = {}},
+        },
+        .metrics = {
+            state_metric("device-state", "device"),
+            working_metric("device-working", "device", "device-state"),
+            state_metric("standalone-state", std::nullopt),
+            working_metric("standalone-working", std::nullopt, "standalone-state"),
+        },
+        .device_projects = {
+            dm::ProjectAssociation{.resource_id = "device", .project_id = "project-a"},
+            dm::ProjectAssociation{.resource_id = "device", .project_id = "project-b"},
+        },
+        .standalone_metric_projects = {
+            dm::ProjectAssociation{.resource_id = "standalone-state", .project_id = "project-a"},
+            dm::ProjectAssociation{.resource_id = "standalone-working", .project_id = "project-a"},
+        },
+    };
+    expect(dm::validate_catalog(catalog).ok(), "valid project associations should pass");
+
+    auto attached_metric_association = catalog;
+    attached_metric_association.standalone_metric_projects.push_back(
+        dm::ProjectAssociation{.resource_id = "device-working", .project_id = "project-a"});
+    expect_error(
+        dm::validate_catalog(attached_metric_association),
+        dm::DomainError::project_metric_not_standalone,
+        "attached metric must inherit device associations instead of storing its own");
+
+    auto mismatched_pair = catalog;
+    mismatched_pair.standalone_metric_projects.push_back(
+        dm::ProjectAssociation{.resource_id = "standalone-working", .project_id = "project-b"});
+    expect_error(
+        dm::validate_catalog(mismatched_pair),
+        dm::DomainError::standalone_state_project_mismatch,
+        "standalone working/state pair must have identical project sets");
+
+    auto duplicate = catalog;
+    duplicate.device_projects.push_back(
+        dm::ProjectAssociation{.resource_id = "device", .project_id = "project-a"});
+    expect_error(
+        dm::validate_catalog(duplicate),
+        dm::DomainError::duplicate_device_project_association,
+        "duplicate device/project association must fail");
+}
+
 }  // namespace
 
 int main() {
@@ -220,6 +268,7 @@ int main() {
     test_state_metric_invariants();
     test_catalog_referential_integrity();
     test_identity_and_metadata_validation();
+    test_project_association_invariants();
     std::cout << "Device Manager domain tests passed\n";
     return 0;
 }

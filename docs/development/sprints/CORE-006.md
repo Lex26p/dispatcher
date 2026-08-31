@@ -2,7 +2,7 @@
 
 ## Статус
 
-**В разработке. Plan commit и Step 1 подтверждены; Step 2 фиксирует project/resource scope и authorization semantics. После подтверждения Step 2 следующий шаг — Step 3: durable metadata storage.**
+**В разработке. Plan commit, Step 1 и Step 2 подтверждены; Step 3 durable metadata storage реализован в текущем рабочем шаге. После подтверждения Step 3 следующий шаг — Step 4: versioned external contract и Service Hub provider.**
 
 Этап: `L1-01 — Ядро платформы`.
 
@@ -19,6 +19,10 @@ Plan commit проверен в GitHub:
 Step 1 commit проверен в GitHub:
 
 `c79ff405284dbed1d0dc9ac3340f97dbcfa217cd`
+
+Step 2 commit проверен в GitHub:
+
+`cfba346eb7943fcd345bdb972c7bfec41b339b9f`
 
 ## Цель
 
@@ -282,6 +286,31 @@ Authorization semantics для будущих protected metadata operations:
 - storage errors без частично сохранённых invalid relationships.
 
 **Результат:** metadata переживает restart и остаётся внутренней ответственностью Device Manager.
+
+#### Решение и реализация Step 3
+
+Step 3 выбирает **SQLite schema v1** как локальное durable storage только для Device Manager. Это не является выбором общей БД платформы и не создаёт общей persistence boundary с Project Manager или Users & Access.
+
+Schema v1 хранит:
+
+- `devices` с базовой metadata Device;
+- `metrics` с optional `device_id`, value type, `writable`, working/state kind и working → state link;
+- `device_projects` для принятых Step 2 Device → project associations;
+- `standalone_metric_projects` только для standalone Metric → project associations.
+
+`SqliteMetadataRepository` на этом шаге намеренно не задаёт будущую CRUD API. Он принимает/возвращает целый `DeviceCatalog`: перед записью catalog проходит domain validation, затем предыдущий catalog заменяется одной SQLite transaction. Invalid catalog не изменяет durable state частично. При чтении metadata снова проходит domain validation, поэтому повреждённые/несогласованные relations не выдаются как валидная модель.
+
+Working/state referential integrity поддерживается и domain validation, и SQLite foreign keys/checks. Attached metrics не получают отдельные project association rows; standalone working/state pair обязана иметь одинаковый project set согласно Step 2.
+
+Schema version хранится через `PRAGMA user_version = 1`. Более новая version отклоняется явно вместо молчаливого чтения неизвестной schema.
+
+Standalone executable теперь открывает/инициализирует SQLite до входа в signal lifecycle. CLI остаётся минимальным:
+
+`dispatcher-device-manager [database-path]`
+
+Без аргумента используется `dispatcher-device-manager.db`. Service Hub, Users & Access client, external CRUD operations и Web по-прежнему отсутствуют и остаются следующими шагами.
+
+Step 3 tests добавляют `device-manager.persistence`: create/save/close/reopen/load, сохранение Device/Metric/project/state relations, reject invalid replacement без изменения предыдущего catalog и explicit newer-schema rejection. Lifecycle tests используют отдельную временную SQLite database.
 
 ### Step 4 — Versioned external contract и Service Hub provider
 

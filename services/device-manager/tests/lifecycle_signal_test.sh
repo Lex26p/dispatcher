@@ -6,6 +6,7 @@ signal_name="${2:?signal name is required}"
 expected_name="${3:?expected signal name is required}"
 
 temp_dir="$(mktemp -d)"
+database="${temp_dir}/device-manager.db"
 log="${temp_dir}/device-manager.log"
 pid=""
 
@@ -18,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"${executable}" >"${log}" 2>&1 &
+"${executable}" "${database}" >"${log}" 2>&1 &
 pid="$!"
 
 for _ in $(seq 1 200); do
@@ -32,6 +33,12 @@ for _ in $(seq 1 200); do
     fi
     sleep 0.02
 done
+
+if ! grep -q "Dispatcher Device Manager SQLite storage ready" "${log}"; then
+    cat "${log}" >&2 || true
+    echo "Device Manager storage did not become ready" >&2
+    exit 1
+fi
 
 if ! grep -q "Dispatcher Device Manager started" "${log}"; then
     cat "${log}" >&2 || true
